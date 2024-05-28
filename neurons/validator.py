@@ -43,7 +43,7 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        bt.logging.info("load_state()")
+        print("load_state()")
         self.load_state()
 
         # TODO(developer): Anything specific to your use case you can do here
@@ -57,13 +57,16 @@ class Validator(BaseValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
-        # TODO(developer): Rewrite this function based on your protocol definition.
-        return await forward(self)
+        # TODO call the challenge generator url for photo and metadata
+        base64_photo = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+        input_metadata = {"dummy": "data"}
+        
+        return await forward(self, base64_photo, input_metadata)
 
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
     with Validator() as validator:
         while True:
-            bt.logging.info("Validator running...", time.time())
+            print("Validator running...", time.time())
             time.sleep(5)

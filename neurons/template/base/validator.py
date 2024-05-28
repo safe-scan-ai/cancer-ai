@@ -56,10 +56,10 @@ class BaseValidatorNeuron(BaseNeuron):
             self.dendrite = MockDendrite(wallet=self.wallet)
         else:
             self.dendrite = bt.dendrite(wallet=self.wallet)
-        bt.logging.info(f"Dendrite: {self.dendrite}")
+        print(f"Dendrite: {self.dendrite}")
 
         # Set up initial scoring weights for validation
-        bt.logging.info("Building validation weights.")
+        print("Building validation weights.")
         self.scores = torch.zeros(
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
@@ -68,10 +68,10 @@ class BaseValidatorNeuron(BaseNeuron):
         self.sync()
 
         # Serve axon to enable external connections.
-        if not self.config.neuron.axon_off:
-            self.serve_axon()
-        else:
-            bt.logging.warning("axon off, not serving ip to chain.")
+        # if not self.config.neuron.axon_off:
+        self.serve_axon()
+        # else:
+        # bt.logging.warning("axon off, not serving ip to chain.")
 
         # Create asyncio event loop to manage async tasks.
         self.loop = asyncio.get_event_loop()
@@ -85,16 +85,17 @@ class BaseValidatorNeuron(BaseNeuron):
     def serve_axon(self):
         """Serve axon to enable external connections."""
 
-        bt.logging.info("serving ip to chain...")
+        print("serving ip to chain...")
         try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
+            self.axon = bt.axon(wallet=self.wallet, config=self.config, port=8093)
+            print(self.axon.port)
 
             try:
                 self.subtensor.serve_axon(
                     netuid=self.config.netuid,
                     axon=self.axon,
                 )
-                bt.logging.info(
+                print(
                     f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
                 )
             except Exception as e:
@@ -137,12 +138,12 @@ class BaseValidatorNeuron(BaseNeuron):
         # Check that validator is registered on the network.
         self.sync()
 
-        bt.logging.info(f"Validator starting at block: {self.block}")
+        print(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                bt.logging.info(f"step({self.step}) block({self.block})")
+                # print(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
                 self.loop.run_until_complete(self.concurrent_forward())
@@ -269,13 +270,13 @@ class BaseValidatorNeuron(BaseNeuron):
             version_key=self.spec_version,
         )
         if result is True:
-            bt.logging.info("set_weights on chain successfully!")
+            print("set_weights on chain successfully!")
         else:
             bt.logging.error("set_weights failed", msg)
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        bt.logging.info("resync_metagraph()")
+        print("resync_metagraph()")
 
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
@@ -287,7 +288,7 @@ class BaseValidatorNeuron(BaseNeuron):
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        bt.logging.info(
+        print(
             "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
         )
         # Zero out all hotkeys that have been replaced.
@@ -341,7 +342,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def save_state(self):
         """Saves the state of the validator to a file."""
-        bt.logging.info("Saving validator state.")
+        # print("Saving validator state.")
 
         # Save the state of the validator to file.
         torch.save(
@@ -355,7 +356,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
+        print("Loading validator state.")
 
         # Load the state of the validator from file.
         state = torch.load(self.config.neuron.full_path + "/state.pt")

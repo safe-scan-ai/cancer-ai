@@ -72,11 +72,11 @@ class BaseNeuron(ABC):
         self.device = self.config.neuron.device
 
         # Log the configuration for reference.
-        bt.logging.info(self.config)
+        print(self.config)
 
         # Build Bittensor objects
         # These are core Bittensor classes to interact with the network.
-        bt.logging.info("Setting up bittensor objects.")
+        print("Setting up bittensor objects.")
 
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
@@ -92,9 +92,9 @@ class BaseNeuron(ABC):
             self.subtensor = bt.subtensor(config=self.config)
             self.metagraph = self.subtensor.metagraph(self.config.netuid)
 
-        bt.logging.info(f"Wallet: {self.wallet}")
-        bt.logging.info(f"Subtensor: {self.subtensor}")
-        bt.logging.info(f"Metagraph: {self.metagraph}")
+        print(f"Wallet: {self.wallet}")
+        print(f"Subtensor: {self.subtensor}")
+        print(f"Metagraph: {self.metagraph}")
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
         self.check_registered()
@@ -103,7 +103,7 @@ class BaseNeuron(ABC):
         self.uid = self.metagraph.hotkeys.index(
             self.wallet.hotkey.ss58_address
         )
-        bt.logging.info(
+        print(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
@@ -169,11 +169,13 @@ class BaseNeuron(ABC):
         )  # don't set weights if you're a miner
 
     def save_state(self):
-        bt.logging.warning(
-            "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
-        )
+        pass
+        # bt.logging.warning(
+        #     "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
+        # )
 
     def load_state(self):
-        bt.logging.warning(
-            "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
-        )
+        pass
+        # bt.logging.warning(
+        #     "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
+        # )
