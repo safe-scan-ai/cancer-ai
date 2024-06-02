@@ -74,3 +74,17 @@ class Dummy(bt.Synapse):
         5
         """
         return self.dummy_output
+
+class PredictionSynapse(bt.Synapse):
+
+    #Validator inputs base 64 encoded photo and any metadata
+    base64_photo: str
+    challenge_type: str
+    model_name: str
+    input_metadata: dict
+    
+    #The response metadata contains miner type and
+    response: typing.Optional[dict] = None
+
+    def deserialize(self) -> dict:
+        return self.response
