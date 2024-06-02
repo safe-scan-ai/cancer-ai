@@ -58,10 +58,12 @@ class Validator(BaseValidatorNeuron):
         - Updating the scores
         """
         # TODO call the challenge generator url for photo and metadata
-        base64_photo = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+        photo_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+        challenge_type = "whitey"
+        model_name = "skynet"
         input_metadata = {"dummy": "data"}
         
-        return await forward(self, base64_photo, input_metadata)
+        return await forward(self, photo_b64, challenge_type, model_name, input_metadata)
 
 
 # The main function parses the configuration and runs the validator.

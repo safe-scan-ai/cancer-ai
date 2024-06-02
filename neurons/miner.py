@@ -59,10 +59,8 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
         # TODO(developer): feed the ML model with the base64 encoded photo
-        synapse.miner_type = "creator" if self.config.creator else "regular"
-        synapse.response = 0.66
-        synapse.response_metadata = {"dummy": "data"}
-        print(synapse.miner_type)
+        miner_type = "creator" if self.config.creator else "regular"
+        synapse.response = {"models_response": 0.66, "miner_type": miner_type}
         return synapse
 
     async def blacklist(

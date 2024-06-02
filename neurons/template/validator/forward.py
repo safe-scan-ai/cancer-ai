@@ -24,7 +24,7 @@ from template.validator.reward import get_rewards
 from template.utils.uids import get_random_uids
 
 
-async def forward(self, base64_photo: str, input_metadata: dict):
+async def forward(self, base64_photo: str, challenge_type: str, model_name: str, input_metadata: dict):
     """
     The forward function is called by the validator every time step.
 
@@ -43,7 +43,7 @@ async def forward(self, base64_photo: str, input_metadata: dict):
 
     responses = await self.dendrite(
         axons=[self.metagraph.axons[uid] for uid in miner_uids],
-        synapse=PredictionSynapse(base64_photo=base64_photo, input_metadata=input_metadata),
+        synapse=PredictionSynapse(base64_photo=base64_photo, challenge_type=challenge_type, model_name=model_name, input_metadata=input_metadata),
         deserialize=True,
     )
 
