@@ -62,6 +62,8 @@ class BaseMinerNeuron(BaseNeuron):
             forward_fn=self.forward,
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
+        ).attach(
+            forward_fn=self.forward_info,
         )
         print(f"Axon created: {self.axon}")
 
@@ -186,7 +188,6 @@ class BaseMinerNeuron(BaseNeuron):
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        print("resync_metagraph()")
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)

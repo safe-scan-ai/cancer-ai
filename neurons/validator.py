@@ -29,6 +29,7 @@ from template.validator import forward
 
 # import base validator class which takes care of most of the boilerplate
 from template.base.validator import BaseValidatorNeuron
+from template.validator.miner_manager import MinerManager
 
 
 class Validator(BaseValidatorNeuron):
@@ -45,8 +46,7 @@ class Validator(BaseValidatorNeuron):
 
         print("load_state()")
         self.load_state()
-
-        # TODO(developer): Anything specific to your use case you can do here
+        self.miner_manager = MinerManager(self)
 
     async def forward(self):
         """
