@@ -26,6 +26,7 @@ import template
 
 # import base miner class which takes care of most of the boilerplate
 from template.base.miner import BaseMinerNeuron
+from template.miner.forward import set_info
 
 
 class Miner(BaseMinerNeuron):
@@ -40,28 +41,28 @@ class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
 
-        # TODO(developer): Anything specific to your use case you can do here
+        self.miner_info = set_info(self)
+        bt.logging.info(f"Miner info: {self.miner_info}")
 
     async def forward(
         self, synapse: template.protocol.PredictionSynapse
     ) -> template.protocol.PredictionSynapse:
-        """
-        Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
-        This method should be replaced with actual logic relevant to the miner's purpose.
 
-        Args:
-            synapse (template.protocol.Dummy): The synapse object containing the 'dummy_input' data.
-
-        Returns:
-            template.protocol.Dummy: The synapse object with the 'dummy_output' field set to twice the 'dummy_input' value.
-
-        The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
-        the miner's intended operation. This method demonstrates a basic transformation of input data.
-        """
         # TODO(developer): feed the ML model with the base64 encoded photo
         miner_type = "creator" if self.config.creator else "regular"
-        synapse.response = {"models_response": 0.66, "miner_type": miner_type}
+        synapse.response_dict = {"models_response": 0.66, "miner_type": miner_type}
+
         return synapse
+    
+    async def forward_info(
+        self, synapse: template.protocol.MinerInfoSynapse
+    ) -> template.protocol.MinerInfoSynapse:
+
+        synapse.response_dict = self.miner_info
+        bt.logging.info(f"Response dict: {self.miner_info}")
+
+        return synapse
+
 
     async def blacklist(
         self, synapse: template.protocol.PredictionSynapse
