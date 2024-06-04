@@ -19,17 +19,14 @@
 
 
 import time
-
-# Bittensor
 import bittensor as bt
+import requests
 
-# Bittensor Validator Template:
-import template
+from threading import Thread
 from template.validator import forward
-
-# import base validator class which takes care of most of the boilerplate
 from template.base.validator import BaseValidatorNeuron
-from template.validator.miner_manager import MinerManager
+from template.protocol import MinerInfoSynapse
+
 
 
 class Validator(BaseValidatorNeuron):
@@ -46,17 +43,15 @@ class Validator(BaseValidatorNeuron):
 
         print("load_state()")
         self.load_state()
-        self.miner_manager = MinerManager(self)
+        self.all_uids = [int(uid) for uid in self.metagraph.uids]
+        self.all_uids_info = {
+            uid: {"scores": [], "model_name": ""} for uid in self.all_uids
+        }
 
     async def forward(self):
-        """
-        Validator forward pass. Consists of:
-        - Generating the query
-        - Querying the miners
-        - Getting the responses
-        - Rewarding the miners
-        - Updating the scores
-        """
+        bt.logging.info("Updating available models & uids")
+        self.update_miners_identity()
+        
         # TODO call the challenge generator url for photo and metadata
         photo_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
         challenge_type = "whitey"
@@ -64,7 +59,68 @@ class Validator(BaseValidatorNeuron):
         input_metadata = {"dummy": "data"}
         
         return await forward(self, photo_b64, challenge_type, model_name, input_metadata)
+    
+    def update_miners_identity(self):
+        """
+        1. Query model_name of available uids
+        2. Update the available list
+        """
+        valid_miners_info = self.get_miner_info()
+        if not valid_miners_info:
+            bt.logging.warning("No active miner available")
+        for uid, info in valid_miners_info.items():
+            if info is None:
+                print(f"Warning: No info available for UID {uid}")
+                continue
+            miner_state = self.all_uids_info.setdefault(
+                uid,
+                {
+                    "scores": [],
+                    "model_name": "",
+                },
+            )
 
+            miner_state["min_stake"] = info.get("min_stake", 100)
+            miner_state["device_info"] = info.get("device_info", {})
+            miner_state["model_name"] = info.get("model_name", "")
+
+        bt.logging.success("Updated miner identity")
+        print("ALL_UIDS_INFO", self.all_uids_info)
+
+        thread = Thread(target=self.store_miner_info, daemon=True)
+        thread.start()
+
+    def get_miner_info(self):
+        """
+        1. Query model_name of available uids
+        """
+        self.all_uids = [int(uid) for uid in self.metagraph.uids]
+        uid_to_axon = dict(zip(self.all_uids, self.metagraph.axons))
+        query_axons = [uid_to_axon[int(uid)] for uid in self.all_uids]
+        bt.logging.info("Requesting miner info")
+        responses = self.dendrite.query(
+            axons=query_axons,
+            synapse=MinerInfoSynapse(),
+            deserialize=False,
+            timeout=10,
+        )
+        responses = {
+            uid: response.response_dict
+            for uid, response in zip(self.all_uids, responses)
+        }
+        return responses
+
+    def store_miner_info(self):
+        try:
+            requests.post(
+                self.config.storage_url + "/store_miner_info",
+                json={
+                    "uid": self.uid,
+                    "info": self.all_uids_info,
+                },
+            )
+        except Exception as e:
+            bt.logging.error(f"Failed to store miner info: {e}")
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
