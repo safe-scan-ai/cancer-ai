@@ -41,9 +41,6 @@ async def forward(self, base64_photo: str, challenge_type: str, model_name: str,
     # TODO(developer): Define how validator selects only miner uids
     miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
 
-    miner_info = self.miner_manager.get_miner_info()
-    print("MINER INFO", miner_info)
-
     responses = await self.dendrite(
         axons=[self.metagraph.axons[uid] for uid in miner_uids],
         synapse=PredictionSynapse(base64_photo=base64_photo, challenge_type=challenge_type, model_name=model_name, input_metadata=input_metadata),

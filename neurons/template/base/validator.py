@@ -234,7 +234,7 @@ class BaseValidatorNeuron(BaseNeuron):
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0)
 
         bt.logging.debug("raw_weights", raw_weights)
-        # bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
+        bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
