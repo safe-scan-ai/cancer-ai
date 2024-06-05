@@ -244,6 +244,13 @@ def add_validator_args(cls, parser):
         default="opentensor-dev",
     )
 
+    parser.add_argument(
+        "--storage_url",
+        type=str,
+        help="URL for storing miner info",
+        default="https://localhost:8888",
+    )
+
 
 def config(cls):
     """
