@@ -22,6 +22,6 @@ def set_info(self):
     return miner_info
 
 def get_model_name(self):
-    # Logic to handle querying models name using ML model watermark (?)
+    #TODO: Logic to handle querying models name using ML model watermark (?)
     return "dummy model"
 

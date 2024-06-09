@@ -251,6 +251,13 @@ def add_validator_args(cls, parser):
         default="https://localhost:8888",
     )
 
+    parser.add_argument(
+        "--top_researchers_url",
+        type=str,
+        help="URL for fetching top researchers",
+        default="https://localhost:8888",
+    ),
+
 
 def config(cls):
     """

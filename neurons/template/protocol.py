@@ -27,12 +27,11 @@ class PredictionSynapse(bt.Synapse):
     challenge_type: str
     model_name: str
     input_metadata: dict
-    
     #The response metadata contains miner type and
     response_dict: typing.Optional[dict] = None
 
     def deserialize(self) -> dict:
-        return self.response_dict
+        return self
 
 class MinerInfoSynapse(bt.Synapse):
 
