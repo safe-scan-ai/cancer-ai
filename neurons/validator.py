@@ -21,6 +21,7 @@
 import time
 import bittensor as bt
 import requests
+import torch
 
 from threading import Thread
 from template.validator import forward
@@ -49,6 +50,11 @@ class Validator(BaseValidatorNeuron):
         }
 
     async def forward(self):
+        # How often you actually send synthetic challenges to miner?
+        if self.step % 1000 > 0:
+            return
+        
+        # TODO: define if we want to update miners identity every forward(pretty often) or poll it e.g. once per minute?
         bt.logging.info("Updating available models & uids")
         self.update_miners_identity()
         
@@ -75,8 +81,12 @@ class Validator(BaseValidatorNeuron):
             miner_state = self.all_uids_info.setdefault(
                 uid,
                 {
-                    "scores": [],
-                    "model_name": "",
+                    "model_name": "Unknown",
+                    "min_stake": 100,
+                    "device_info": {
+                        "gpu_device_name": "Unknown",
+                        "gpu_device_count": "Unknown",
+                     }
                 },
             )
 
@@ -84,11 +94,14 @@ class Validator(BaseValidatorNeuron):
             miner_state["device_info"] = info.get("device_info", {})
             miner_state["model_name"] = info.get("model_name", "")
 
+            #TODO: update miner's score (?) do we want to store score in miners info?
+
         bt.logging.success("Updated miner identity")
         print("ALL_UIDS_INFO", self.all_uids_info)
 
-        thread = Thread(target=self.store_miner_info, daemon=True)
-        thread.start()
+        # commented for not spamming on output
+        # thread = Thread(target=self.store_miner_info, daemon=True)
+        # thread.start()
 
     def get_miner_info(self):
         """
@@ -121,6 +134,65 @@ class Validator(BaseValidatorNeuron):
             )
         except Exception as e:
             bt.logging.error(f"Failed to store miner info: {e}")
+
+    def update_and_get_top_researchers(self):
+        '''This function fetches top researchers with mapped rewards from cancer-ai external api'''
+        try:
+            response = requests.get(url = self.config.top_researchers_url)
+            data = response.json()
+
+            if not isinstance(data, dict):
+                raise Exception("Invalid data")
+            
+            for key, value in data.items():
+                if not (isinstance(key, int) and isinstance(value, float)):
+                    raise Exception("Invalid data inside top researcher dict")
+                
+            self.top_researchers = dict(sorted(data.items()))
+        except Exception as e:
+            bt.logging.error(f"Failed to fetch top researchers: {e}. Proceeding with cached top researchers.")
+        finally:
+            return self.top_researchers
+
+    def update_scores(self, rewards: torch.FloatTensor, uids: list[int]):
+        top_researchers = self.update_and_get_top_researchers()
+        researchers_uids = torch.tensor(list(top_researchers.keys()))
+
+        if torch.isnan(rewards).any():
+            bt.logging.warning(f"NaN values detected in rewards: {rewards}")
+            rewards = torch.nan_to_num(rewards, 0)
+        
+        # Check if `uids` is already a tensor and clone it to avoid the warning.
+        if isinstance(uids, torch.Tensor):
+            uids_tensor = uids.clone().detach()
+        else:
+            uids_tensor = torch.tensor(uids).to(self.device)
+
+        all_uids_tensor = torch.tensor(self.all_uids).to(self.device)
+
+        current_regular_uids_mask = torch.ones_like(uids_tensor, dtype=torch.bool)
+        all_regular_uids_mask = torch.ones_like(all_uids_tensor, dtype=torch.bool)
+        for uid in researchers_uids:
+            current_regular_uids_mask[uids_tensor == uid] = False
+            all_regular_uids_mask[all_uids_tensor == uid] = False
+        
+        regular_rewards = rewards[current_regular_uids_mask]
+        regular_uids = uids_tensor[current_regular_uids_mask]
+
+        scattered_rewards: torch.FloatTensor = self.scores.scatter(
+            0, regular_uids, regular_rewards
+        ).to(self.device)
+
+        bt.logging.debug(f"Scattered rewards: {scattered_rewards}")
+
+        alpha: float = self.config.neuron.moving_average_alpha
+        bt.logging.debug(f"alpha: {alpha}")
+        bt.logging.debug(f"mask: {all_regular_uids_mask}")
+        bt.logging.debug(f"self.scores: {self.scores}")
+
+        self.scores[all_regular_uids_mask] = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
+
+        bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
