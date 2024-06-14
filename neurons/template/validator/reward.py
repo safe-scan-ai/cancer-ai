@@ -36,7 +36,6 @@ def get_rewards(
     factor: float,
 ) -> torch.FloatTensor:
     
-    #TODO(probably): create uids -> rewards mapping and return it
     return torch.FloatTensor(
         [reward(response, max_time_penalty, factor) for response in responses]
     ).to(self.device)

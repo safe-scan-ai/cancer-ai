@@ -53,7 +53,7 @@ class Miner(BaseMinerNeuron):
         synapse.response_dict = {"models_response": 0.66, "miner_type": miner_type}
 
         # simulate delay for testing purposes
-        time.sleep(12)
+        # time.sleep(10)
 
         return synapse
     

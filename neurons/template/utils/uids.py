@@ -22,7 +22,7 @@ def check_uid_availability(
     if metagraph.validator_permit[uid]:
         if metagraph.S[uid] > vpermit_tao_limit:
             return False
-    # Check if uid is a researcher uiD
+    # Check if uid is a researcher
     if uid in top_researchers_uids:
         return False
     # Available otherwise.
@@ -46,8 +46,6 @@ def get_random_uids(
 
     top_researchers = self.update_and_get_top_researchers()
     top_researchers_uids = list(top_researchers.keys())
-    # top_researchers_uids = [2]
-
 
     for uid in range(self.metagraph.n.item()):
         uid_is_available = check_uid_availability(
