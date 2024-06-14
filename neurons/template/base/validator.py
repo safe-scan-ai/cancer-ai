@@ -65,14 +65,15 @@ class BaseValidatorNeuron(BaseNeuron):
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
 
+        self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
         # Serve axon to enable external connections.
-        # if not self.config.neuron.axon_off:
-        self.serve_axon()
-        # else:
-        # bt.logging.warning("axon off, not serving ip to chain.")
+        if not self.config.neuron.axon_off:
+            self.serve_axon()
+        else:
+            bt.logging.warning("axon off, not serving ip to chain.")
 
         # Create asyncio event loop to manage async tasks.
         self.loop = asyncio.get_event_loop()
@@ -227,8 +228,9 @@ class BaseValidatorNeuron(BaseNeuron):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
-
+        # Fetch top researchers and calculate the remaining reward pool for regular miners
         top_researchers = self.update_and_get_top_researchers()
+        # top_researchers = {2: 0.6} 
         researchers_uids = torch.tensor(list(top_researchers.keys()))
         researchers_rewards = torch.tensor(list(top_researchers.values()))
         remaining_reward_pool = 1 - researchers_rewards.sum()
@@ -238,17 +240,21 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.warning(
                 f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
-            
+        
+        # Create a boolean mask to filter out the researchers from the scaling the scores for miners
+        self.all_uids = [int(uid) for uid in self.metagraph.uids]
         all_uids_tensor = torch.tensor(self.all_uids).to(self.device)
         all_uids_regular_mask = torch.ones_like(all_uids_tensor, dtype=torch.bool)
         for uid in researchers_uids:
             all_uids_regular_mask[all_uids_tensor == uid] = False
         
+        # Scale the scores for miners only
         regular_rewards = self.scores[all_uids_regular_mask]
         if regular_rewards.sum() > 0:
             scaling_factor = remaining_reward_pool / regular_rewards.sum()
             regular_rewards *= scaling_factor
 
+        # Update the scores locally
         self.scores[all_uids_regular_mask] = regular_rewards
         self.scores[~all_uids_regular_mask] = researchers_rewards
         

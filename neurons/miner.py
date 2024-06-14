@@ -52,6 +52,9 @@ class Miner(BaseMinerNeuron):
         miner_type = "creator" if self.config.creator else "regular"
         synapse.response_dict = {"models_response": 0.66, "miner_type": miner_type}
 
+        # simulate delay for testing purposes
+        time.sleep(12)
+
         return synapse
     
     async def forward_info(
