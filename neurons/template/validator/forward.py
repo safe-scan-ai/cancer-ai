@@ -26,7 +26,6 @@ from template.utils.uids import get_random_uids
 
 async def forward(self, base64_photo: str, challenge_type: str, model_name: str, input_metadata: dict):
     
-    # TODO(developer): Define how validator selects only miner uids
     random_uids = get_random_uids(self, k=self.config.neuron.sample_size)
 
     responses = await self.dendrite(
