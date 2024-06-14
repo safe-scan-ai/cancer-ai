@@ -230,7 +230,6 @@ class BaseValidatorNeuron(BaseNeuron):
         """
         # Fetch top researchers and calculate the remaining reward pool for regular miners
         top_researchers = self.update_and_get_top_researchers()
-        # top_researchers = {2: 0.6} 
         researchers_uids = torch.tensor(list(top_researchers.keys()))
         researchers_rewards = torch.tensor(list(top_researchers.values()))
         remaining_reward_pool = 1 - researchers_rewards.sum()
