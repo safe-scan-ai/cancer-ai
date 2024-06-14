@@ -42,8 +42,6 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        print("load_state()")
-        self.load_state()
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
         self.all_uids_info = {
             uid: {"scores": [], "model_name": ""} for uid in self.all_uids
@@ -155,8 +153,6 @@ class Validator(BaseValidatorNeuron):
             return self.top_researchers
 
     def update_scores(self, rewards: torch.FloatTensor, uids: list[int]):
-        top_researchers = self.update_and_get_top_researchers()
-        researchers_uids = torch.tensor(list(top_researchers.keys()))
 
         if torch.isnan(rewards).any():
             bt.logging.warning(f"NaN values detected in rewards: {rewards}")
@@ -168,29 +164,15 @@ class Validator(BaseValidatorNeuron):
         else:
             uids_tensor = torch.tensor(uids).to(self.device)
 
-        all_uids_tensor = torch.tensor(self.all_uids).to(self.device)
-
-        current_regular_uids_mask = torch.ones_like(uids_tensor, dtype=torch.bool)
-        all_regular_uids_mask = torch.ones_like(all_uids_tensor, dtype=torch.bool)
-        for uid in researchers_uids:
-            current_regular_uids_mask[uids_tensor == uid] = False
-            all_regular_uids_mask[all_uids_tensor == uid] = False
-        
-        regular_rewards = rewards[current_regular_uids_mask]
-        regular_uids = uids_tensor[current_regular_uids_mask]
-
         scattered_rewards: torch.FloatTensor = self.scores.scatter(
-            0, regular_uids, regular_rewards
+            0, uids_tensor, rewards
         ).to(self.device)
 
-        bt.logging.debug(f"Scattered rewards: {scattered_rewards}")
-
+        # Perform moving average with alpha parameter only on regular miners
         alpha: float = self.config.neuron.moving_average_alpha
-        bt.logging.debug(f"alpha: {alpha}")
-        bt.logging.debug(f"mask: {all_regular_uids_mask}")
-        bt.logging.debug(f"self.scores: {self.scores}")
-
-        self.scores[all_regular_uids_mask] = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
+        self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
+        zero_threshold = 1e-4
+        self.scores = torch.where(self.scores.abs() < zero_threshold, torch.zeros_like(self.scores), self.scores)
 
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 

@@ -52,9 +52,9 @@ class BaseMinerNeuron(BaseNeuron):
             bt.logging.warning(
                 "You are allowing non-registered entities to send requests to your miner. This is a security risk."
             )
-        bt.logging.warning("ELOOO")
+            
         # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(wallet=self.wallet, config=self.config)
+        self.axon = bt.axon(wallet=self.wallet, config=self.config, port=8102)
 
         # Attach determiners which functions are called when servicing a request.
         print(f"Attaching forward function to miner axon.")

@@ -5,7 +5,7 @@ from typing import List
 
 
 def check_uid_availability(
-    metagraph: "bt.metagraph.Metagraph", uid: int, vpermit_tao_limit: int
+    metagraph: "bt.metagraph.Metagraph", uid: int, vpermit_tao_limit: int, top_researchers_uids: list[int]
 ) -> bool:
     """Check if uid is available. The UID should be available if it is serving and has less than vpermit_tao_limit stake
     Args:
@@ -22,6 +22,9 @@ def check_uid_availability(
     if metagraph.validator_permit[uid]:
         if metagraph.S[uid] > vpermit_tao_limit:
             return False
+    # Check if uid is a researcher uiD
+    if uid in top_researchers_uids:
+        return False
     # Available otherwise.
     return True
 
@@ -41,9 +44,14 @@ def get_random_uids(
     candidate_uids = []
     avail_uids = []
 
+    top_researchers = self.update_and_get_top_researchers()
+    top_researchers_uids = list(top_researchers.keys())
+    # top_researchers_uids = [2]
+
+
     for uid in range(self.metagraph.n.item()):
         uid_is_available = check_uid_availability(
-            self.metagraph, uid, self.config.neuron.vpermit_tao_limit
+            self.metagraph, uid, self.config.neuron.vpermit_tao_limit, top_researchers_uids
         )
         uid_is_not_excluded = exclude is None or uid not in exclude
 
