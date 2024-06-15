@@ -64,6 +64,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores = torch.zeros(
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
+        self.top_researchers: dict = {}
 
         self.load_state()
         # Init sync with the network. Updates the metagraph.
@@ -89,7 +90,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         print("serving ip to chain...")
         try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config, port=8093)
+            self.axon = bt.axon(wallet=self.wallet, config=self.config, port=8103)
             print(self.axon.port)
 
             try:
@@ -388,7 +389,9 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Load the state of the validator from file.
         state = torch.load(self.config.neuron.full_path + "/state.pt")
-        self.step = state["step"]
-        self.scores = state["scores"]
-        self.hotkeys = state["hotkeys"]
-        self.top_researchers = state["top_researchers"]
+        self.step = state.get("step", 0)
+        self.scores = state.get("scores", torch.zeros(
+            self.metagraph.n, dtype=torch.float32, device=self.device
+        ))
+        self.hotkeys = state.get("hotkeys", copy.deepcopy(self.metagraph.hotkeys))
+        self.top_researchers = state.get("top_researchers", {})

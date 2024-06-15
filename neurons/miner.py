@@ -63,10 +63,10 @@ class Miner(BaseMinerNeuron):
 
         synapse.response_dict = self.miner_info
         bt.logging.info(f"Response dict: {self.miner_info}")
+        print("I'VE RESPONDED TO VALIDATOR")
 
         return synapse
-
-
+    
     async def blacklist(
         self, synapse: template.protocol.PredictionSynapse
     ) -> typing.Tuple[bool, str]:
