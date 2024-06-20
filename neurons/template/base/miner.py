@@ -54,7 +54,7 @@ class BaseMinerNeuron(BaseNeuron):
             )
             
         # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(wallet=self.wallet, config=self.config, port=8100)
+        self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
         # Attach determiners which functions are called when servicing a request.
         print(f"Attaching forward function to miner axon.")
