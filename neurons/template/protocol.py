@@ -22,12 +22,21 @@ import bittensor as bt
 
 class PredictionSynapse(bt.Synapse):
 
-    #Validator inputs base 64 encoded photo and any metadata
     base64_photo: str
     challenge_type: str
     model_name: str
     input_metadata: dict
-    #The response metadata contains miner type and
+    response_dict: typing.Optional[dict] = None
+
+    def deserialize(self) -> dict:
+        return self
+    
+class ReasearcherTestingSynapse(bt.Synapse):
+
+    photos_urls: list[str]
+    challenge_type: str
+    model_name: str
+    input_metadata: dict
     response_dict: typing.Optional[dict] = None
 
     def deserialize(self) -> dict:

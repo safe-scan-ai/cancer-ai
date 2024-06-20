@@ -64,6 +64,8 @@ class BaseMinerNeuron(BaseNeuron):
             priority_fn=self.priority,
         ).attach(
             forward_fn=self.forward_info,
+        ).attach(
+            forward_fn=self.forward_researcher,
         )
         print(f"Axon created: {self.axon}")
 

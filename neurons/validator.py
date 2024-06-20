@@ -54,7 +54,7 @@ class Validator(BaseValidatorNeuron):
         
         # TODO: define if we want to update miners identity every forward(pretty often) or poll it e.g. once per minute?
         bt.logging.info("Updating available models & uids")
-        self.update_miners_identity()
+        await self.update_miners_identity()
         
         # TODO call the challenge generator url for photo and metadata
         photo_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
@@ -64,12 +64,12 @@ class Validator(BaseValidatorNeuron):
         
         return await forward(self, photo_b64, challenge_type, model_name, input_metadata)
     
-    def update_miners_identity(self):
+    async def update_miners_identity(self):
         """
         1. Query model_name of available uids
         2. Update the available list
         """
-        valid_miners_info = self.get_miner_info()
+        valid_miners_info = await self.get_miners_info()
         if not valid_miners_info:
             bt.logging.warning("No active miner available")
         for uid, info in valid_miners_info.items():
@@ -92,6 +92,10 @@ class Validator(BaseValidatorNeuron):
             miner_state["device_info"] = info.get("device_info", {})
             miner_state["model_name"] = info.get("model_name", "")
 
+            if info["miner_mode"] == "researcher" and miner_state["miner_mode"] == "regular":
+                #TODO: this should trigger calling the DB for test utilities to test the researcher
+                ...
+            miner_state["miner_mode"] = info["miner_mode"]
             #TODO: update miner's score (?) do we want to store score in miners info?
 
         bt.logging.success("Updated miner identity")
@@ -101,7 +105,7 @@ class Validator(BaseValidatorNeuron):
         # thread = Thread(target=self.store_miner_info, daemon=True)
         # thread.start()
 
-    def get_miner_info(self):
+    async def get_miners_info(self):
         """
         1. Query model_name of available uids
         """

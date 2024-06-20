@@ -22,9 +22,9 @@ from typing import List
 from template.protocol import PredictionSynapse
 
 def reward(response: PredictionSynapse, max_time_penalty: float, factor: float) -> float:
-    if response.response_dict is None or response.response_dict["miner_type"] == "creator" or response.dendrite.process_time > response.timeout:
+    if response.response_dict is None or response.dendrite.process_time > response.timeout:
         return 0
-
+    
     time_penalty = min(max_time_penalty, max_time_penalty * pow(response.dendrite.process_time, 3) / pow(factor, 3))
     return 1 - time_penalty
 
