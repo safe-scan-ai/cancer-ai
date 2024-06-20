@@ -27,6 +27,7 @@ import bittensor as bt
 
 from typing import List
 from traceback import print_exception
+from abc import abstractmethod
 
 from template.base.neuron import BaseNeuron
 from template.mock import MockDendrite
@@ -63,15 +64,17 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores = torch.zeros(
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
+        self.top_researchers: dict = {}
 
+        self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
 
         # Serve axon to enable external connections.
-        # if not self.config.neuron.axon_off:
-        self.serve_axon()
-        # else:
-        # bt.logging.warning("axon off, not serving ip to chain.")
+        if not self.config.neuron.axon_off:
+            self.serve_axon()
+        else:
+            bt.logging.warning("axon off, not serving ip to chain.")
 
         # Create asyncio event loop to manage async tasks.
         self.loop = asyncio.get_event_loop()
@@ -87,7 +90,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         print("serving ip to chain...")
         try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config, port=8093)
+            self.axon = bt.axon(wallet=self.wallet, config=self.config)
             print(self.axon.port)
 
             try:
@@ -218,17 +221,43 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = False
             bt.logging.debug("Stopped")
 
+    @abstractmethod
+    def update_and_get_top_researchers(self):
+        ...
+
     def set_weights(self):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
+        # Fetch top researchers and calculate the remaining reward pool for regular miners
+        top_researchers = self.update_and_get_top_researchers()
+        researchers_uids = torch.tensor(list(top_researchers.keys()))
+        researchers_rewards = torch.tensor(list(top_researchers.values()))
+        remaining_reward_pool = 1 - researchers_rewards.sum()
 
         # Check if self.scores contains any NaN values and log a warning if it does.
         if torch.isnan(self.scores).any():
             bt.logging.warning(
                 f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
+        
+        # Create a boolean mask to filter out the researchers from the scaling the scores for miners
+        self.all_uids = [int(uid) for uid in self.metagraph.uids]
+        all_uids_tensor = torch.tensor(self.all_uids).to(self.device)
+        all_uids_regular_mask = torch.ones_like(all_uids_tensor, dtype=torch.bool)
+        for uid in researchers_uids:
+            all_uids_regular_mask[all_uids_tensor == uid] = False
+        
+        # Scale the scores for miners only
+        regular_rewards = self.scores[all_uids_regular_mask]
+        if regular_rewards.sum() > 0:
+            scaling_factor = remaining_reward_pool / regular_rewards.sum()
+            regular_rewards *= scaling_factor
 
+        # Update the scores locally
+        self.scores[all_uids_regular_mask] = regular_rewards
+        self.scores[~all_uids_regular_mask] = researchers_rewards
+        
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0)
@@ -342,7 +371,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def save_state(self):
         """Saves the state of the validator to a file."""
-        # print("Saving validator state.")
 
         # Save the state of the validator to file.
         torch.save(
@@ -350,6 +378,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 "step": self.step,
                 "scores": self.scores,
                 "hotkeys": self.hotkeys,
+                "top_researchers": self.top_researchers,
             },
             self.config.neuron.full_path + "/state.pt",
         )
@@ -360,6 +389,9 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Load the state of the validator from file.
         state = torch.load(self.config.neuron.full_path + "/state.pt")
-        self.step = state["step"]
-        self.scores = state["scores"]
-        self.hotkeys = state["hotkeys"]
+        self.step = state.get("step", 0)
+        self.scores = state.get("scores", torch.zeros(
+            self.metagraph.n, dtype=torch.float32, device=self.device
+        ))
+        self.hotkeys = state.get("hotkeys", copy.deepcopy(self.metagraph.hotkeys))
+        self.top_researchers = state.get("top_researchers", {})

@@ -19,42 +19,42 @@
 
 import bittensor as bt
 
-from template.protocol import PredictionSynapse
+from template.protocol import PredictionSynapse, ReasearcherTestingSynapse
 from template.validator.reward import get_rewards
 from template.utils.uids import get_random_uids
 
 
 async def forward(self, base64_photo: str, challenge_type: str, model_name: str, input_metadata: dict):
-    """
-    The forward function is called by the validator every time step.
-
-    It is responsible for querying the network and scoring the responses.
-
-    Args:
-        self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
-
-    """
-    # How often you actually send synthetic challenges to miner?
-    if self.step % 25 > 0:
-        return
     
-    # TODO(developer): Define how validator selects only miner uids
-    miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+    random_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+    # TODO: all_uids =
 
     responses = await self.dendrite(
-        axons=[self.metagraph.axons[uid] for uid in miner_uids],
+        axons=[self.metagraph.axons[uid] for uid in random_uids],
         synapse=PredictionSynapse(base64_photo=base64_photo, challenge_type=challenge_type, model_name=model_name, input_metadata=input_metadata),
         deserialize=True,
+        timeout=12,
     )
 
     # Log the results for monitoring purposes.
     print(f"Received responses: {responses}")
-    print("responses", responses)
 
-    # TODO(developer): Define how the validator scores responses.
-    # Adjust the scores based on responses from miners.
-    rewards = get_rewards(self, query=self.step, responses=responses)
+    rewards = get_rewards(self, responses=responses, max_time_penalty=self.config.max_time_penalty, factor=12)
+    print(f"Scored rewards: {rewards}")
 
-    print(f"Scored responses: {rewards}")
-    # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-    self.update_scores(rewards, miner_uids)
+    self.update_scores(rewards, random_uids)
+
+async def forward_to_researcher(self, researcher_uid: int, base64_photo: str, challenge_type: str, model_name: str, input_metadata: dict):
+    response = await self.dendrite(
+        axons=self.metagraph.axons[researcher_uid],
+        synapse=ReasearcherTestingSynapse(base64_photo=base64_photo, challenge_type=challenge_type, model_name=model_name, input_metadata=input_metadata),
+        deserialize=True,
+        timeout=12,
+    )
+
+    print(f"Received response: {response}")
+    if response.response_dict["identity_error"]:
+        bt.logging.error(f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher.")
+    
+    #possibly returning score loss for a particular challenge, or returning the the whole set of predictions/losses
+    

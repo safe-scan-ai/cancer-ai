@@ -21,6 +21,7 @@
 import time
 import bittensor as bt
 import requests
+import torch
 
 from threading import Thread
 from template.validator import forward
@@ -41,16 +42,19 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        print("load_state()")
-        self.load_state()
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
         self.all_uids_info = {
             uid: {"scores": [], "model_name": ""} for uid in self.all_uids
         }
 
     async def forward(self):
+        # How often you actually send synthetic challenges to miner?
+        if self.step % 1000 > 0:
+            return
+        
+        # TODO: define if we want to update miners identity every forward(pretty often) or poll it e.g. once per minute?
         bt.logging.info("Updating available models & uids")
-        self.update_miners_identity()
+        await self.update_miners_identity()
         
         # TODO call the challenge generator url for photo and metadata
         photo_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
@@ -60,12 +64,12 @@ class Validator(BaseValidatorNeuron):
         
         return await forward(self, photo_b64, challenge_type, model_name, input_metadata)
     
-    def update_miners_identity(self):
+    async def update_miners_identity(self):
         """
         1. Query model_name of available uids
         2. Update the available list
         """
-        valid_miners_info = self.get_miner_info()
+        valid_miners_info = await self.get_miners_info()
         if not valid_miners_info:
             bt.logging.warning("No active miner available")
         for uid, info in valid_miners_info.items():
@@ -75,8 +79,12 @@ class Validator(BaseValidatorNeuron):
             miner_state = self.all_uids_info.setdefault(
                 uid,
                 {
-                    "scores": [],
-                    "model_name": "",
+                    "model_name": "Unknown",
+                    "min_stake": 100,
+                    "device_info": {
+                        "gpu_device_name": "Unknown",
+                        "gpu_device_count": "Unknown",
+                     }
                 },
             )
 
@@ -84,13 +92,20 @@ class Validator(BaseValidatorNeuron):
             miner_state["device_info"] = info.get("device_info", {})
             miner_state["model_name"] = info.get("model_name", "")
 
+            if info["miner_mode"] == "researcher" and miner_state["miner_mode"] == "regular":
+                #TODO: this should trigger calling the DB for test utilities to test the researcher
+                ...
+            miner_state["miner_mode"] = info["miner_mode"]
+            #TODO: update miner's score (?) do we want to store score in miners info?
+
         bt.logging.success("Updated miner identity")
         print("ALL_UIDS_INFO", self.all_uids_info)
 
-        thread = Thread(target=self.store_miner_info, daemon=True)
-        thread.start()
+        # commented for not spamming on output
+        # thread = Thread(target=self.store_miner_info, daemon=True)
+        # thread.start()
 
-    def get_miner_info(self):
+    async def get_miners_info(self):
         """
         1. Query model_name of available uids
         """
@@ -121,6 +136,49 @@ class Validator(BaseValidatorNeuron):
             )
         except Exception as e:
             bt.logging.error(f"Failed to store miner info: {e}")
+
+    def update_and_get_top_researchers(self):
+        '''This function fetches top researchers with mapped rewards from cancer-ai external api'''
+        try:
+            response = requests.get(url = self.config.top_researchers_url)
+            data = response.json()
+
+            if not isinstance(data, dict):
+                raise Exception("Invalid data")
+            
+            for key, value in data.items():
+                if not (isinstance(key, int) and isinstance(value, float)):
+                    raise Exception("Invalid data inside top researcher dict")
+                
+            self.top_researchers = dict(sorted(data.items()))
+        except Exception as e:
+            bt.logging.error(f"Failed to fetch top researchers: {e}. Proceeding with cached top researchers.")
+        finally:
+            return self.top_researchers
+
+    def update_scores(self, rewards: torch.FloatTensor, uids: list[int]):
+
+        if torch.isnan(rewards).any():
+            bt.logging.warning(f"NaN values detected in rewards: {rewards}")
+            rewards = torch.nan_to_num(rewards, 0)
+        
+        # Check if `uids` is already a tensor and clone it to avoid the warning.
+        if isinstance(uids, torch.Tensor):
+            uids_tensor = uids.clone().detach()
+        else:
+            uids_tensor = torch.tensor(uids).to(self.device)
+
+        scattered_rewards: torch.FloatTensor = self.scores.scatter(
+            0, uids_tensor, rewards
+        ).to(self.device)
+
+        # Perform moving average with alpha parameter only on regular miners
+        alpha: float = self.config.neuron.moving_average_alpha
+        self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores.to(self.device)
+        zero_threshold = 1e-4
+        self.scores = torch.where(self.scores.abs() < zero_threshold, torch.zeros_like(self.scores), self.scores)
+
+        bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":

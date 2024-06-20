@@ -52,7 +52,7 @@ class BaseMinerNeuron(BaseNeuron):
             bt.logging.warning(
                 "You are allowing non-registered entities to send requests to your miner. This is a security risk."
             )
-        bt.logging.warning("ELOOO")
+            
         # The axon handles request processing, allowing validators to send this miner requests.
         self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
@@ -64,6 +64,8 @@ class BaseMinerNeuron(BaseNeuron):
             priority_fn=self.priority,
         ).attach(
             forward_fn=self.forward_info,
+        ).attach(
+            forward_fn=self.forward_researcher,
         )
         print(f"Axon created: {self.axon}")
 
@@ -191,3 +193,8 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)
+
+    def load_state(self):
+        ...
+    def save_state(self):
+        ...
