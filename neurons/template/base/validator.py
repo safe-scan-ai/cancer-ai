@@ -90,7 +90,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         print("serving ip to chain...")
         try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config, port=8103)
+            self.axon = bt.axon(wallet=self.wallet, config=self.config)
             print(self.axon.port)
 
             try:
