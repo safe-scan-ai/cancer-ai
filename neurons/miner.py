@@ -49,11 +49,23 @@ class Miner(BaseMinerNeuron):
     ) -> template.protocol.PredictionSynapse:
 
         # TODO(developer): feed the ML model with the base64 encoded photo
-        miner_type = "creator" if self.config.creator else "regular"
-        synapse.response_dict = {"models_response": 0.66, "miner_type": miner_type}
+        miner_mode = "researcher" if self.config.researcher else "regular"
+        synapse.response_dict = {"models_response": 0.66, "miner_mode": miner_mode, "miner_uid": self.uid}
 
         # simulate delay for testing purposes
         # time.sleep(10)
+
+        return synapse
+    
+    async def forward_researcher(
+            self, synapse: template.protocol.ReasearcherTestingSynapse
+    ) -> template.protocol.ReasearcherTestingSynapse:
+        
+        if not self.config.researcher:
+            synapse.response_dict = {"identity_error": True}
+        else:
+            # TODO(developer): feed the ML model with the test data
+            synapse.response_dict = {"models_response": 0.66}
 
         return synapse
     
@@ -63,7 +75,6 @@ class Miner(BaseMinerNeuron):
 
         synapse.response_dict = self.miner_info
         bt.logging.info(f"Response dict: {self.miner_info}")
-        print("I'VE RESPONDED TO VALIDATOR")
 
         return synapse
     

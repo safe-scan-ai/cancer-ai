@@ -13,15 +13,21 @@ def set_info(self):
     response = get_model_name(self)
     miner_info = {
         "model_name": response,
-        "min_stake": 100,
+        "min_stake": self.config.min_stake,
         "device_info": {
             "gpu_device_name": GPU_DEVICE_NAME,
             "gpu_device_count": GPU_DEVICE_COUNT,
-        }
+        },
+        "miner_mode": get_mode(self)
     }
     return miner_info
 
 def get_model_name(self):
     #TODO: Logic to handle querying models name using ML model watermark (?)
     return "dummy model"
+
+def get_mode(self):
+    if self.config.researcher:
+        return "researcher"
+    return "regular"
 
