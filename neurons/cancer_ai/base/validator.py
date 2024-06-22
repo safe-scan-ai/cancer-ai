@@ -241,8 +241,7 @@ class BaseValidatorNeuron(BaseNeuron):
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
         # Fetch top researchers and calculate the remaining reward pool for regular miners
-        # top_researchers = self.update_and_get_top_researchers()
-        top_researchers = {0: 0.5}
+        top_researchers = self.update_and_get_top_researchers()
         researchers_uids = torch.tensor(list(top_researchers.keys()))
         researchers_rewards = torch.tensor(list(top_researchers.values()))
         remaining_reward_pool = 1 - researchers_rewards.sum()
