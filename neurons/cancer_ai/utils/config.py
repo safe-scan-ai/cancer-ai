@@ -266,6 +266,13 @@ def add_validator_args(cls, parser):
     ),
 
     parser.add_argument(
+        "--stats_api",
+        type=str,
+        help="URL statistics api",
+        default="https://localhost:8888",
+    ),
+
+    parser.add_argument(
         "--max_time_penalty",
         type=int,
         help="Max value for time penalty tax for miner reward",

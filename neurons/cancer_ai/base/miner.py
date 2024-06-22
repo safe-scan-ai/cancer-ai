@@ -24,8 +24,8 @@ import traceback
 
 import bittensor as bt
 
-from template.base.neuron import BaseNeuron
-from template.utils.config import add_miner_args
+from cancer_ai.base.neuron import BaseNeuron
+from cancer_ai.utils.config import add_miner_args
 
 
 class BaseMinerNeuron(BaseNeuron):
@@ -57,7 +57,6 @@ class BaseMinerNeuron(BaseNeuron):
         self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
         # Attach determiners which functions are called when servicing a request.
-        print(f"Attaching forward function to miner axon.")
         self.axon.attach(
             forward_fn=self.forward,
             blacklist_fn=self.blacklist,
@@ -67,7 +66,6 @@ class BaseMinerNeuron(BaseNeuron):
         ).attach(
             forward_fn=self.forward_researcher,
         )
-        print(f"Axon created: {self.axon}")
 
         # Instantiate runners
         self.should_exit: bool = False
@@ -103,14 +101,13 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
-        print(
+        bt.logging.info(
             f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
 
         # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
-        print("axon started", self.axon.port, self.axon.ip, self.axon.external_port, self.axon.external_ip)
         bt.logging.warning(f"Miner starting at block: {self.block}")
 
         # This loop maintains the miner's operations until intentionally stopped.

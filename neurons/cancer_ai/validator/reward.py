@@ -19,7 +19,7 @@
 
 import torch
 from typing import List
-from template.protocol import PredictionSynapse
+from cancer_ai.protocol import PredictionSynapse
 
 def reward(response: PredictionSynapse, max_time_penalty: float, factor: float) -> float:
     if response.response_dict is None or response.dendrite.process_time > response.timeout:
