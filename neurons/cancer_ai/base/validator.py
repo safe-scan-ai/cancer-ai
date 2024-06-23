@@ -24,14 +24,15 @@ import asyncio
 import argparse
 import threading
 import bittensor as bt
+import requests
 
 from typing import List
 from traceback import print_exception
 from abc import abstractmethod
 
-from template.base.neuron import BaseNeuron
-from template.mock import MockDendrite
-from template.utils.config import add_validator_args
+from cancer_ai.base.neuron import BaseNeuron
+from cancer_ai.mock import MockDendrite
+from cancer_ai.utils.config import add_validator_args
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -57,7 +58,6 @@ class BaseValidatorNeuron(BaseNeuron):
             self.dendrite = MockDendrite(wallet=self.wallet)
         else:
             self.dendrite = bt.dendrite(wallet=self.wallet)
-        print(f"Dendrite: {self.dendrite}")
 
         # Set up initial scoring weights for validation
         print("Building validation weights.")
@@ -91,7 +91,6 @@ class BaseValidatorNeuron(BaseNeuron):
         print("serving ip to chain...")
         try:
             self.axon = bt.axon(wallet=self.wallet, config=self.config)
-            print(self.axon.port)
 
             try:
                 self.subtensor.serve_axon(
@@ -146,7 +145,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                # print(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
                 self.loop.run_until_complete(self.concurrent_forward())
@@ -225,6 +223,19 @@ class BaseValidatorNeuron(BaseNeuron):
     def update_and_get_top_researchers(self):
         ...
 
+    def send_weights(self, weights, uids):
+        try:
+            requests.post(
+                self.config.stats_api + "/scores",
+                json={
+                    "validator_uid": self.uid,
+                    "weights": weights,
+                    "uids": uids,
+                },
+            )
+        except Exception as e:
+            bt.logging.error(f"Failed to send scores to statistics api: {e}")
+
     def set_weights(self):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
@@ -300,6 +311,7 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         if result is True:
             print("set_weights on chain successfully!")
+            self.send_weights(uint_weights, uint_uids)
         else:
             bt.logging.error("set_weights failed", msg)
 
@@ -385,7 +397,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-        print("Loading validator state.")
 
         # Load the state of the validator from file.
         state = torch.load(self.config.neuron.full_path + "/state.pt")

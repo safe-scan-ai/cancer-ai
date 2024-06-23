@@ -24,9 +24,9 @@ import requests
 import torch
 
 from threading import Thread
-from template.validator import forward
-from template.base.validator import BaseValidatorNeuron
-from template.protocol import MinerInfoSynapse
+from cancer_ai.validator import forward
+from cancer_ai.base.validator import BaseValidatorNeuron
+from cancer_ai.protocol import MinerInfoSynapse
 
 
 

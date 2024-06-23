@@ -19,18 +19,17 @@
 
 import bittensor as bt
 
-from template.protocol import PredictionSynapse, ReasearcherTestingSynapse
-from template.validator.reward import get_rewards
-from template.utils.uids import get_random_uids
+from cancer_ai.protocol import PredictionSynapse, ReasearcherTestingSynapse
+from cancer_ai.validator.reward import get_rewards
+from cancer_ai.utils.uids import get_all_uids
 
 
 async def forward(self, base64_photo: str, challenge_type: str, model_name: str, input_metadata: dict):
     
-    random_uids = get_random_uids(self, k=self.config.neuron.sample_size)
-    # TODO: all_uids =
+    all_uids = get_all_uids(self)
 
     responses = await self.dendrite(
-        axons=[self.metagraph.axons[uid] for uid in random_uids],
+        axons=[self.metagraph.axons[uid] for uid in all_uids],
         synapse=PredictionSynapse(base64_photo=base64_photo, challenge_type=challenge_type, model_name=model_name, input_metadata=input_metadata),
         deserialize=True,
         timeout=12,
@@ -42,7 +41,7 @@ async def forward(self, base64_photo: str, challenge_type: str, model_name: str,
     rewards = get_rewards(self, responses=responses, max_time_penalty=self.config.max_time_penalty, factor=12)
     print(f"Scored rewards: {rewards}")
 
-    self.update_scores(rewards, random_uids)
+    self.update_scores(rewards, all_uids)
 
 async def forward_to_researcher(self, researcher_uid: int, base64_photo: str, challenge_type: str, model_name: str, input_metadata: dict):
     response = await self.dendrite(

@@ -21,12 +21,12 @@ import time
 import typing
 import bittensor as bt
 
-# Bittensor Miner Template:
-import template
+# Bittensor Miner cancer_ai:
+import cancer_ai
 
 # import base miner class which takes care of most of the boilerplate
-from template.base.miner import BaseMinerNeuron
-from template.miner.forward import set_info
+from cancer_ai.base.miner import BaseMinerNeuron
+from cancer_ai.miner.forward import set_info
 
 
 class Miner(BaseMinerNeuron):
@@ -45,11 +45,12 @@ class Miner(BaseMinerNeuron):
         bt.logging.info(f"Miner info: {self.miner_info}")
 
     async def forward(
-        self, synapse: template.protocol.PredictionSynapse
-    ) -> template.protocol.PredictionSynapse:
+        self, synapse: cancer_ai.protocol.PredictionSynapse
+    ) -> cancer_ai.protocol.PredictionSynapse:
 
         # TODO(developer): feed the ML model with the base64 encoded photo
         miner_mode = "researcher" if self.config.researcher else "regular"
+
         synapse.response_dict = {"models_response": 0.66, "miner_mode": miner_mode, "miner_uid": self.uid}
 
         # simulate delay for testing purposes
@@ -58,8 +59,8 @@ class Miner(BaseMinerNeuron):
         return synapse
     
     async def forward_researcher(
-            self, synapse: template.protocol.ReasearcherTestingSynapse
-    ) -> template.protocol.ReasearcherTestingSynapse:
+            self, synapse: cancer_ai.protocol.ReasearcherTestingSynapse
+    ) -> cancer_ai.protocol.ReasearcherTestingSynapse:
         
         if not self.config.researcher:
             synapse.response_dict = {"identity_error": True}
@@ -70,8 +71,8 @@ class Miner(BaseMinerNeuron):
         return synapse
     
     async def forward_info(
-        self, synapse: template.protocol.MinerInfoSynapse
-    ) -> template.protocol.MinerInfoSynapse:
+        self, synapse: cancer_ai.protocol.MinerInfoSynapse
+    ) -> cancer_ai.protocol.MinerInfoSynapse:
 
         synapse.response_dict = self.miner_info
         bt.logging.info(f"Response dict: {self.miner_info}")
@@ -79,7 +80,7 @@ class Miner(BaseMinerNeuron):
         return synapse
     
     async def blacklist(
-        self, synapse: template.protocol.PredictionSynapse
+        self, synapse: cancer_ai.protocol.PredictionSynapse
     ) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
@@ -90,7 +91,7 @@ class Miner(BaseMinerNeuron):
         requests before they are deserialized to avoid wasting resources on requests that will be ignored.
 
         Args:
-            synapse (template.protocol.Dummy): A synapse object constructed from the headers of the incoming request.
+            synapse (cancer_ai.protocol.Dummy): A synapse object constructed from the headers of the incoming request.
 
         Returns:
             Tuple[bool, str]: A tuple containing a boolean indicating whether the synapse's hotkey is blacklisted,
@@ -135,7 +136,7 @@ class Miner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def priority(self, synapse: template.protocol.PredictionSynapse) -> float:
+    async def priority(self, synapse: cancer_ai.protocol.PredictionSynapse) -> float:
         """
         The priority function determines the order in which requests are handled. More valuable or higher-priority
         requests are processed before others. You should design your own priority mechanism with care.
@@ -143,7 +144,7 @@ class Miner(BaseMinerNeuron):
         This implementation assigns priority to incoming requests based on the calling entity's stake in the metagraph.
 
         Args:
-            synapse (template.protocol.Dummy): The synapse object that contains metadata about the incoming request.
+            synapse (cancer_ai.protocol.Dummy): The synapse object that contains metadata about the incoming request.
 
         Returns:
             float: A priority score derived from the stake of the calling entity.

@@ -68,3 +68,31 @@ def get_random_uids(
         )
     uids = torch.tensor(random.sample(available_uids, k))
     return uids
+
+def get_all_uids(
+        self, exclude: List[int] = None
+) -> torch.LongTensor:
+    """Returns all available uids from the metagrapth.
+        Args:
+        exclude (List[int]): List of uids to exclude from the random sampling.
+    Returns:
+        uids (torch.LongTensor): All available uids.
+    Notes:
+        Current top researchers are not considered to be 
+    """
+    avail_uids = []
+
+    # top_researchers = self.update_and_get_top_researchers()
+    top_researchers = self.update_and_get_top_researchers()
+    top_researchers_uids = list(top_researchers.keys())
+
+    for uid in range(self.metagraph.n.item()):
+        uid_is_available = check_uid_availability(
+            self.metagraph, uid, self.config.neuron.vpermit_tao_limit, top_researchers_uids
+        )
+        uid_is_not_excluded = exclude is None or uid not in exclude
+
+        if uid_is_available and uid_is_not_excluded:
+            avail_uids.append(uid)
+
+    return torch.tensor(avail_uids)
