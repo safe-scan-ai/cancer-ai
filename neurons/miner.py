@@ -28,7 +28,7 @@ import cancer_ai
 
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
-from cancer_ai.miner.forward import set_info
+from cancer_ai.miner.forward import set_info, get_images
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from io import BytesIO
 
@@ -83,9 +83,15 @@ class Miner(BaseMinerNeuron):
         
         if not self.config.researcher:
             synapse.response_dict = {"identity_error": True}
-        else:
-            # TODO(developer): feed the ML model with the test data
-            synapse.response_dict = {"models_response": 0.66}
+            return synapse
+        
+        # TODO(researcher owner): feed the ML model with the images
+        images = get_images(synapse.images_urls)
+        mock_response = {
+            "sample_photo_id_1": 0.43,
+            "sample_photo_id_2": 0.99,
+        }
+        synapse.response_dict = {"models_response": mock_response}
 
         return synapse
     
@@ -186,7 +192,6 @@ class Miner(BaseMinerNeuron):
             f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority
         )
         return prirority
-
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":

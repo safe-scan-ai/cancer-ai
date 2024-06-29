@@ -37,14 +37,11 @@ class PredictionSynapse(bt.Synapse):
     
 class ReasearcherTestingSynapse(bt.Synapse):
 
-    photos_urls: list[str]
-    challenge_type: str
-    model_name: str
-    input_metadata: dict
+    images_urls: list[str]
     response_dict: typing.Optional[dict] = None
 
     def deserialize(self) -> dict:
-        return self
+        return self.response_dict
 
 class MinerInfoSynapse(bt.Synapse):
 
