@@ -174,7 +174,6 @@ def add_miner_args(cls, parser):
         default=100,
     )
 
-
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
 
@@ -277,6 +276,13 @@ def add_validator_args(cls, parser):
         type=int,
         help="Max value for time penalty tax for miner reward",
         default=0.4,
+    )
+
+    parser.forward_frequency(
+        "--forward_frequency",
+        type=int,
+        help="Steps per forward frequency",
+        default=1000,
     )
 
 def config(cls):

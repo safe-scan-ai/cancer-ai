@@ -50,7 +50,7 @@ class Validator(BaseValidatorNeuron):
 
     async def forward(self):
         # How often you actually send synthetic challenges to the miner?
-        if self.step % 1000 > 0:
+        if self.step % self.config.forward_frequency > 0:
             return
         
         bt.logging.info("Updating available models & uids")
@@ -64,7 +64,7 @@ class Validator(BaseValidatorNeuron):
     
     async def get_challenge(self):
         # TODO implement calling the actual challenge service
-        with open("/home/tensor/cancer-ai-clone/data/melanoma.jpg", "rb") as image_file:
+        with open("path-to-the-image", "rb") as image_file:
             image_data = image_file.read()
             base64_encoded_data = base64.b64encode(image_data)
             base64_string = base64_encoded_data.decode('utf-8')
