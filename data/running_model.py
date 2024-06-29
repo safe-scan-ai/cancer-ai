@@ -14,7 +14,10 @@ img_array = img_to_array(img)  # Convert to NumPy array
 img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
 
 pred = model.predict(img_array)
-melanoma_probability, not_melanoma_probability = pred[0]
+not_melanoma_probability, melanoma_probability = pred[0]
+
 output = {
     "melanoma": melanoma_probability,
 }
+
+print(output)
