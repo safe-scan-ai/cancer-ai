@@ -22,6 +22,7 @@ import time
 import bittensor as bt
 import requests
 import torch
+import base64
 
 from threading import Thread
 from cancer_ai.validator import forward
@@ -44,25 +45,36 @@ class Validator(BaseValidatorNeuron):
 
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
         self.all_uids_info = {
-            uid: {"scores": [], "model_name": ""} for uid in self.all_uids
+            uid: {"scores": [], "model_name": "", "miner_mode": ""} for uid in self.all_uids
         }
 
     async def forward(self):
-        # How often you actually send synthetic challenges to miner?
+        # How often you actually send synthetic challenges to the miner?
         if self.step % 1000 > 0:
             return
         
-        # TODO: define if we want to update miners identity every forward(pretty often) or poll it e.g. once per minute?
         bt.logging.info("Updating available models & uids")
         await self.update_miners_identity()
-        
-        # TODO call the challenge generator url for photo and metadata
-        photo_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
-        challenge_type = "whitey"
-        model_name = "skynet"
+
+        challenge_data = await self.get_challenge()
         input_metadata = {"dummy": "data"}
         
-        return await forward(self, photo_b64, challenge_type, model_name, input_metadata)
+        return await forward(self, challenge_data["photo"], challenge_data["skin_type"],
+                              challenge_data["model_name"], input_metadata)
+    
+    async def get_challenge(self):
+        # TODO implement calling the actual challenge service
+        with open("/home/tensor/cancer-ai-clone/data/melanoma.jpg", "rb") as image_file:
+            image_data = image_file.read()
+            base64_encoded_data = base64.b64encode(image_data)
+            base64_string = base64_encoded_data.decode('utf-8')
+        
+        challenge_data = {
+            "photo": base64_string,
+            "skin_type": "whitey",
+            "model_name": "skynet",
+        }
+        return challenge_data
     
     async def update_miners_identity(self):
         """
@@ -80,6 +92,7 @@ class Validator(BaseValidatorNeuron):
                 uid,
                 {
                     "model_name": "Unknown",
+                    "miner_mode": "Unknown",
                     "min_stake": 100,
                     "device_info": {
                         "gpu_device_name": "Unknown",

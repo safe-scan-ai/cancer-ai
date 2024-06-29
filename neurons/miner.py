@@ -20,13 +20,17 @@
 import time
 import typing
 import bittensor as bt
-
+import tensorflow as tf
+import base64
+import numpy as np
 # Bittensor Miner cancer_ai:
 import cancer_ai
 
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
 from cancer_ai.miner.forward import set_info
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from io import BytesIO
 
 
 class Miner(BaseMinerNeuron):
@@ -44,14 +48,28 @@ class Miner(BaseMinerNeuron):
         self.miner_info = set_info(self)
         bt.logging.info(f"Miner info: {self.miner_info}")
 
+        self.regular_model = tf.keras.models.load_model("/home/tensor/cancer-ai-clone/data/melanoma.keras")
+        bt.logging.info(f"Regular model built status: {self.regular_model.built}")
+
+
+
     async def forward(
         self, synapse: cancer_ai.protocol.PredictionSynapse
     ) -> cancer_ai.protocol.PredictionSynapse:
 
-        # TODO(developer): feed the ML model with the base64 encoded photo
         miner_mode = "researcher" if self.config.researcher else "regular"
 
-        synapse.response_dict = {"models_response": 0.66, "miner_mode": miner_mode, "miner_uid": self.uid}
+        # Convert binary data to an image
+        image_data = base64.b64decode(synapse.base64_photo)
+        image = load_img(BytesIO(image_data), target_size=(180, 180, 3))
+        img_array = img_to_array(image)
+        img_array = np.expand_dims(img_array, axis=0)
+
+        # Predict using the model
+        pred = self.regular_model.predict(img_array)
+
+        not_melanoma_probability, melanoma_probability = pred[0]
+        synapse.response_dict = {"models_response": float(melanoma_probability), "miner_mode": miner_mode, "miner_uid": self.uid}
 
         # simulate delay for testing purposes
         # time.sleep(10)

@@ -397,7 +397,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-
         # Load the state of the validator from file.
         state = torch.load(self.config.neuron.full_path + "/state.pt")
         self.step = state.get("step", 0)

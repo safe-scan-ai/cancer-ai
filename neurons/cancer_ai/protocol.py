@@ -29,7 +29,11 @@ class PredictionSynapse(bt.Synapse):
     response_dict: typing.Optional[dict] = None
 
     def deserialize(self) -> dict:
-        return self
+        return {
+            "process_time": self.dendrite.process_time,
+            "timeout": self.timeout,
+            "response_dict": self.response_dict,
+        }
     
 class ReasearcherTestingSynapse(bt.Synapse):
 
