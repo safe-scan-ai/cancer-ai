@@ -405,3 +405,7 @@ class BaseValidatorNeuron(BaseNeuron):
         ))
         self.hotkeys = state.get("hotkeys", copy.deepcopy(self.metagraph.hotkeys))
         self.top_researchers = state.get("top_researchers", {})
+
+    @abstractmethod
+    def forward_to_researcher(self):
+        ...

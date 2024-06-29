@@ -272,6 +272,13 @@ def add_validator_args(cls, parser):
     ),
 
     parser.add_argument(
+        "--dataset_api",
+        type=str,
+        help="URL dataset api",
+        default="https://localhost:8888",
+    )
+
+    parser.add_argument(
         "--max_time_penalty",
         type=int,
         help="Max value for time penalty tax for miner reward",
@@ -283,6 +290,13 @@ def add_validator_args(cls, parser):
         type=int,
         help="Steps per forward frequency",
         default=1000,
+    )
+
+    parser.test_data_fetching_delay(
+        "--test_data_fetching_delay",
+        type=int,
+        help="Retry delay between attempts to fetch test data for researcher in seconds",
+        default=10,
     )
 
 def config(cls):

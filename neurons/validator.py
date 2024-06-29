@@ -25,9 +25,11 @@ import torch
 import base64
 
 from threading import Thread
-from cancer_ai.validator import forward
+from cancer_ai.validator import forward, forward_to_researcher
+from cancer_ai.validator.models import DatasetEntries
 from cancer_ai.base.validator import BaseValidatorNeuron
 from cancer_ai.protocol import MinerInfoSynapse
+from pydantic import ValidationError
 
 
 
@@ -62,6 +64,18 @@ class Validator(BaseValidatorNeuron):
         return await forward(self, challenge_data["photo"], challenge_data["skin_type"],
                               challenge_data["model_name"], input_metadata)
     
+    async def forward_researcher_test(self, researcher_uid):
+        bt.loggin.info("Forwarding the test data to the researcher miner")
+        test_data = []
+        while not test_data:
+            test_data = await self.get_researcher_test_data(self)
+            if not test_data:
+                bt.logging.error(f"Error during fetching test data for researcher. Retrying in {self.config.fetching_interval} seconds")
+                time.sleep(self.config.test_data_fetching_delay)
+
+        return await forward_to_researcher(self, researcher_uid, test_data)
+
+
     async def get_challenge(self):
         # TODO implement calling the actual challenge service
         with open("path-to-the-image", "rb") as image_file:
@@ -76,6 +90,25 @@ class Validator(BaseValidatorNeuron):
         }
         return challenge_data
     
+    async def get_researcher_test_data(self):
+        '''This function fetches test data images from cancer-ai external api'''
+        try:
+            response_json = requests.get(url = self.config.dataset_api)
+            dataset_entries = DatasetEntries.parse_obj(response_json)
+
+        except requests.RequestException as e:
+            bt.logging.error(f"Failed to fetch test data: {e}")
+
+        except ValidationError as e:
+            bt.logging.error(f"Failed to fetch test data: {e}")
+
+        finally:
+            return dataset_entries
+    
+    async def evaluate_model(self, response):
+
+        response["models_response"]
+
     async def update_miners_identity(self):
         """
         1. Query model_name of available uids
@@ -106,10 +139,8 @@ class Validator(BaseValidatorNeuron):
             miner_state["model_name"] = info.get("model_name", "")
 
             if info["miner_mode"] == "researcher" and miner_state["miner_mode"] == "regular":
-                #TODO: this should trigger calling the DB for test utilities to test the researcher
-                ...
+                self.forward_researcher_test(uid)
             miner_state["miner_mode"] = info["miner_mode"]
-            #TODO: update miner's score (?) do we want to store score in miners info?
 
         bt.logging.success("Updated miner identity")
         print("ALL_UIDS_INFO", self.all_uids_info)

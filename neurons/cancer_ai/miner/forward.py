@@ -1,4 +1,9 @@
 import torch
+import requests
+import bittensor as bt
+
+from io import BytesIO
+from PIL import Image
 
 try:
     GPU_DEVICE_NAME = torch.cuda.get_device_name()
@@ -10,7 +15,7 @@ except Exception:
 def set_info(self):
     response = get_model_name(self)
     miner_info = {
-        "model_name": response,
+        # "model_name": response,
         "min_stake": self.config.min_stake,
         "device_info": {
             "gpu_device_name": GPU_DEVICE_NAME,
@@ -29,3 +34,21 @@ def get_mode(self):
         return "researcher"
     return "regular"
 
+def get_images(images_urls: list):
+    images = []
+    
+    for url in images_urls:
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            if 'image/jpeg' in response.headers.get('Content-Type', ''):
+                image = Image.open(BytesIO(response.content))
+                images.append(image)
+            else:
+                bt.logging.error(f"URL does not point to a JPEG image: {url}")
+        except requests.exceptions.RequestException as e:
+            bt.logging.error(f"Error fetching {url}: {e}")
+        except IOError as e:
+            bt.logging.error(f"Error opening image from {url}: {e}")
+
+    return images
