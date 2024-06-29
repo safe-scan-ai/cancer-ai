@@ -21,3 +21,4 @@ output = {
 }
 
 print(output)
+print(model.built)

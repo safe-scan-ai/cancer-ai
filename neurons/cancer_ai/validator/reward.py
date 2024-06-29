@@ -22,10 +22,10 @@ from typing import List
 from cancer_ai.protocol import PredictionSynapse
 
 def reward(response: PredictionSynapse, max_time_penalty: float, factor: float) -> float:
-    if response.response_dict is None or response.dendrite.process_time > response.timeout:
+    if response["response_dict"] is None or response["process_time"] > response["timeout"]:
         return 0
     
-    time_penalty = min(max_time_penalty, max_time_penalty * pow(response.dendrite.process_time, 3) / pow(factor, 3))
+    time_penalty = min(max_time_penalty, max_time_penalty * pow(response["process_time"], 3) / pow(factor, 3))
     return 1 - time_penalty
 
 
