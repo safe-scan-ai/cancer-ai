@@ -48,7 +48,8 @@ class Miner(BaseMinerNeuron):
         self.miner_info = set_info(self)
         bt.logging.info(f"Miner info: {self.miner_info}")
 
-        self.regular_model = tf.keras.models.load_model("/home/tensor/cancer-ai-clone/data/melanoma.keras")
+        #TODO: fetch the model from hugging face
+        self.regular_model = tf.keras.models.load_model("path-to-the-model")
         bt.logging.info(f"Regular model built status: {self.regular_model.built}")
 
 
