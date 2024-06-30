@@ -105,15 +105,12 @@ class BaseValidatorNeuron(BaseNeuron):
                 pass
 
         except Exception as e:
-            bt.logging.error(
-                f"Failed to create Axon initialize with exception: {e}"
-            )
+            bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
             pass
 
     async def concurrent_forward(self):
         coroutines = [
-            self.forward()
-            for _ in range(self.config.neuron.num_concurrent_forwards)
+            self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)
         ]
         await asyncio.gather(*coroutines)
 
@@ -145,7 +142,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-
                 # Run multiple forwards concurrently.
                 self.loop.run_until_complete(self.concurrent_forward())
 
@@ -167,9 +163,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # In case of unforeseen errors, the validator will log the error and continue operations.
         except Exception as err:
             bt.logging.error("Error during validation", str(err))
-            bt.logging.debug(
-                print_exception(type(err), err, err.__traceback__)
-            )
+            bt.logging.debug(print_exception(type(err), err, err.__traceback__))
 
     def run_in_background_thread(self):
         """
@@ -251,14 +245,14 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.warning(
                 f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
-        
+
         # Create a boolean mask to filter out the researchers from the scaling the scores for miners
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
         all_uids_tensor = torch.tensor(self.all_uids).to(self.device)
         all_uids_regular_mask = torch.ones_like(all_uids_tensor, dtype=torch.bool)
         for uid in researchers_uids:
             all_uids_regular_mask[all_uids_tensor == uid] = False
-        
+
         # Scale the scores for miners only
         regular_rewards = self.scores[all_uids_regular_mask]
         if regular_rewards.sum() > 0:
@@ -268,7 +262,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Update the scores locally
         self.scores[all_uids_regular_mask] = regular_rewards
         self.scores[~all_uids_regular_mask] = researchers_rewards
-        
+
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0)
@@ -341,9 +335,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # If so, we need to add new hotkeys and moving averages.
         if len(self.hotkeys) < len(self.metagraph.hotkeys):
             # Update the size of the moving average scores.
-            new_moving_average = torch.zeros((self.metagraph.n)).to(
-                self.device
-            )
+            new_moving_average = torch.zeros((self.metagraph.n)).to(self.device)
             min_len = min(len(self.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             self.scores = new_moving_average
@@ -400,12 +392,9 @@ class BaseValidatorNeuron(BaseNeuron):
         # Load the state of the validator from file.
         state = torch.load(self.config.neuron.full_path + "/state.pt")
         self.step = state.get("step", 0)
-        self.scores = state.get("scores", torch.zeros(
-            self.metagraph.n, dtype=torch.float32, device=self.device
-        ))
+        self.scores = state.get(
+            "scores",
+            torch.zeros(self.metagraph.n, dtype=torch.float32, device=self.device),
+        )
         self.hotkeys = state.get("hotkeys", copy.deepcopy(self.metagraph.hotkeys))
         self.top_researchers = state.get("top_researchers", {})
-
-    @abstractmethod
-    def forward_to_researcher(self):
-        ...

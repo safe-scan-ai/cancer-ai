@@ -13,7 +13,7 @@ except Exception:
     GPU_DEVICE_COUNT = 0
 
 def set_info(self):
-    response = get_model_name(self)
+    # response = get_model_name(self)
     miner_info = {
         # "model_name": response,
         "min_stake": self.config.min_stake,
@@ -27,7 +27,7 @@ def set_info(self):
 
 def get_model_name(self):
     #TODO: Logic to handle querying models name using ML model watermark (?)
-    return "dummy model"
+    ...
 
 def get_mode(self):
     if self.config.researcher:
@@ -42,7 +42,7 @@ def get_images(images: list):
             response = requests.get(image["image_url"])
             response.raise_for_status()
             if 'image/jpeg' in response.headers.get('Content-Type', ''):
-                jpg_image = Image.open(BytesIO(response.content))
+                jpg_image = response.content
                 images.append(image["id"], jpg_image)
             else:
                 bt.logging.error(f"URL does not point to a JPEG image: {image["image_url"]}")
@@ -52,3 +52,19 @@ def get_images(images: list):
             bt.logging.error(f"Error opening image from {image["image_url"]}: {e}")
 
     return images
+
+def get_image(self, image: str):
+    try:
+        response = requests.get(self.config.dataset_api + image)
+        response.raise_for_status()
+        if 'image/jpeg' in response.headers.get('Content-Type', ''):
+            jpg_image = response.content
+        else:
+            bt.logging.error(f"URL does not point to a JPEG image: {image}")
+
+    except requests.exceptions.RequestException as e:
+        bt.logging.error(f"Error fetching image from {image}: {e}")
+    except IOError as e:
+        bt.logging.error(f"Error opening image from {image}: {e}")
+    
+    return jpg_image

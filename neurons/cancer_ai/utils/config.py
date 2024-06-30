@@ -41,6 +41,7 @@ def check_config(cls, config: "bt.Config"):
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
     import sys
+
     logger.add(sys.stdout, format="{time} {level} {message}", level="DEBUG")
     # if not config.neuron.dont_save_events:
     #     # Add custom event logger for the events.
@@ -121,6 +122,13 @@ def add_args(cls, parser):
         default="",
     )
 
+    parser.add_argument(
+        "--dataset_api",
+        type=str,
+        help="URL dataset api",
+        default="https://dataset.api.safe-scan.ai",
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
@@ -173,6 +181,7 @@ def add_miner_args(cls, parser):
         help="Min validators stake to be considered by miner",
         default=100,
     )
+
 
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
@@ -272,17 +281,10 @@ def add_validator_args(cls, parser):
     ),
 
     parser.add_argument(
-        "--dataset_api",
-        type=str,
-        help="URL dataset api",
-        default="https://dataset.api.safe-scan.ai",
-    )
-
-    parser.add_argument(
         "--dataset_api_key",
         type=str,
         help="key to access dataset api resources",
-        default="8a5e9c0f-5e78-4b3f-9e7b-7b5f1f5e7b5f",
+        default="",
     )
 
     parser.add_argument(
@@ -292,19 +294,20 @@ def add_validator_args(cls, parser):
         default=0.4,
     )
 
-    parser.forward_frequency(
+    parser.add_argument(
         "--forward_frequency",
         type=int,
         help="Steps per forward frequency",
         default=1000,
     )
 
-    parser.fetching_interval(
+    parser.add_argument(
         "--fetching_interval",
         type=int,
         help="Retry interval between attempts to fetch test data for researcher in seconds",
         default=10,
     )
+
 
 def config(cls):
     """

@@ -24,13 +24,12 @@ from cancer_ai.validator.reward import get_rewards
 from cancer_ai.utils.uids import get_all_uids
 
 
-async def forward(self, base64_photo: str, challenge_type: str, model_name: str, input_metadata: dict):
-    
+async def forward(self, image_url: str):
     all_uids = get_all_uids(self)
 
     responses = await self.dendrite(
         axons=[self.metagraph.axons[uid] for uid in all_uids],
-        synapse=PredictionSynapse(base64_photo=base64_photo, challenge_type=challenge_type, model_name=model_name, input_metadata=input_metadata),
+        synapse=PredictionSynapse(image_url=image_url),
         deserialize=True,
         timeout=12,
     )
@@ -38,25 +37,38 @@ async def forward(self, base64_photo: str, challenge_type: str, model_name: str,
     # Log the results for monitoring purposes.
     print(f"Received responses: {responses}")
 
-    rewards = get_rewards(self, responses=responses, max_time_penalty=self.config.max_time_penalty, factor=12)
+    rewards = get_rewards(
+        self,
+        responses=responses,
+        max_time_penalty=self.config.max_time_penalty,
+        factor=12,
+    )
     print(f"Scored rewards: {rewards}")
 
     self.update_scores(rewards, all_uids)
 
-async def forward_to_researcher(self, researcher_uid: int, test_data: list):
 
-    images = [{"id": entry["id"], "image_url": entry["image_url"]} for entry in test_data]
+async def forward_to_researcher(self, researcher_uid: int, test_data: list):
+    images = [
+        {"id": entry.id, "image_url": entry.image_url} for entry in test_data
+    ]
 
     response = await self.dendrite(
         axons=self.metagraph.axons[researcher_uid],
         synapse=ReasearcherTestingSynapse(images=images),
         deserialize=True,
-        timeout=60*60*24,
+        timeout=60 * 60 * 24,
     )
 
     if response.response_dict["identity_error"]:
-        bt.logging.error(f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher.")
-    
-    researcher_score, current_model_score, num_entries = self.evaluate_model(self, response, test_data)
-    print(f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}")
-    
+        bt.logging.error(
+            f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher."
+        )
+
+    researcher_score, current_model_score, num_entries = self.evaluate_model(
+        self, response, test_data
+    )
+    # TODO: send the comparision response to the cancer-ai API
+    print(
+        f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}"
+    )
