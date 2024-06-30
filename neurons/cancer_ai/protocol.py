@@ -37,7 +37,7 @@ class PredictionSynapse(bt.Synapse):
     
 class ReasearcherTestingSynapse(bt.Synapse):
 
-    images_urls: list[str]
+    images: dict
     response_dict: typing.Optional[dict] = None
 
     def deserialize(self) -> dict:

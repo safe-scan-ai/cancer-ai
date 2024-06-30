@@ -86,7 +86,7 @@ class Miner(BaseMinerNeuron):
             return synapse
         
         # TODO(researcher owner): feed the ML model with the images
-        images = get_images(synapse.images_urls)
+        images = get_images(synapse.images)
         mock_response = {
             "sample_photo_id_1": 0.43,
             "sample_photo_id_2": 0.99,
