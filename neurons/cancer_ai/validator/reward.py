@@ -22,14 +22,26 @@ from typing import List
 from cancer_ai.protocol import PredictionSynapse
 from collections import Counter
 
-def reward(response: PredictionSynapse, max_time_penalty: float, factor: float, most_common_prediction: float) -> float:
-    if response["response_dict"] is None or response["process_time"] > response["timeout"]:
+
+def reward(
+    response: PredictionSynapse,
+    max_time_penalty: float,
+    factor: float,
+    most_common_prediction: float,
+) -> float:
+    if (
+        response["response_dict"] is None
+        or response["process_time"] > response["timeout"]
+    ):
         return 0
-    
+
     if response["response_dict"]["models_response"] != most_common_prediction:
         return 0
-    
-    time_penalty = min(max_time_penalty, max_time_penalty * pow(response["process_time"], 3) / pow(factor, 3))
+
+    time_penalty = min(
+        max_time_penalty,
+        max_time_penalty * pow(response["process_time"], 3) / pow(factor, 3),
+    )
     return 1 - time_penalty
 
 
@@ -39,15 +51,25 @@ def get_rewards(
     max_time_penalty: float,
     factor: float,
 ) -> torch.FloatTensor:
-    
     # getting the most common response to validate if miner used the right model
     predictions = []
+    most_common_prediction = 1
     for res in responses:
-        if res is not None and isinstance(res, dict) and "response_dict" in res and isinstance(res["response_dict"], dict) and "models_response" in res["response_dict"]:
+        if (
+            res is not None
+            and isinstance(res, dict)
+            and "response_dict" in res
+            and isinstance(res["response_dict"], dict)
+            and "models_response" in res["response_dict"]
+        ):
             predictions.append(res["response_dict"]["models_response"])
-    counter = Counter(predictions)
-    most_common_prediction, _ = counter.most_common(1)[0]
-    
+    if predictions:
+        counter = Counter(predictions)
+        most_common_prediction, _ = counter.most_common(1)[0]
+
     return torch.FloatTensor(
-        [reward(response, max_time_penalty, factor, most_common_prediction) for response in responses]
+        [
+            reward(response, max_time_penalty, factor, most_common_prediction)
+            for response in responses
+        ]
     ).to(self.device)

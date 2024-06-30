@@ -5,7 +5,10 @@ from typing import List
 
 
 def check_uid_availability(
-    metagraph: "bt.metagraph.Metagraph", uid: int, vpermit_tao_limit: int, top_researchers_uids: list[int]
+    metagraph: "bt.metagraph.Metagraph",
+    uid: int,
+    vpermit_tao_limit: int,
+    top_researchers_uids: list[int],
 ) -> bool:
     """Check if uid is available. The UID should be available if it is serving and has less than vpermit_tao_limit stake
     Args:
@@ -29,9 +32,7 @@ def check_uid_availability(
     return True
 
 
-def get_random_uids(
-    self, k: int, exclude: List[int] = None
-) -> torch.LongTensor:
+def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor:
     """Returns k available random uids from the metagraph.
     Args:
         k (int): Number of uids to return.
@@ -49,7 +50,10 @@ def get_random_uids(
 
     for uid in range(self.metagraph.n.item()):
         uid_is_available = check_uid_availability(
-            self.metagraph, uid, self.config.neuron.vpermit_tao_limit, top_researchers_uids
+            self.metagraph,
+            uid,
+            self.config.neuron.vpermit_tao_limit,
+            top_researchers_uids,
         )
         uid_is_not_excluded = exclude is None or uid not in exclude
 
@@ -69,16 +73,15 @@ def get_random_uids(
     uids = torch.tensor(random.sample(available_uids, k))
     return uids
 
-def get_all_uids(
-        self, exclude: List[int] = None
-) -> torch.LongTensor:
+
+def get_all_uids(self, exclude: List[int] = None) -> torch.LongTensor:
     """Returns all available uids from the metagrapth.
         Args:
         exclude (List[int]): List of uids to exclude from the random sampling.
     Returns:
         uids (torch.LongTensor): All available uids.
     Notes:
-        Current top researchers are not considered to be 
+        Current top researchers are not considered to be
     """
     avail_uids = []
 
@@ -88,7 +91,10 @@ def get_all_uids(
 
     for uid in range(self.metagraph.n.item()):
         uid_is_available = check_uid_availability(
-            self.metagraph, uid, self.config.neuron.vpermit_tao_limit, top_researchers_uids
+            self.metagraph,
+            uid,
+            self.config.neuron.vpermit_tao_limit,
+            top_researchers_uids,
         )
         uid_is_not_excluded = exclude is None or uid not in exclude
 
