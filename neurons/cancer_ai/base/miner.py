@@ -52,7 +52,7 @@ class BaseMinerNeuron(BaseNeuron):
             bt.logging.warning(
                 "You are allowing non-registered entities to send requests to your miner. This is a security risk."
             )
-            
+
         # The axon handles request processing, allowing validators to send this miner requests.
         self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
@@ -193,5 +193,6 @@ class BaseMinerNeuron(BaseNeuron):
 
     def load_state(self):
         ...
+
     def save_state(self):
         ...

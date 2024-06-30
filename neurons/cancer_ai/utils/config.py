@@ -41,6 +41,7 @@ def check_config(cls, config: "bt.Config"):
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
     import sys
+
     logger.add(sys.stdout, format="{time} {level} {message}", level="DEBUG")
     # if not config.neuron.dont_save_events:
     #     # Add custom event logger for the events.
@@ -119,6 +120,13 @@ def add_args(cls, parser):
         type=str,
         help="Notes to add to the wandb run.",
         default="",
+    )
+
+    parser.add_argument(
+        "--dataset_api",
+        type=str,
+        help="URL dataset api",
+        default="https://dataset.api.safe-scan.ai",
     )
 
 
@@ -273,11 +281,33 @@ def add_validator_args(cls, parser):
     ),
 
     parser.add_argument(
+        "--dataset_api_key",
+        type=str,
+        help="key to access dataset api resources",
+        default="",
+    )
+
+    parser.add_argument(
         "--max_time_penalty",
         type=int,
         help="Max value for time penalty tax for miner reward",
         default=0.4,
     )
+
+    parser.add_argument(
+        "--forward_frequency",
+        type=int,
+        help="Steps per forward frequency",
+        default=1000,
+    )
+
+    parser.add_argument(
+        "--fetching_interval",
+        type=int,
+        help="Retry interval between attempts to fetch test data for researcher in seconds",
+        default=10,
+    )
+
 
 def config(cls):
     """

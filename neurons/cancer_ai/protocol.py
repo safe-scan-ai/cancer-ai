@@ -20,30 +20,28 @@
 import typing
 import bittensor as bt
 
+
 class PredictionSynapse(bt.Synapse):
-
-    base64_photo: str
-    challenge_type: str
-    model_name: str
-    input_metadata: dict
+    image_url: str
     response_dict: typing.Optional[dict] = None
 
     def deserialize(self) -> dict:
-        return self
-    
+        return {
+            "process_time": self.dendrite.process_time,
+            "timeout": self.timeout,
+            "response_dict": self.response_dict,
+        }
+
+
 class ReasearcherTestingSynapse(bt.Synapse):
-
-    photos_urls: list[str]
-    challenge_type: str
-    model_name: str
-    input_metadata: dict
+    images: dict
     response_dict: typing.Optional[dict] = None
 
     def deserialize(self) -> dict:
-        return self
+        return self.response_dict
+
 
 class MinerInfoSynapse(bt.Synapse):
-
     response_dict: typing.Optional[dict] = None
 
     def deserialize(self) -> dict:

@@ -20,13 +20,18 @@
 import time
 import typing
 import bittensor as bt
+import tensorflow as tf
+import base64
+import numpy as np
 
 # Bittensor Miner cancer_ai:
 import cancer_ai
 
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
-from cancer_ai.miner.forward import set_info
+from cancer_ai.miner.forward import set_info, get_images, get_image
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from io import BytesIO
 
 
 class Miner(BaseMinerNeuron):
@@ -44,41 +49,66 @@ class Miner(BaseMinerNeuron):
         self.miner_info = set_info(self)
         bt.logging.info(f"Miner info: {self.miner_info}")
 
+        # TODO: fetch the model from hugging face
+        self.regular_model = tf.keras.models.load_model(
+            "path-to-model"
+        )
+        bt.logging.info(f"Regular model built status: {self.regular_model.built}")
+
     async def forward(
         self, synapse: cancer_ai.protocol.PredictionSynapse
     ) -> cancer_ai.protocol.PredictionSynapse:
-
-        # TODO(developer): feed the ML model with the base64 encoded photo
         miner_mode = "researcher" if self.config.researcher else "regular"
 
-        synapse.response_dict = {"models_response": 0.66, "miner_mode": miner_mode, "miner_uid": self.uid}
+        # Convert binary data to an image
+        image = get_image(self, synapse.image_url)
+        image = load_img(BytesIO(image), target_size=(180, 180, 3))
+        img_array = img_to_array(image)
+        img_array = np.expand_dims(img_array, axis=0)
+
+        # Predict using the model
+        pred = self.regular_model.predict(img_array)
+
+        not_melanoma_probability, melanoma_probability = pred[0]
+        synapse.response_dict = {
+            "models_response": float(melanoma_probability),
+            "miner_mode": miner_mode,
+            "miner_uid": self.uid,
+        }
 
         # simulate delay for testing purposes
         # time.sleep(10)
 
         return synapse
-    
+
     async def forward_researcher(
-            self, synapse: cancer_ai.protocol.ReasearcherTestingSynapse
+        self, synapse: cancer_ai.protocol.ReasearcherTestingSynapse
     ) -> cancer_ai.protocol.ReasearcherTestingSynapse:
-        
         if not self.config.researcher:
             synapse.response_dict = {"identity_error": True}
-        else:
-            # TODO(developer): feed the ML model with the test data
-            synapse.response_dict = {"models_response": 0.66}
+            return synapse
+
+        images = get_images(synapse.images)
+
+        # TODO(researcher owner): feed the ML model with the images
+
+        # mock response for testing purposes
+        # mock_response = {
+        #     "sample_photo_id_1": 0.43,
+        #     "sample_photo_id_2": 0.99,
+        # }
+        # synapse.response_dict = {"models_response": mock_response}
 
         return synapse
-    
+
     async def forward_info(
         self, synapse: cancer_ai.protocol.MinerInfoSynapse
     ) -> cancer_ai.protocol.MinerInfoSynapse:
-
         synapse.response_dict = self.miner_info
         bt.logging.info(f"Response dict: {self.miner_info}")
 
         return synapse
-    
+
     async def blacklist(
         self, synapse: cancer_ai.protocol.PredictionSynapse
     ) -> typing.Tuple[bool, str]:
