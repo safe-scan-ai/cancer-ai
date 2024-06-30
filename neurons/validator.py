@@ -93,6 +93,7 @@ class Validator(BaseValidatorNeuron):
     async def get_researcher_test_data(self):
         '''This function fetches test data images from cancer-ai external api'''
         try:
+            endpoint = self.config.dataset_api + "/dataset/skin/melanoma"
             response_json = requests.get(url = self.config.dataset_api)
             dataset_entries = DatasetEntries.parse_obj(response_json)
 
@@ -105,10 +106,33 @@ class Validator(BaseValidatorNeuron):
         finally:
             return dataset_entries
     
-    async def evaluate_model(self, response):
+    async def evaluate_model(self, researcher_response, test_data):
+        #researcher_response shape: {"models_response": {"sample_photo_id_1": 0.43,"sample_photo_id_2": 0.99, ...}}
+        #test_data shape: [{"id": 1, "label": {"melanoma": false}, "image_url": "someurl"}, ...]
 
-        response["models_response"]
-
+        #TODO: fetch the current model from hugging face
+        current_model_response = self.get_current_model_response()
+        #current_model_response shape: {"sample_photo_id_1": 0.43,"sample_photo_id_2": 0.99, ...}
+        combined_result = []
+        for entry in test_data:
+            if entry["id"] in researcher_response["models_response"] and entry ["id"] in current_model_response:
+                combined_result.append((researcher_response["models_response"][entry["id"]],
+                                        current_model_response[entry["id"]],
+                                        entry["label"]["melanoma"]))
+                
+        researcher_model_score = 0
+        current_model_score = 0
+        for entry in combined_result:
+            researcher_pred, current_model_pred, label = entry
+            if researcher_pred == current_model_pred:
+                continue
+            elif (label == True and researcher_pred > current_model_pred) or (label == False and researcher_pred < current_model_pred):
+                researcher_model_score += 1
+            else:
+                current_model_score += 1
+        entries_num = len(combined_result)
+        return researcher_model_score, current_model_score, entries_num
+        
     async def update_miners_identity(self):
         """
         1. Query model_name of available uids

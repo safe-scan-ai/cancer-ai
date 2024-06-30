@@ -275,7 +275,14 @@ def add_validator_args(cls, parser):
         "--dataset_api",
         type=str,
         help="URL dataset api",
-        default="https://localhost:8888",
+        default="https://dataset.api.safe-scan.ai",
+    )
+
+    parser.add_argument(
+        "--dataset_api_key",
+        type=str,
+        help="key to access dataset api resources",
+        default="8a5e9c0f-5e78-4b3f-9e7b-7b5f1f5e7b5f",
     )
 
     parser.add_argument(
@@ -292,10 +299,10 @@ def add_validator_args(cls, parser):
         default=1000,
     )
 
-    parser.test_data_fetching_delay(
-        "--test_data_fetching_delay",
+    parser.fetching_interval(
+        "--fetching_interval",
         type=int,
-        help="Retry delay between attempts to fetch test data for researcher in seconds",
+        help="Retry interval between attempts to fetch test data for researcher in seconds",
         default=10,
     )
 

@@ -45,18 +45,18 @@ async def forward(self, base64_photo: str, challenge_type: str, model_name: str,
 
 async def forward_to_researcher(self, researcher_uid: int, test_data: list):
 
-    images = [entry["image_url"] for entry in test_data]
+    images = [{"id": entry["id"], "image_url": entry["image_url"]} for entry in test_data]
 
     response = await self.dendrite(
         axons=self.metagraph.axons[researcher_uid],
         synapse=ReasearcherTestingSynapse(images=images),
         deserialize=True,
-        timeout=600,
+        timeout=60*60*24,
     )
 
     if response.response_dict["identity_error"]:
         bt.logging.error(f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher.")
     
-    print(f"Received response from researcher {researcher_uid}: {response}")
-    self.evaluate_model(self, response, test_data)
+    researcher_score, current_model_score, num_entries = self.evaluate_model(self, response, test_data)
+    print(f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}")
     
