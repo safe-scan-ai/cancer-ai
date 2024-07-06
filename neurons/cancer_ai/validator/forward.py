@@ -27,6 +27,11 @@ from cancer_ai.utils.uids import get_all_uids
 async def forward(self, image_url: str):
     all_uids = get_all_uids(self)
 
+    #if the uids is the researcher which is in testing mode send him testing data
+    for uid in all_uids:
+        if self.all_uids_info[int(uid)]["is_tested"]:
+            self.forward_researcher_test(uid)
+
     responses = await self.dendrite(
         axons=[self.metagraph.axons[uid] for uid in all_uids],
         synapse=PredictionSynapse(image_url=image_url),
@@ -65,9 +70,17 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
             f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher."
         )
 
-    researcher_score, current_model_score, num_entries = self.evaluate_model(
-        self, response, test_data
-    )
+    # append tested entries num
+    self.all_uids_info[researcher_uid]["tested_entries_amount"] += response["entries_num"]
+    print(f"Researcher with uid {researcher_uid} responded with {response["entries_num"]} predictions.\n\
+           Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]["tested_entries_amount"]}")
+
+    # switch off testing mode for the researcher when expected number of entries was tested
+    if self.all_uids_info[researcher_uid]["tested_entries_amount"] > self.config.researcher_testing_entries_amount:
+        self.all_uids_info[researcher_uid]["is_tested"] = False
+        self.all_uids_info[researcher_uid]["tested_entries_amount"] = 0
+
+    researcher_score, current_model_score, num_entries = self.evaluate_model(self, response, test_data)
     # TODO: send the comparision response to the cancer-ai API
     print(
         f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}"

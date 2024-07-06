@@ -307,7 +307,20 @@ def add_validator_args(cls, parser):
         help="Retry interval between attempts to fetch test data for researcher in seconds",
         default=10,
     )
-
+    
+    parser.add_argument(
+        "--researcher_testing_entries_amount",
+        type=int,
+        help="Total amount of test entries for a researcher to process",
+        default=10000,
+    )
+    
+    parser.add_argument(
+        "--researcher_testing_entries_package",
+        type=int,
+        help="Amount of test entries to send to researcher on one forward call",
+        default=50,
+    )
 
 def config(cls):
     """

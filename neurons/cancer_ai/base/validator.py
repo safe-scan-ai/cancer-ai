@@ -383,6 +383,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 "scores": self.scores,
                 "hotkeys": self.hotkeys,
                 "top_researchers": self.top_researchers,
+                "all_uids_info": self.all_uids_info,
             },
             self.config.neuron.full_path + "/state.pt",
         )
@@ -398,3 +399,4 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         self.hotkeys = state.get("hotkeys", copy.deepcopy(self.metagraph.hotkeys))
         self.top_researchers = state.get("top_researchers", {})
+        self.all_uids_info = state.get("all_uids_info", self.all_uids_info)

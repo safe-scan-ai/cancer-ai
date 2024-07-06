@@ -46,8 +46,9 @@ class Validator(BaseValidatorNeuron):
 
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
         self.all_uids_info = {
-            uid: {"scores": [], "miner_mode": ""} for uid in self.all_uids
+            uid: {"scores": [], "miner_mode": "", "is_tested": False} for uid in self.all_uids
         }
+        self.load_state()
 
     async def forward(self):
         # How often you actually send synthetic challenges to the miner
@@ -73,8 +74,8 @@ class Validator(BaseValidatorNeuron):
         test_data = []
         while not test_data:
             test_data = await self.get_image_data(
-                50
-            )  # TODO: make the amount argument configurable
+                self.config.researcher_testing_entries_package
+            )
             if not test_data:
                 bt.logging.error(
                     f"Error during fetching test data for researcher. Retrying in {self.config.fetching_interval} seconds"
@@ -150,6 +151,7 @@ class Validator(BaseValidatorNeuron):
                         "gpu_device_name": "Unknown",
                         "gpu_device_count": "Unknown",
                     },
+                    "is_tested": False,
                 },
             )
 
@@ -160,10 +162,11 @@ class Validator(BaseValidatorNeuron):
                 info["miner_mode"] == "researcher"
                 and miner_state["miner_mode"] == "regular"
             ):
-                self.forward_researcher_test(uid)
+                miner_state["is_tested"] = True
             miner_state["miner_mode"] = info["miner_mode"]
 
         bt.logging.success("Updated miner identity")
+        self.save_state
         print("ALL_UIDS_INFO", self.all_uids_info)
 
         # TODO: enable once the cancer-ai API endpoint for storing miner info is ready

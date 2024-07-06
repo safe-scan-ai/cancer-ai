@@ -97,7 +97,7 @@ class Miner(BaseMinerNeuron):
         #     "sample_photo_id_1": 0.43,
         #     "sample_photo_id_2": 0.99,
         # }
-        # synapse.response_dict = {"models_response": mock_response}
+        # synapse.response_dict = {"models_response": mock_response, "entries_num": len(images)}
 
         return synapse
 
