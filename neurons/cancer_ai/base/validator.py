@@ -65,8 +65,15 @@ class BaseValidatorNeuron(BaseNeuron):
             self.metagraph.n, dtype=torch.float32, device=self.device
         )
         self.top_researchers: dict = {}
+        self.all_uids = [int(uid) for uid in self.metagraph.uids]
+        self.all_uids_info = {
+            uid: {"scores": [], "miner_mode": "", "is_tested": False,
+                   "tested_entries_amount": 0} for uid in self.all_uids
+        }
+        print(self.all_uids_info)
 
         self.load_state()
+        print(self.all_uids_info)
         # Init sync with the network. Updates the metagraph.
         self.sync()
 

@@ -44,12 +44,6 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        self.all_uids = [int(uid) for uid in self.metagraph.uids]
-        self.all_uids_info = {
-            uid: {"scores": [], "miner_mode": "", "is_tested": False} for uid in self.all_uids
-        }
-        self.load_state()
-
     async def forward(self):
         # How often you actually send synthetic challenges to the miner
         if self.step % self.config.forward_frequency > 0:
@@ -59,8 +53,7 @@ class Validator(BaseValidatorNeuron):
         await self.update_miners_identity()
 
         image_data = await self.get_image_data(1)
-        print(image_data.entries)
-        if image_data.entries is None:
+        if image_data is None or image_data.entries is None:
             return
         # TODO: use skin_type and model name fetched from the dataset api endpoint once its ready to serve this data
         challenge_data = {
@@ -70,7 +63,7 @@ class Validator(BaseValidatorNeuron):
         return await forward(self, challenge_data["image_url"])
 
     async def forward_researcher_test(self, researcher_uid):
-        bt.loggin.info("Forwarding the test data to the researcher miner")
+        bt.logging.info("Forwarding the test data to the researcher miner")
         test_data = []
         while not test_data:
             test_data = await self.get_image_data(
@@ -114,8 +107,9 @@ class Validator(BaseValidatorNeuron):
                 combined_result.append(
                     (
                         researcher_response["models_response"][entry.id],
-                        entry.current_model_response,
-                        entry.label.melanoma,
+                        # entry.current_model_response, # Enable when dataset-api endpoint is fully ready
+                        0.98, # MOCK for testing purposes until dataset-api endpoint is fully ready
+                        entry.label["melanoma"],
                     )
                 )
 
@@ -152,6 +146,7 @@ class Validator(BaseValidatorNeuron):
                         "gpu_device_count": "Unknown",
                     },
                     "is_tested": False,
+                    "tested_entries_amount": 0,
                 },
             )
 
@@ -163,6 +158,7 @@ class Validator(BaseValidatorNeuron):
                 and miner_state["miner_mode"] == "regular"
             ):
                 miner_state["is_tested"] = True
+                bt.logging.success("New Researcher with uid {uid} started the testing challenge")
             miner_state["miner_mode"] = info["miner_mode"]
 
         bt.logging.success("Updated miner identity")

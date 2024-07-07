@@ -18,6 +18,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import bittensor as bt
+import asyncio
 
 from cancer_ai.protocol import PredictionSynapse, ReasearcherTestingSynapse
 from cancer_ai.validator.reward import get_rewards
@@ -29,8 +30,8 @@ async def forward(self, image_url: str):
 
     #if the uids is the researcher which is in testing mode send him testing data
     for uid in all_uids:
-        if self.all_uids_info[int(uid)]["is_tested"]:
-            self.forward_researcher_test(uid)
+        if uid.item() in self.all_uids_info and self.all_uids_info[uid.item()]["is_tested"]:
+            asyncio.create_task(self.forward_researcher_test(uid.item()))
 
     responses = await self.dendrite(
         axons=[self.metagraph.axons[uid] for uid in all_uids],
@@ -54,9 +55,7 @@ async def forward(self, image_url: str):
 
 
 async def forward_to_researcher(self, researcher_uid: int, test_data: list):
-    images = [
-        {"id": entry.id, "image_url": entry.image_url} for entry in test_data
-    ]
+    images = {entry.id: entry.image_url for entry in test_data}
 
     response = await self.dendrite(
         axons=self.metagraph.axons[researcher_uid],
@@ -65,23 +64,25 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
         timeout=60 * 60 * 24,
     )
 
-    if response.response_dict["identity_error"]:
+    if response["identity_error"]:
         bt.logging.error(
             f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher."
         )
 
     # append tested entries num
-    self.all_uids_info[researcher_uid]["tested_entries_amount"] += response["entries_num"]
-    print(f"Researcher with uid {researcher_uid} responded with {response["entries_num"]} predictions.\n\
-           Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]["tested_entries_amount"]}")
+    if self.all_uids_info[researcher_uid] and response["entries_num"]:
+        self.all_uids_info[researcher_uid]["tested_entries_amount"] += response["entries_num"]
+        print(f"Researcher with uid {researcher_uid} responded with {response["entries_num"]} predictions.\n\
+            Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]["tested_entries_amount"]}")
+        
+        researcher_score, current_model_score, num_entries = await self.evaluate_model(response, test_data)
+        # TODO: send the comparision response to the cancer-ai API
+        print(
+            f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}"
+        )
 
     # switch off testing mode for the researcher when expected number of entries was tested
-    if self.all_uids_info[researcher_uid]["tested_entries_amount"] > self.config.researcher_testing_entries_amount:
+    if self.all_uids_info[researcher_uid]["tested_entries_amount"] >= self.config.researcher_testing_entries_amount:
         self.all_uids_info[researcher_uid]["is_tested"] = False
         self.all_uids_info[researcher_uid]["tested_entries_amount"] = 0
-
-    researcher_score, current_model_score, num_entries = self.evaluate_model(self, response, test_data)
-    # TODO: send the comparision response to the cancer-ai API
-    print(
-        f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}"
-    )
+        print(f"Researcher with uid {researcher_uid} has finished testing.")
