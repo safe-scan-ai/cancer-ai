@@ -169,7 +169,7 @@ def add_miner_args(cls, parser):
     )
 
     parser.add_argument(
-        "--creator",
+        "--researcher",
         action="store_true",
         help="defines whether miner is considered creator miner or a regular miner",
         default=False,
