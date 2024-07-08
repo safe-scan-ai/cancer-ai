@@ -34,22 +34,22 @@ def get_mode(self):
         return "researcher"
     return "regular"
 
-def get_images(images: list):
+def get_images(self, images_urls: dict):
     images = []
-    
-    for image in images:
+
+    for image_id, image_url in images_urls.items():
         try:
-            response = requests.get(image["image_url"])
+            response = requests.get(self.config.dataset_api + image_url)
             response.raise_for_status()
             if 'image/jpeg' in response.headers.get('Content-Type', ''):
                 jpg_image = response.content
-                images.append(image["id"], jpg_image)
+                images.append((image_id, jpg_image))
             else:
-                bt.logging.error(f"URL does not point to a JPEG image: {image["image_url"]}")
+                bt.logging.error(f"URL does not point to a JPEG image: {image_url}")
         except requests.exceptions.RequestException as e:
-            bt.logging.error(f"Error fetching {image["image_url"]}: {e}")
+            bt.logging.error(f"Error fetching {image_url}: {e}")
         except IOError as e:
-            bt.logging.error(f"Error opening image from {image["image_url"]}: {e}")
+            bt.logging.error(f"Error opening image from {image_url}: {e}")
 
     return images
 

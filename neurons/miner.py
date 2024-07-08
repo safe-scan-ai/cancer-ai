@@ -75,7 +75,6 @@ class Miner(BaseMinerNeuron):
             "miner_mode": miner_mode,
             "miner_uid": self.uid,
         }
-
         # simulate delay for testing purposes
         # time.sleep(10)
 
@@ -88,16 +87,14 @@ class Miner(BaseMinerNeuron):
             synapse.response_dict = {"identity_error": True}
             return synapse
 
-        images = get_images(synapse.images)
+        images = get_images(self, synapse.images)
 
         # TODO(researcher owner): feed the ML model with the images
-
-        # mock response for testing purposes
-        # mock_response = {
-        #     "sample_photo_id_1": 0.43,
-        #     "sample_photo_id_2": 0.99,
-        # }
-        # synapse.response_dict = {"models_response": mock_response}
+        # MOCK response for testing purposes
+        # mock_response = {"entries_num": len(images), "models_response": {}}
+        # for image in images:
+        #     mock_response["models_response"][image[0]] = 0.99
+        # synapse.response_dict = mock_response
 
         return synapse
 
