@@ -1,8 +1,9 @@
 <div align="center">
 
-# **Bittensor Cancer AI Subnet** <!-- omit in toc -->
-[![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
+# **Safe Scan Cancer AI decetion **  <!-- omit in toc -->
+Bittensor Subnet for recognizing cancer
+
+[Discord](https://discord.gg/npwNy9tU)
 
 ---
 - [Vision & Roadmap](#Vision-&-Roadmap)
@@ -103,7 +104,7 @@ In addition, we aim to collaborate with manufacturers of CT scanners who current
 
 ## Validator
 
-1. Contact us on [![Discord](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor) to request the dataset-api-key which will enable you to pull resources for testing researchers and generation of synthetic queries.
+1. Contact us on [![Discord](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/npwNy9tU) to request the dataset-api-key which will enable you to pull resources for testing researchers and generation of synthetic queries.
 2. Setup config parameters which can be found in ./neurons/cancer_ai/utils/config.py. You can either provide these parameters with the flags when running the validator.py or adjust the default values for the config parameters in the config.py file directly. The fetched in previous step api key is one of the parameters.
 3. Run the validator.py with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
 
