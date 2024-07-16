@@ -1,13 +1,13 @@
 <div align="center">
 
 # **Safe Scan Cancer AI decetion **  <!-- omit in toc -->
-Bittensor Subnet for recognizing cancer
+Bittensor Subnet for improving cancer detection algorithms
 
-[Discord](https://discord.gg/npwNy9tU)
+[Discord](https://discord.gg/npwNy9tU) [Twitter](https://x.com/SAFESCAN_AI)
 
 ---
 - [Vision & Roadmap](#Vision-&-Roadmap)
-- [Unique Tokenomy](#Unique-Tokenomy)
+- [Tokenomy](#Unique-Tokenomy)
   - [Validators](#Validators)
   - [Miners](#Miners)
   - [Researchers](#Researchers)
@@ -37,7 +37,7 @@ By focusing on these areas, we aim to overcome the barriers to the practical use
 
 To expedite the process and navigate the complexities of medical certification, we are beginning our initiatives with authorized clinical trials.  After completing clinical trials of our first project, SELFSCAN – an application for detecting skin cancer through selfies – we will focus on its deployment as a Class II medical device in the USA and Europe, obtaining the necessary FDA and CE approvals. 
 
-Concurrently, with the help of the BITTENSOR community and our unique tokenomics supporting RESEARCHERS, we will continuously improve the best cancer detection algorithms. This ensures that, by the time our products are brought to market, our solutions surpass all existing algorithms.
+Concurrently, with the help of the Bittensor community and our unique tokenomics supporting researchers, we will continuously improve the best cancer detection algorithms. This ensures that, by the time our products are brought to market, our solutions surpass all existing algorithms.
 
 Subsequently, we will focus on detecting other types of cancer, starting with breast and lung cancer.
 
@@ -48,7 +48,10 @@ For more information about our project, roadmap, and progress, visit our website
 www.skin-scan.ai
 
 
-## Unique Tokenomy
+## Tokenomy
+
+Our tokenomics are unique and designed to support our research and development of new algorithms as well as serving real life tasks.
+We have 3 types of entities in our network: Validators, Miners, and Researchers.
 
 ## Validators
 
@@ -72,15 +75,15 @@ Researchers with the highest model accuracy receive 15% of emissions as an incen
 
 As a subnet, we focus on the practical application of our technology. Therefore, we continuously reinvest profits from the subnet into the development of applications and software for cancer detection, medical device registration costs, and marketing. The problem of underutilizing AI algorithms in practical cancer detection is complex and multifaceted. Solving this problem in a form that is accessible, affordable, and user-friendly is our primary goal. Here is what we intend to do in terms of practical applications:
 
-## Skinscan App
+### Skinscan App
 
-Our first product is the SKINSCAN app www.skin-scan.ai which allows us to diagnose skin changes using a simple photo from a phone and determine whether they are potentially cancerous with over 90% accuracy.
+Our first product is the [SKINSCAN app](www.skin-scan.ai) which allows us to diagnose skin changes using a simple photo from a phone and determine whether they are potentially cancerous with over 90% accuracy.
 
 Our app increases awareness of skin diseases, informs users about current UV levels, and most importantly, supports the early diagnosis of skin cancer. It helps assess whether a particular skin lesion is potentially cancerous. It also assists doctors by enabling the easy export of changes in skin lesions over time along with their descriptions. Additionally, thanks to feedback from doctors, it will be possible to build a growing dataset and further improve the effectiveness of our skin cancer detection algorithm.
 
 Until we obtain certification as a Class II medical device from the FDA and CE, the app will be available to participants in clinical trials: patients and doctors involved in the trials. Afterward, it will be deployed on the Apple and Google stores.
 
-## AI Powered Breast Screening Tools
+### AI Powered Breast Screening Tools
 
 Next, we will focus on breast cancer, the most common type of cancer. Studies show that as many as 1 in 8 women may develop breast cancer in their lifetime. Screening is key to diagnosing and effectively treating cancer. However, the number of specialists available to analyze mammogram results is insufficient. In many countries, there is no capacity for timely analysis of mammogram images. Research indicates that AI analysis of mammogram images is as accurate as the best radiologists. By creating open-source software, we can provide the necessary technology wherever it is needed, significantly enhancing early detection capabilities for breast cancer. 
 
@@ -88,7 +91,7 @@ Leveraging the power of Bittensor, we will ensure the project has independent fu
 
 Additionally, we will develop integrations with companies that manufacture mammography machines without built-in AI detection, further extending the reach and impact of our technology.
 
-## AI-Enhanced Lung Cancer Detection Tools
+### AI-Enhanced Lung Cancer Detection Tools
 
 Lung cancer remains a significant global health challenge, being the second most common cancer and the leading cause of cancer mortality worldwide. According to the World Health Organization, lung cancer accounts for approximately 2.1 million new cases and 1.8 million deaths annually. The survival rate for lung cancer improves dramatically with early detection; however, the scarcity of radiologists to interpret CT scans timely impedes early diagnosis and treatment.
 
@@ -102,19 +105,19 @@ In addition, we aim to collaborate with manufacturers of CT scanners who current
 
 ## Participation
 
-## Validator
+### Validator
 
-1. Contact us on [![Discord](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/npwNy9tU) to request the dataset-api-key which will enable you to pull resources for testing researchers and generation of synthetic queries.
+1. Contact us on [![Discord](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/npwNy9tU) to request the Dataset API key which will enable you to pull resources for testing researchers and generation of synthetic queries.
 2. Setup config parameters which can be found in ./neurons/cancer_ai/utils/config.py. You can either provide these parameters with the flags when running the validator.py or adjust the default values for the config parameters in the config.py file directly. The fetched in previous step api key is one of the parameters.
 3. Run the validator.py with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
 
-## Miner
+### Miner
 
 1. Setup config parameters which can be found in ./neurons/cancer_ai/utils/config.py. You can either provide these parameters with the flags when running the miner.py or adjust the default values for the config parameters in the config.py file directly. A miner can be both a Regular miner (offering computational power) and the Researcher. To proceed with just Regular miner (without announcing to the subnet participation as a Researcher) make sure that the --researcher flag is set to false (the default value).
 
 2. Run the miner.py script with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
 
-## Researcher
+### Researcher
 
 Note that if you are planning to participate as the Researcher it is adviced to run the Researcher Miner in the immunity period (right after registration). The Researcher Miner is at the same time performing Regular Miner job, but as the reward system is based on the response pace it is possible that the general score of the Miner will drop if you are executing both Researcher and Miner tasks on the same machine.
 Hence, if you are already running a Regular Miner successfully after the immunity period it is also adviced to adjust the miner.py to handle the Researcher tasks asynchronously and/or introducing proxy for handling the Researcher processing on another machine.
@@ -124,26 +127,3 @@ Hence, if you are already running a Regular Miner successfully after the immunit
 2. Run the miner.py script with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
 
 3. When the testing is done the outcome can be found on [![Statistics API]](https:cancer-ai/stats). If it appears that your Researcher models is better then our current model, reach us on [![Discord](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor). We will then test your model outside of the subnet to confirm on its accuracy and hopefully introduce it as a new base model for the Subnet and the Skinscan App!
-
-```
-
-## License
-This repository is licensed under the MIT License.
-```text
-# The MIT License (MIT)
-# Copyright © 2023 Lem Technologies
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-```
