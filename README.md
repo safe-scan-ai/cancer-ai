@@ -5,6 +5,8 @@ Bittensor Subnet for improving cancer detection algorithms
 
 [Discord](https://discord.gg/npwNy9tU) [Twitter](https://x.com/SAFESCAN_AI)
 
+</div>
+
 ## Introduction
 
 Welcome to Safe Scan Cancer AI Detection, a groundbreaking initiative leveraging the power of AI and blockchain technology to revolutionize cancer detection. Our mission is to make advanced cancer detection algorithms accessible and free for everyone. Through our project, we aim to provide cutting-edge, open-source tools that support early cancer diagnosis for patients and healthcare professionals worldwide.
