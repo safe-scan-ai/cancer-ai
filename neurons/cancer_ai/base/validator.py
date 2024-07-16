@@ -219,16 +219,18 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def send_weights(self, weights, uids):
         try:
+            headers = {"x-api-key": self.config.dataset_api_key}
             requests.post(
-                self.config.stats_api + "/scores",
+                self.config.stats_api + "/send-weights",
                 json={
                     "validator_uid": self.uid,
                     "weights": weights,
                     "uids": uids,
                 },
+                headers=headers
             )
         except Exception as e:
-            bt.logging.error(f"Failed to send scores to statistics api: {e}")
+            bt.logging.error(f"Failed to send weights to statistics api: {e}")
 
     def set_weights(self):
         """

@@ -6,6 +6,7 @@ class DatasetEntry(BaseModel):
     id: str
     label: Dict[str, str]
     image_url: str
+    current_model_response: float
 
 
 class DatasetEntries(BaseModel):
