@@ -1,26 +1,17 @@
 <div align="center">
 
-# **Safe Scan Cancer AI decetion **  <!-- omit in toc -->
+# **Safe Scan Cancer AI detection **  <!-- omit in toc -->
 Bittensor Subnet for improving cancer detection algorithms
 
 [Discord](https://discord.gg/npwNy9tU) [Twitter](https://x.com/SAFESCAN_AI)
 
----
-- [Vision & Roadmap](#Vision-&-Roadmap)
-- [Tokenomy](#Unique-Tokenomy)
-  - [Validators](#Validators)
-  - [Miners](#Miners)
-  - [Researchers](#Researchers)
-- [Applications](#Applications)
-  - [Skinscan App](#Skinscan-App)
-  - [AI-Enhanced Lung Cancer Detection Tools](#AI-Enhanced-Lung-Cancer-Detection-Tools)
-- [Participation](#Participation)
-  - [Validator](#Validator)
-  - [Miner](#Miner)
-  - [Researcher](#Researcher)
-- [License](#license)
+## Introduction
 
----
+Welcome to Safe Scan Cancer AI Detection, a groundbreaking initiative leveraging the power of AI and blockchain technology to revolutionize cancer detection. Our mission is to make advanced cancer detection algorithms accessible and free for everyone. Through our project, we aim to provide cutting-edge, open-source tools that support early cancer diagnosis for patients and healthcare professionals worldwide.
+
+This repository contains subnet code to run on Bittensor network.  
+
+
 ## Vision & Roadmap
 Cancer is one of the most significant challenges of our time, and we believe that AI holds the key to addressing it. However, this solution should be accessible and free for everyone. Machine vision technology has long proven effective in early diagnosis, which is crucial for curing cancer. Yet, until now, it has largely remained in the realm of whitepapers. SAFESCAN is a project dedicated to aggregating and enhancing the best algorithms for detecting various types of cancer and providing free computational power for practical cancer detection. We aim to create open-source products that support cancer diagnosis for both patients and doctors.
 
