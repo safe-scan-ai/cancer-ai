@@ -61,16 +61,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Set up initial scoring weights for validation
         print("Building validation weights.")
-        self.scores = torch.zeros(
-            self.metagraph.n, dtype=torch.float32, device=self.device
-        )
-        self.top_researchers: dict = {}
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
-        self.all_uids_info = {
-            uid: {"scores": [], "miner_mode": "", "is_tested": False,
-                   "tested_entries_amount": 0} for uid in self.all_uids
-        }
-        
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -390,6 +381,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 "scores": self.scores,
                 "hotkeys": self.hotkeys,
                 "top_researchers": self.top_researchers,
+                "all_uids_info": self.all_uids_info,
             },
             self.config.neuron.full_path + "/state.pt",
         )
@@ -405,3 +397,7 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         self.hotkeys = state.get("hotkeys", copy.deepcopy(self.metagraph.hotkeys))
         self.top_researchers = state.get("top_researchers", {})
+        self.all_uids_info = state.get("all_uids_info", {
+            uid: {"scores": [], "miner_mode": "", "is_tested": False,
+                   "tested_entries_amount": 0} for uid in self.all_uids
+        })

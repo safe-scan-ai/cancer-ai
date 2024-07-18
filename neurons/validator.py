@@ -22,9 +22,8 @@ import time
 import bittensor as bt
 import requests
 import torch
-import base64
+import uuid
 
-from threading import Thread
 from cancer_ai.validator import forward, forward_to_researcher
 from cancer_ai.validator.models import DatasetEntries
 from cancer_ai.base.validator import BaseValidatorNeuron
@@ -86,7 +85,6 @@ class Validator(BaseValidatorNeuron):
             )
             headers = {"x-api-key": self.config.dataset_api_key}
             response = requests.get(url=endpoint, headers=headers)
-            print(response.json())
             dataset_entries = DatasetEntries.parse_obj(response.json())
 
         except requests.RequestException as e:
@@ -142,6 +140,7 @@ class Validator(BaseValidatorNeuron):
                     "researcher_score": researcher_score,
                     "current_model_score": current_model_score,
                     "num_entries": num_entries,
+                    "testing_session_id": self.all_uids_info[researcher_uid]["testing_session_id"]
                 },
                 headers=headers
             )
@@ -180,6 +179,7 @@ class Validator(BaseValidatorNeuron):
                 and miner_state["miner_mode"] == "regular"
             ):
                 miner_state["is_tested"] = True
+                miner_state["testing_session_id"] = uuid.uuid4()
                 bt.logging.success("New Researcher with uid {uid} started the testing challenge")
             miner_state["miner_mode"] = info["miner_mode"]
 

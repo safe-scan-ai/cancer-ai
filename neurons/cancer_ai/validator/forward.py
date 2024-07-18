@@ -69,7 +69,6 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
             f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher."
         )
 
-    print(response)
     # append tested entries num
     if self.all_uids_info[researcher_uid] and response["entries_num"]:
         self.all_uids_info[researcher_uid]["tested_entries_amount"] += response["entries_num"]
@@ -77,19 +76,19 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
             Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]["tested_entries_amount"]}")
         
         researcher_score, current_model_score, num_entries, combined_predictions = await self.evaluate_model(response, test_data)
-        # asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries, combined_predictions, researcher_uid))
-        # print(
-        #     f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}"
-        # )
+        asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries, combined_predictions, researcher_uid))
+        print(
+            f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}"
+        )
 
         # Send the scores to the miner as a feedback
         feedback = [{"researcher_res": entry[0], "current_model_res": entry[1], "label": entry[2], "image_id": entry[3]} for entry in combined_predictions]
-        await self.dendrite(
+        asyncio.create_task(self.dendrite(
             axons=self.metagraph.axons[researcher_uid],
             synapse=MinerFeedbackSynapse(feedback=feedback),
             deserialize=False,
             timeout=12,
-        )
+        ))
 
     # switch off testing mode for the researcher when expected number of entries was tested
     if self.all_uids_info[researcher_uid]["tested_entries_amount"] >= self.config.researcher_testing_entries_amount:
