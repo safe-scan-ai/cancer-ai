@@ -86,6 +86,7 @@ class Validator(BaseValidatorNeuron):
             )
             headers = {"x-api-key": self.config.dataset_api_key}
             response = requests.get(url=endpoint, headers=headers)
+            print(response.json())
             dataset_entries = DatasetEntries.parse_obj(response.json())
 
         except requests.RequestException as e:
@@ -222,7 +223,7 @@ class Validator(BaseValidatorNeuron):
     def update_and_get_top_researchers(self):
         """This function fetches top researchers with mapped rewards from cancer-ai external api"""
         try:
-            response = requests.get(url=self.config.stats_api + "/top-researchers")
+            response = requests.get(url=self.config.stats_api + "/emission-share")
             data = response.json()
 
             if not isinstance(data, dict):

@@ -46,3 +46,6 @@ class MinerInfoSynapse(bt.Synapse):
 
     def deserialize(self) -> dict:
         return self.response_dict
+    
+class MinerFeedbackSynapse(bt.Synapse):
+    feedback: list
