@@ -107,16 +107,16 @@ class Validator(BaseValidatorNeuron):
                 combined_result.append(
                     (
                         researcher_response["models_response"][entry.id],
-                        # entry.current_model_response, # Enable when dataset-api endpoint is fully ready
-                        0.98, # MOCK for testing purposes until dataset-api endpoint is fully ready
+                        entry.current_model_response,
                         entry.label["melanoma"],
+                        entry.id,
                     )
                 )
 
         researcher_model_score = 0
         current_model_score = 0
         for entry in combined_result:
-            researcher_pred, current_model_pred, label = entry
+            researcher_pred, current_model_pred, label, id = entry
             if researcher_pred == current_model_pred:
                 continue
             elif (label == True and researcher_pred > current_model_pred) or (
@@ -126,7 +126,28 @@ class Validator(BaseValidatorNeuron):
             else:
                 current_model_score += 1
         entries_num = len(combined_result)
-        return researcher_model_score, current_model_score, entries_num
+        return researcher_model_score, current_model_score, entries_num, combined_result
+    
+    async def send_researchers_scores(self, researcher_score, current_model_score, num_entries,
+                                       combined_predictions, researcher_uid):
+        entries = [{"prediction": i[0], "current_model_prediction": i[1], "is_melanoma": i[2], "image_id": i[3]}
+                    for i in combined_predictions]
+        try:
+            headers = {"x-api-key": self.config.dataset_api_key}
+            res = requests.post(
+                self.config.stats_api + f"/researcher/testing/{researcher_uid}",
+                json={
+                    "entries": entries,
+                    "researcher_score": researcher_score,
+                    "current_model_score": current_model_score,
+                    "num_entries": num_entries,
+                },
+                headers=headers
+            )
+            if not res.ok:
+                raise Exception(f"Received non-2xx status code: {res.status_code} - {res.text}")
+        except Exception as e:
+            bt.logging.error(f"Failed to send researchers scores to statistics api: {e}")
 
     async def update_miners_identity(self):
         valid_miners_info = await self.get_miners_info()
@@ -201,7 +222,7 @@ class Validator(BaseValidatorNeuron):
     def update_and_get_top_researchers(self):
         """This function fetches top researchers with mapped rewards from cancer-ai external api"""
         try:
-            response = requests.get(url=self.config.top_researchers_url)
+            response = requests.get(url=self.config.stats_api + "/top-researchers")
             data = response.json()
 
             if not isinstance(data, dict):
