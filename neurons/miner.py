@@ -29,7 +29,6 @@ import cancer_ai
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
 from cancer_ai.miner.forward import set_info, get_images, get_image, get_mode
-from cancer_ai.models import Feedback
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from io import BytesIO
 
@@ -107,7 +106,7 @@ class Miner(BaseMinerNeuron):
     async def forward_get_feedback(
         self, synapse: cancer_ai.protocol.MinerFeedbackSynapse
     ):
-        feedback: Feedback = synapse.feedback
+        feedback = synapse.feedback
         #TODO(researcher developer): write your logic to process feedback data
         print("You got real results and current best model scores.", feedback)
 

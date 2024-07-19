@@ -12,7 +12,7 @@ except Exception:
     GPU_DEVICE_NAME = "cpu"
     GPU_DEVICE_COUNT = 0
 
-def set_info(self):
+def set_info(self) -> dict:
     # response = get_model_name(self)
     miner_info = {
         # "model_name": response,
@@ -29,12 +29,12 @@ def get_model_name(self):
     #TODO: Logic to handle querying models name using ML model watermark (?)
     ...
 
-def get_mode(self):
+def get_mode(self) -> str:
     if self.config.researcher:
         return "researcher"
     return "regular"
 
-def get_images(self, images_urls: dict):
+def get_images(self, images_urls: dict) -> list:
     images = []
 
     for image_id, image_url in images_urls.items():
@@ -53,7 +53,7 @@ def get_images(self, images_urls: dict):
 
     return images
 
-def get_image(self, image: str):
+def get_image(self, image: str) -> bytes:
     try:
         response = requests.get(self.config.dataset_api + image)
         response.raise_for_status()

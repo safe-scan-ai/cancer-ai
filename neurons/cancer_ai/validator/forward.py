@@ -21,12 +21,12 @@ import bittensor as bt
 import asyncio
 
 from cancer_ai.protocol import PredictionSynapse, ReasearcherTestingSynapse, MinerFeedbackSynapse
-from cancer_ai.models import Feedback, FeedbackEntry
 from cancer_ai.validator.reward import get_rewards
 from cancer_ai.utils.uids import get_all_uids
+from typing import Awaitable
 
 
-async def forward(self, image_url: str):
+async def forward(self, image_url: str) -> Awaitable[None]:
     all_uids = get_all_uids(self)
 
     #if the uids is the researcher which is in testing mode send him testing data
@@ -55,7 +55,7 @@ async def forward(self, image_url: str):
     self.update_scores(rewards, all_uids)
 
 
-async def forward_to_researcher(self, researcher_uid: int, test_data: list):
+async def forward_to_researcher(self, researcher_uid: int, test_data: list) -> Awaitable[None]:
     images = {entry.id: entry.image_url for entry in test_data}
 
     response = await self.dendrite(
@@ -83,10 +83,10 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
         )
 
         # Send the scores to the miner as a feedback
-        feedback_list = [FeedbackEntry(researcher_res=entry[0], current_model_res=entry[1], label=entry[2], image_id=entry[3]) for entry in combined_predictions]
+        feedback = [{"researcher_res": entry[0], "current_model_res": entry[1], "label": entry[2], "image_id": entry[3]} for entry in combined_predictions]
         asyncio.create_task(self.dendrite(
             axons=self.metagraph.axons[researcher_uid],
-            synapse=MinerFeedbackSynapse(feedback=Feedback(feedback=feedback_list)),
+            synapse=MinerFeedbackSynapse(feedback=feedback),
             deserialize=False,
         ))
 

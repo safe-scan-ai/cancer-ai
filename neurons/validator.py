@@ -23,13 +23,13 @@ import bittensor as bt
 import requests
 import torch
 import uuid
-import json
 
 from cancer_ai.validator import forward, forward_to_researcher
 from cancer_ai.validator.models import DatasetEntries, ResearcherEntry, ResearcherScores
 from cancer_ai.base.validator import BaseValidatorNeuron
 from cancer_ai.protocol import MinerInfoSynapse
 from pydantic import ValidationError
+from typing import Any
 
 
 class Validator(BaseValidatorNeuron):
@@ -44,7 +44,7 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-    async def forward(self):
+    async def forward(self) -> None:
         # How often you actually send synthetic challenges to the miner
         if self.step % self.config.forward_frequency > 0:
             return
@@ -62,7 +62,7 @@ class Validator(BaseValidatorNeuron):
 
         return await forward(self, challenge_data["image_url"])
 
-    async def forward_researcher_test(self, researcher_uid):
+    async def forward_researcher_test(self, researcher_uid) -> None:
         bt.logging.info("Forwarding the test data to the researcher miner")
         test_data = []
         while not test_data:
@@ -77,7 +77,7 @@ class Validator(BaseValidatorNeuron):
 
         return await forward_to_researcher(self, researcher_uid, test_data.entries)
 
-    async def get_image_data(self, amount):
+    async def get_image_data(self, amount) -> DatasetEntries:
         """This function fetches test data images from cancer-ai external api"""
         dataset_entries = None
         try:
@@ -97,7 +97,7 @@ class Validator(BaseValidatorNeuron):
         finally:
             return dataset_entries
 
-    async def evaluate_model(self, researcher_response, test_data):
+    async def evaluate_model(self, researcher_response, test_data) -> tuple[int, int, int, list]:
         # researcher_response shape: {"models_response": {"sample_photo_id_1": 0.43,"sample_photo_id_2": 0.99, ...}}
         # test_data shape: [{"id": 1, "label": {"melanoma": false}, "image_url": "someurl"}, ...]
 
@@ -129,7 +129,7 @@ class Validator(BaseValidatorNeuron):
         return researcher_model_score, current_model_score, entries_num, combined_result
     
     async def send_researchers_scores(self, researcher_score, current_model_score, num_entries,
-                                       combined_predictions, researcher_uid):
+                                       combined_predictions, researcher_uid) -> None:
         
         entries = [ResearcherEntry(prediction=i[0], current_model_prediction=i[1], is_melanoma=i[2], image_id=i[3]) for i in combined_predictions]
         researcher_scores = ResearcherScores(entries=entries, researcher_score=researcher_score, current_model_score=current_model_score,
@@ -148,7 +148,7 @@ class Validator(BaseValidatorNeuron):
         except Exception as e:
             bt.logging.error(f"Failed to send researchers scores to statistics api: {e}")
 
-    async def update_miners_identity(self):
+    async def update_miners_identity(self) -> None:
         valid_miners_info = await self.get_miners_info()
         if not valid_miners_info:
             bt.logging.warning("No active miner available")
@@ -190,7 +190,7 @@ class Validator(BaseValidatorNeuron):
         # thread = Thread(target=self.store_miner_info, daemon=True)
         # thread.start()
 
-    async def get_miners_info(self):
+    async def get_miners_info(self) -> dict:
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
         uid_to_axon = dict(zip(self.all_uids, self.metagraph.axons))
         query_axons = [uid_to_axon[int(uid)] for uid in self.all_uids]
@@ -207,7 +207,7 @@ class Validator(BaseValidatorNeuron):
         }
         return responses
 
-    def store_miner_info(self):
+    def store_miner_info(self) -> None:
         try:
             requests.post(
                 self.config.storage_url + "/store_miner_info",
@@ -219,7 +219,7 @@ class Validator(BaseValidatorNeuron):
         except Exception as e:
             bt.logging.error(f"Failed to store miner info: {e}")
 
-    def update_and_get_top_researchers(self):
+    def update_and_get_top_researchers(self) -> dict:
         """This function fetches top researchers with mapped rewards from cancer-ai external api"""
         try:
             response = requests.get(url=self.config.stats_api + "/emission-share")
@@ -240,7 +240,7 @@ class Validator(BaseValidatorNeuron):
         finally:
             return self.top_researchers
 
-    def update_scores(self, rewards: torch.FloatTensor, uids: list[int]):
+    def update_scores(self, rewards: torch.FloatTensor, uids: list[int]) -> None:
         if torch.isnan(rewards).any():
             bt.logging.warning(f"NaN values detected in rewards: {rewards}")
             rewards = torch.nan_to_num(rewards, 0)
