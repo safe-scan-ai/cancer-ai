@@ -1,6 +1,4 @@
-from pydantic import BaseModel, parse_obj_as
-from typing import List, Dict
-
+from pydantic import BaseModel
 
 class FeedbackEntry(BaseModel):
     researcher_res: float

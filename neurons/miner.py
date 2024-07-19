@@ -29,7 +29,7 @@ import cancer_ai
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
 from cancer_ai.miner.forward import set_info, get_images, get_image, get_mode
-from cancer_ai.miner.models import Feedback
+from cancer_ai.models import Feedback
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from io import BytesIO
 
