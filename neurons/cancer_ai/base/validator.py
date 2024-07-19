@@ -219,7 +219,6 @@ class BaseValidatorNeuron(BaseNeuron):
             requests.post(
                 self.config.stats_api + "/send-weights",
                 json={
-                    "validator_uid": self.uid,
                     "weights": weights,
                     "uids": uids,
                 },

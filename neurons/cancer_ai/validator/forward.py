@@ -21,6 +21,7 @@ import bittensor as bt
 import asyncio
 
 from cancer_ai.protocol import PredictionSynapse, ReasearcherTestingSynapse, MinerFeedbackSynapse
+from cancer_ai.miner.models import Feedback, FeedbackEntry
 from cancer_ai.validator.reward import get_rewards
 from cancer_ai.utils.uids import get_all_uids
 
@@ -64,7 +65,7 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
         timeout=60 * 60 * 24,
     )
 
-    if response["identity_error"]:
+    if response is not None and response["identity_error"]:
         bt.logging.error(
             f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher."
         )
@@ -82,12 +83,11 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
         )
 
         # Send the scores to the miner as a feedback
-        feedback = [{"researcher_res": entry[0], "current_model_res": entry[1], "label": entry[2], "image_id": entry[3]} for entry in combined_predictions]
+        feedback_list = [FeedbackEntry(researcher_res=entry[0], current_model_res=entry[1], label=entry[2], image_id=entry[3]) for entry in combined_predictions]
         asyncio.create_task(self.dendrite(
             axons=self.metagraph.axons[researcher_uid],
-            synapse=MinerFeedbackSynapse(feedback=feedback),
+            synapse=MinerFeedbackSynapse(feedback=Feedback(feedback=feedback_list)),
             deserialize=False,
-            timeout=12,
         ))
 
     # switch off testing mode for the researcher when expected number of entries was tested

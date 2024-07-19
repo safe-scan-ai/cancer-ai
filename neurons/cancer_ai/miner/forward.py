@@ -21,8 +21,7 @@ def set_info(self):
             "gpu_device_name": GPU_DEVICE_NAME,
             "gpu_device_count": GPU_DEVICE_COUNT,
         },
-        # "miner_mode": get_mode(self)
-        "miner_mode": "researcher"
+        "miner_mode": get_mode(self)
     }
     return miner_info
 

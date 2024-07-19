@@ -51,7 +51,7 @@ class Miner(BaseMinerNeuron):
 
         # TODO: fetch the model from hugging face
         self.regular_model = tf.keras.models.load_model(
-            "/home/tensor/cancer-ai-clone/data/melanoma.keras"
+            "./data/melanoma.keras"
         )
         bt.logging.info(f"Regular model built status: {self.regular_model.built}")
 
@@ -70,8 +70,7 @@ class Miner(BaseMinerNeuron):
         not_melanoma_probability, melanoma_probability = pred[0]
         synapse.response_dict = {
             "models_response": float(melanoma_probability),
-            # "miner_mode": get_mode(self),
-            "miner_mode": "researcher",
+            "miner_mode": get_mode(self),
             "miner_uid": self.uid,
         }
         # simulate delay for testing purposes
@@ -82,18 +81,18 @@ class Miner(BaseMinerNeuron):
     async def forward_researcher(
         self, synapse: cancer_ai.protocol.ReasearcherTestingSynapse
     ) -> cancer_ai.protocol.ReasearcherTestingSynapse:
-        # if not self.config.researcher:
-        #     synapse.response_dict = {"identity_error": True}
-        #     return synapse
+        if not self.config.researcher:
+            synapse.response_dict = {"identity_error": True}
+            return synapse
 
         images = get_images(self, synapse.images)
 
         # TODO(researcher owner): feed the ML model with the images
         # MOCK response for testing purposes
-        mock_response = {"entries_num": len(images), "models_response": {}, "identity_error": False}
-        for image in images:
-            mock_response["models_response"][image[0]] = 0.99
-        synapse.response_dict = mock_response
+        # mock_response = {"entries_num": len(images), "models_response": {}, "identity_error": False}
+        # for image in images:
+        #     mock_response["models_response"][image[0]] = 0.99
+        # synapse.response_dict = mock_response
 
         return synapse
 
@@ -110,7 +109,7 @@ class Miner(BaseMinerNeuron):
     ):
         feedback: Feedback = synapse.feedback
         #TODO(researcher developer): write your logic to process feedback data
-        print("I GOT FEEDBACK......", feedback)
+        print("You got real results and current best model scores.", feedback)
 
     async def blacklist(
         self, synapse: cancer_ai.protocol.PredictionSynapse
