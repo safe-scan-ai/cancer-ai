@@ -19,8 +19,6 @@
 
 import typing
 import bittensor as bt
-from cancer_ai.models import Feedback
-
 
 class PredictionSynapse(bt.Synapse):
     image_url: str
