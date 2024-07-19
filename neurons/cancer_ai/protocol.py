@@ -19,6 +19,7 @@
 
 import typing
 import bittensor as bt
+from cancer_ai.miner.models import Feedback
 
 
 class PredictionSynapse(bt.Synapse):
@@ -46,3 +47,6 @@ class MinerInfoSynapse(bt.Synapse):
 
     def deserialize(self) -> dict:
         return self.response_dict
+    
+class MinerFeedbackSynapse(bt.Synapse):
+    feedback: Feedback

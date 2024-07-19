@@ -22,11 +22,11 @@ import time
 import bittensor as bt
 import requests
 import torch
-import base64
+import uuid
+import json
 
-from threading import Thread
 from cancer_ai.validator import forward, forward_to_researcher
-from cancer_ai.validator.models import DatasetEntries
+from cancer_ai.validator.models import DatasetEntries, ResearcherEntry, ResearcherScores
 from cancer_ai.base.validator import BaseValidatorNeuron
 from cancer_ai.protocol import MinerInfoSynapse
 from pydantic import ValidationError
@@ -130,19 +130,18 @@ class Validator(BaseValidatorNeuron):
     
     async def send_researchers_scores(self, researcher_score, current_model_score, num_entries,
                                        combined_predictions, researcher_uid):
-        entries = [{"prediction": i[0], "current_model_prediction": i[1], "is_melanoma": i[2], "image_id": i[3]}
-                    for i in combined_predictions]
+        
+        entries = [ResearcherEntry(prediction=i[0], current_model_prediction=i[1], is_melanoma=i[2], image_id=i[3]) for i in combined_predictions]
+        researcher_scores = ResearcherScores(entries=entries, researcher_score=researcher_score, current_model_score=current_model_score,
+                                             num_entries=num_entries, testing_session_id=str(self.all_uids_info[researcher_uid]["testing_session_id"]))
+        researcher_scores = researcher_scores.dict()
+
         try:
             headers = {"x-api-key": self.config.dataset_api_key}
             res = requests.post(
                 self.config.stats_api + f"/researcher/testing/{researcher_uid}",
-                json={
-                    "entries": entries,
-                    "researcher_score": researcher_score,
-                    "current_model_score": current_model_score,
-                    "num_entries": num_entries,
-                },
-                headers=headers
+                json=researcher_scores,
+                headers=headers,
             )
             if not res.ok:
                 raise Exception(f"Received non-2xx status code: {res.status_code} - {res.text}")
@@ -179,6 +178,7 @@ class Validator(BaseValidatorNeuron):
                 and miner_state["miner_mode"] == "regular"
             ):
                 miner_state["is_tested"] = True
+                miner_state["testing_session_id"] = uuid.uuid4()
                 bt.logging.success("New Researcher with uid {uid} started the testing challenge")
             miner_state["miner_mode"] = info["miner_mode"]
 
@@ -222,7 +222,7 @@ class Validator(BaseValidatorNeuron):
     def update_and_get_top_researchers(self):
         """This function fetches top researchers with mapped rewards from cancer-ai external api"""
         try:
-            response = requests.get(url=self.config.stats_api + "/top-researchers")
+            response = requests.get(url=self.config.stats_api + "/emission-share")
             data = response.json()
 
             if not isinstance(data, dict):

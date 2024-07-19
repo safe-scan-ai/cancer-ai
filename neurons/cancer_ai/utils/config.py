@@ -259,25 +259,18 @@ def add_validator_args(cls, parser):
         default="opentensor-dev",
     )
 
-    parser.add_argument(
-        "--storage_url",
-        type=str,
-        help="URL for storing miner info",
-        default="https://localhost:8888",
-    )
-
-    parser.add_argument(
-        "--top_researchers_url",
-        type=str,
-        help="URL for fetching top researchers",
-        default="https://localhost:8888",
-    ),
+    # parser.add_argument(
+    #     "--storage_url",
+    #     type=str,
+    #     help="URL for storing miner info",
+    #     default="https://localhost:8888",
+    # )
 
     parser.add_argument(
         "--stats_api",
         type=str,
         help="URL statistics api",
-        default="https://localhost:8888",
+        default="https://statistics.api.safe-scan.ai/",
     ),
 
     parser.add_argument(
@@ -308,6 +301,19 @@ def add_validator_args(cls, parser):
         default=10,
     )
 
+    parser.add_argument(
+        "--researcher_testing_entries_package",
+        type=int,
+        help="Amount of images for researcher test data that are to be fetched on one dataset-api call",
+        default=30,
+    )
+
+    parser.add_argument(
+        "--researcher_testing_entries_amount",
+        type=int,
+        help="Amount of images for researcher test data that are to be fetched overall for testing the model purposes",
+        default=300,
+    )
 
 def config(cls):
     """

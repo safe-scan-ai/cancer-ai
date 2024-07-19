@@ -65,6 +65,8 @@ class BaseMinerNeuron(BaseNeuron):
             forward_fn=self.forward_info,
         ).attach(
             forward_fn=self.forward_researcher,
+        ).attach(
+            forward_fn=self.forward_get_feedback,
         )
 
         # Instantiate runners

@@ -11,3 +11,17 @@ class DatasetEntry(BaseModel):
 
 class DatasetEntries(BaseModel):
     entries: List[DatasetEntry]
+
+
+class ResearcherEntry(BaseModel):
+    prediction: float
+    current_model_prediction: float
+    is_melanoma: bool
+    image_id: str
+
+class ResearcherScores(BaseModel):
+    entries: list[ResearcherEntry]
+    researcher_score: int
+    current_model_score: int
+    num_entries: int
+    testing_session_id: str
