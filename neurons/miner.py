@@ -19,10 +19,15 @@
 
 import time
 import typing
+from io import BytesIO
+
 import bittensor as bt
 import tensorflow as tf
 import numpy as np
-import uuid
+
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from huggingface_hub import hf_hub_download
+
 
 # Bittensor Miner cancer_ai:
 import cancer_ai
@@ -30,9 +35,12 @@ import cancer_ai
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
 from cancer_ai.miner.forward import set_info, get_images, get_image, get_mode
+
 from cancer_ai.miner.utils import is_valid_uuid
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from io import BytesIO
+
+
 
 
 class Miner(BaseMinerNeuron):
@@ -50,10 +58,10 @@ class Miner(BaseMinerNeuron):
         self.miner_info = set_info(self)
         bt.logging.info(f"Miner info: {self.miner_info}")
 
-        # TODO: fetch the model from hugging face
-        self.regular_model = tf.keras.models.load_model(
-            "./data/melanoma.keras"
+        model_path = hf_hub_download(
+            "safe-scan-ai/skin-cancer-collection", "melanoma.keras"
         )
+        self.regular_model = tf.keras.models.load_model(model_path)
         bt.logging.info(f"Regular model built status: {self.regular_model.built}")
 
     async def forward(
@@ -109,7 +117,9 @@ class Miner(BaseMinerNeuron):
     async def forward_get_feedback(
         self, synapse: cancer_ai.protocol.MinerFeedbackSynapse
     ):
-        feedback = synapse.feedback
+
+        feedback: Feedback = synapse.feedback
+
         #TODO(researcher developer): write your logic to process feedback data
         # bt.logging.info("Researcher feddback from model scores:", feedback)
 
