@@ -1,0 +1,1 @@
+python neurons/validator.py --netuid 163 --subtensor.network test --wallet.name miner --wallet.hotkey hot_validator --logging.debug

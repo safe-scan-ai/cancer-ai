@@ -265,14 +265,15 @@ class BaseValidatorNeuron(BaseNeuron):
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0)
 
         bt.logging.debug("raw_weights", raw_weights)
-        bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
+        # TODO commented  not working
+        # bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
             processed_weights,
         ) = bt.utils.weight_utils.process_weights_for_netuid(
-            uids=self.metagraph.uids.to("cpu"),
-            weights=raw_weights.to("cpu"),
+            uids=self.metagraph.uids,
+            weights=raw_weights,
             netuid=self.config.netuid,
             subtensor=self.subtensor,
             metagraph=self.metagraph,
@@ -388,7 +389,11 @@ class BaseValidatorNeuron(BaseNeuron):
     def load_state(self):
         """Loads the state of the validator from a file."""
         # Load the state of the validator from file.
-        state = torch.load(self.config.neuron.full_path + "/state.pt")
+        try:
+            state = torch.load(self.config.neuron.full_path + "/state.pt")
+        except Exception as e:
+            bt.logging.error(e)
+            state = {}
         self.step = state.get("step", 0)
         self.scores = state.get(
             "scores",

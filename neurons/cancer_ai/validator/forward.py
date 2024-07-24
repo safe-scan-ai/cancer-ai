@@ -20,10 +20,10 @@
 import bittensor as bt
 import asyncio
 
-from cancer_ai.protocol import PredictionSynapse, ReasearcherTestingSynapse, MinerFeedbackSynapse
-from cancer_ai.models import Feedback, FeedbackEntry
-from cancer_ai.validator.reward import get_rewards
-from cancer_ai.utils.uids import get_all_uids
+from ..protocol import PredictionSynapse, ReasearcherTestingSynapse, MinerFeedbackSynapse
+from ..models import Feedback, FeedbackEntry
+from ..validator.reward import get_rewards
+from ..utils.uids import get_all_uids
 
 
 async def forward(self, image_url: str):

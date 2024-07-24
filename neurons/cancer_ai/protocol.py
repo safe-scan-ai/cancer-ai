@@ -19,7 +19,7 @@
 
 import typing
 import bittensor as bt
-from cancer_ai.models import Feedback
+from .models import Feedback
 
 
 class PredictionSynapse(bt.Synapse):

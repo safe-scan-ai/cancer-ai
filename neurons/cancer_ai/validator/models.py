@@ -1,10 +1,10 @@
 from pydantic import BaseModel, parse_obj_as
-from typing import List, Dict
+from typing import List, Dict, Any
 
 
 class DatasetEntry(BaseModel):
     id: str
-    label: Dict[str, str]
+    label: Dict[str, Any]
     image_url: str
     current_model_response: float
 
