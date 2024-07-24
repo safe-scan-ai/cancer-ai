@@ -3,7 +3,7 @@
 # **Safe Scan Cancer AI detection **  <!-- omit in toc -->
 Bittensor Subnet for improving cancer detection algorithms
 
-[Discord](https://discord.gg/npwNy9tU) [Twitter](https://x.com/SAFESCAN_AI)
+[Discord - Safe Scan](https://discord.gg/PZevpMJrfW) |  [Discord - Bittensor #safe-scan 163](https://discord.gg/bittensor) | [Twitter](https://x.com/SAFESCAN_AI)
 
 </div>
 
