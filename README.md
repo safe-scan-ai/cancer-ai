@@ -36,9 +36,9 @@ Subsequently, we will focus on detecting other types of cancer, starting with br
 
 For more information about our project, roadmap, and progress, visit our website:
 
-[www.safe-scan.ai](http://www.safe-scan.ai/)
+[safe-scan.ai](https://www.safe-scan.ai/)
 
-www.skin-scan.ai
+[skin-scan.ai](https://skin-scan.ai/)
 
 
 ## Tokenomy
@@ -70,7 +70,7 @@ As a subnet, we focus on the practical application of our technology. Therefore,
 
 ### Skinscan App
 
-Our first product is the [SKINSCAN app](www.skin-scan.ai) which allows us to diagnose skin changes using a simple photo from a phone and determine whether they are potentially cancerous with over 90% accuracy.
+Our first product is the [SKINSCAN app](https://skin-scan.ai/) which allows us to diagnose skin changes using a simple photo from a phone and determine whether they are potentially cancerous with over 90% accuracy.
 
 Our app increases awareness of skin diseases, informs users about current UV levels, and most importantly, supports the early diagnosis of skin cancer. It helps assess whether a particular skin lesion is potentially cancerous. It also assists doctors by enabling the easy export of changes in skin lesions over time along with their descriptions. Additionally, thanks to feedback from doctors, it will be possible to build a growing dataset and further improve the effectiveness of our skin cancer detection algorithm.
 
@@ -100,7 +100,7 @@ In addition, we aim to collaborate with manufacturers of CT scanners who current
 
 ### Validator
 
-1. Contact us on [Discord](https://discord.gg/XedfWAUK) to request the Dataset API key which will enable you to pull resources for testing researchers and generation of synthetic queries.
+1. Contact us on [Safe Scan Discord, #validator-support](https://discord.gg/PZevpMJrfW) to request the Dataset API key which will enable you to pull resources for testing researchers and generation of synthetic queries.
 2. Setup config parameters which can be found in ./neurons/cancer_ai/utils/config.py. You can either provide these parameters with the flags when running the validator.py or adjust the default values for the config parameters in the config.py file directly. The fetched in previous step api key is one of the parameters.
 3. Run the validator.py with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
 
@@ -119,4 +119,4 @@ Hence, if you are already running a Regular Miner successfully after the immunit
 
 2. Run the miner.py script with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
 
-3. When the testing is done the outcome can be found on [![Statistics API]](https:cancer-ai/stats). If it appears that your Researcher models is better then our current model, reach us on [![Discord](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor). We will then test your model outside of the subnet to confirm on its accuracy and hopefully introduce it as a new base model for the Subnet and the Skinscan App!
+3. When the testing is done the outcome can be found on [Statistics API](https://statistics.safe-scan.ai/). If it appears that your Researcher models is better then our current model, reach us on Discord. We will then test your model outside of the subnet to confirm on its accuracy and hopefully introduce it as a new base model for the Subnet and the Skinscan App!
