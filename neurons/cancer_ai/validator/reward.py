@@ -17,8 +17,9 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import torch
+import numpy as np
 from typing import List
+import bittensor as bt
 from ..protocol import PredictionSynapse
 from collections import Counter
 
@@ -42,6 +43,9 @@ def reward(
         max_time_penalty,
         max_time_penalty * pow(response["process_time"], 3) / pow(factor, 3),
     )
+    # TODO Konrad what to log 
+    # bt.logging.info(f"In rewards, query val: {query}, response val: {response}, rewards val: {1.0 if response == query * 2 else 0}")
+
     return 1 - time_penalty
 
 
@@ -50,7 +54,7 @@ def get_rewards(
     responses: List[PredictionSynapse],
     max_time_penalty: float,
     factor: float,
-) -> torch.FloatTensor:
+) -> np.ndarray:
     # getting the most common response to validate if miner used the right model
     predictions = []
     most_common_prediction = 1
@@ -67,9 +71,6 @@ def get_rewards(
         counter = Counter(predictions)
         most_common_prediction, _ = counter.most_common(1)[0]
 
-    return torch.FloatTensor(
-        [
-            reward(response, max_time_penalty, factor, most_common_prediction)
-            for response in responses
-        ]
-    ).to(self.device)
+    return np.ndarray(
+        [ reward(response, max_time_penalty, factor, most_common_prediction) for response in responses ]
+    )

@@ -18,6 +18,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import bittensor as bt
+import time
 import asyncio
 
 from ..protocol import PredictionSynapse, ReasearcherTestingSynapse, MinerFeedbackSynapse
@@ -53,6 +54,7 @@ async def forward(self, image_url: str):
     print(f"Scored rewards: {rewards}")
 
     self.update_scores(rewards, all_uids)
+    time.sleep(5)
 
 
 async def forward_to_researcher(self, researcher_uid: int, test_data: list):
