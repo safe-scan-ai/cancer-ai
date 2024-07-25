@@ -30,9 +30,9 @@ from typing import List
 from traceback import print_exception
 from abc import abstractmethod
 
-from cancer_ai.base.neuron import BaseNeuron
-from cancer_ai.mock import MockDendrite
-from cancer_ai.utils.config import add_validator_args
+from ..base.neuron import BaseNeuron
+from ..mock import MockDendrite
+from ..utils.config import add_validator_args
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -62,6 +62,13 @@ class BaseValidatorNeuron(BaseNeuron):
         # Set up initial scoring weights for validation
         print("Building validation weights.")
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
+        self.scores = torch.zeros(self.metagraph.n, dtype=torch.float32, device=self.device)
+        self.top_researchers = {}
+        self.all_uids_info = {
+            uid: {"scores": [], "miner_mode": "", "is_tested": False,
+                   "tested_entries_amount": 0} for uid in self.all_uids
+        }
+        self.save_state()
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -263,16 +270,15 @@ class BaseValidatorNeuron(BaseNeuron):
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0)
-
         bt.logging.debug("raw_weights", raw_weights)
-        bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
+        bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
             processed_weights,
         ) = bt.utils.weight_utils.process_weights_for_netuid(
-            uids=self.metagraph.uids.to("cpu"),
-            weights=raw_weights.to("cpu"),
+            uids=self.metagraph.uids,
+            weights=raw_weights,
             netuid=self.config.netuid,
             subtensor=self.subtensor,
             metagraph=self.metagraph,
@@ -388,7 +394,11 @@ class BaseValidatorNeuron(BaseNeuron):
     def load_state(self):
         """Loads the state of the validator from a file."""
         # Load the state of the validator from file.
-        state = torch.load(self.config.neuron.full_path + "/state.pt")
+        try:
+            state = torch.load(self.config.neuron.full_path + "/state.pt")
+        except Exception as e:
+            bt.logging.error(e)
+            state = {}
         self.step = state.get("step", 0)
         self.scores = state.get(
             "scores",

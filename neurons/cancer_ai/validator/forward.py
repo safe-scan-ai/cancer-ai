@@ -20,10 +20,10 @@
 import bittensor as bt
 import asyncio
 
-from cancer_ai.protocol import PredictionSynapse, ReasearcherTestingSynapse, MinerFeedbackSynapse
-from cancer_ai.models import Feedback, FeedbackEntry
-from cancer_ai.validator.reward import get_rewards
-from cancer_ai.utils.uids import get_all_uids
+from ..protocol import PredictionSynapse, ReasearcherTestingSynapse, MinerFeedbackSynapse
+from ..models import Feedback, FeedbackEntry
+from ..validator.reward import get_rewards
+from ..utils.uids import get_all_uids
 
 
 async def forward(self, image_url: str):
@@ -73,7 +73,7 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
     # append tested entries num
     if self.all_uids_info[researcher_uid] and response["entries_num"]:
         self.all_uids_info[researcher_uid]["tested_entries_amount"] += response["entries_num"]
-        print(f"Researcher with uid {researcher_uid} responded with {response['entries_num']} predictions.\n Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]['tested_entries_amount']}")
+        print(f'Researcher with uid {researcher_uid} responded with {response["entries_num"]} predictions. Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]["tested_entries_amount"]}')
         
         researcher_score, current_model_score, num_entries, combined_predictions = await self.evaluate_model(response, test_data)
         asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries, combined_predictions, researcher_uid))

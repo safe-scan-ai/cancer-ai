@@ -19,7 +19,7 @@
 
 import torch
 from typing import List
-from cancer_ai.protocol import PredictionSynapse
+from ..protocol import PredictionSynapse
 from collections import Counter
 
 

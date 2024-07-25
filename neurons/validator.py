@@ -86,7 +86,9 @@ class Validator(BaseValidatorNeuron):
             )
             headers = {"x-api-key": self.config.dataset_api_key}
             response = requests.get(url=endpoint, headers=headers)
-            dataset_entries = DatasetEntries.parse_obj(response.json())
+            data = response.json()
+            bt.logging.info(f"Datset API response: {data}")
+            dataset_entries = DatasetEntries(**data)
 
         except requests.RequestException as e:
             bt.logging.error(f"Failed to fetch test data: {e}")
