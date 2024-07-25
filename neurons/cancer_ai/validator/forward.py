@@ -73,7 +73,7 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
     # append tested entries num
     if self.all_uids_info[researcher_uid] and response["entries_num"]:
         self.all_uids_info[researcher_uid]["tested_entries_amount"] += response["entries_num"]
-        print(f"Researcher with uid {researcher_uid} responded with {response['entries_num']} predictions.\n Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]['tested_entries_amount']}")
+        print(f'Researcher with uid {researcher_uid} responded with {response["entries_num"]} predictions. Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]["tested_entries_amount"]}')
         
         researcher_score, current_model_score, num_entries, combined_predictions = await self.evaluate_model(response, test_data)
         asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries, combined_predictions, researcher_uid))

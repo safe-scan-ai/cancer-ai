@@ -62,6 +62,13 @@ class BaseValidatorNeuron(BaseNeuron):
         # Set up initial scoring weights for validation
         print("Building validation weights.")
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
+        self.scores = torch.zeros(self.metagraph.n, dtype=torch.float32, device=self.device)
+        self.top_researchers = {}
+        self.all_uids_info = {
+            uid: {"scores": [], "miner_mode": "", "is_tested": False,
+                   "tested_entries_amount": 0} for uid in self.all_uids
+        }
+        self.save_state()
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -264,9 +271,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Replace any NaN values with 0.
         raw_weights = torch.nn.functional.normalize(self.scores, p=1, dim=0)
         bt.logging.debug("raw_weights", raw_weights)
-        raw_weights = raw_weights.numpy()
-        # TODO commented  not working
-        # bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
+        bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
