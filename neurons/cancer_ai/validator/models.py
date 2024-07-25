@@ -25,3 +25,4 @@ class ResearcherScores(BaseModel):
     current_model_score: int
     num_entries: int
     testing_session_id: str
+    contact: str

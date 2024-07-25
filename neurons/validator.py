@@ -129,11 +129,11 @@ class Validator(BaseValidatorNeuron):
         return researcher_model_score, current_model_score, entries_num, combined_result
     
     async def send_researchers_scores(self, researcher_score, current_model_score, num_entries,
-                                       combined_predictions, researcher_uid):
+                                       combined_predictions, researcher_uid, contact):
         
         entries = [ResearcherEntry(prediction=i[0], current_model_prediction=i[1], is_melanoma=i[2], image_id=i[3]) for i in combined_predictions]
         researcher_scores = ResearcherScores(entries=entries, researcher_score=researcher_score, current_model_score=current_model_score,
-                                             num_entries=num_entries, testing_session_id=str(self.all_uids_info[researcher_uid]["testing_session_id"]))
+                                             num_entries=num_entries, testing_session_id=str(self.all_uids_info[researcher_uid]["testing_session_id"]), contact=contact)
         researcher_scores = researcher_scores.dict()
 
         try:

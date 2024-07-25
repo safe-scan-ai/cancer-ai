@@ -86,14 +86,18 @@ class Miner(BaseMinerNeuron):
             return synapse
 
         images = get_images(self, synapse.images)
+        response = {"entries_num": len(images), "models_response": {}, "identity_error": False, "contact": ""}
 
         # TODO(researcher owner): feed the ML model with the images
         # MOCK response for testing purposes
-        # mock_response = {"entries_num": len(images), "models_response": {}, "identity_error": False}
         # for image in images:
-        #     mock_response["models_response"][image[0]] = 0.99
-        # synapse.response_dict = mock_response
+        #     response["models_response"][image[0]] = 0.99
 
+        # TODO(researcher owner): consider dropping contact info (its sent on our API later on if your researcher happens to be the best)
+        # Alternatively you can contact us on discord if your model is best one
+        response["contact"] = "dummy"
+        
+        synapse.response_dict = response
         return synapse
 
     async def forward_info(

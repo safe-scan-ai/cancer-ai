@@ -77,7 +77,8 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
             Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]["tested_entries_amount"]}")
         
         researcher_score, current_model_score, num_entries, combined_predictions = await self.evaluate_model(response, test_data)
-        asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries, combined_predictions, researcher_uid))
+        asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries,
+                                                          combined_predictions, researcher_uid, response["contact"]))
         print(
             f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}"
         )
