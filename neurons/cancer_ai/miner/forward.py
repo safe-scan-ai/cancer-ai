@@ -2,9 +2,6 @@ import torch
 import requests
 import bittensor as bt
 
-from io import BytesIO
-from PIL import Image
-
 try:
     GPU_DEVICE_NAME = torch.cuda.get_device_name()
     GPU_DEVICE_COUNT = torch.cuda.device_count()

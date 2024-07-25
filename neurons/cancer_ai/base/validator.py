@@ -30,9 +30,9 @@ from typing import List
 from traceback import print_exception
 from abc import abstractmethod
 
-from cancer_ai.base.neuron import BaseNeuron
-from cancer_ai.mock import MockDendrite
-from cancer_ai.utils.config import add_validator_args
+from ..base.neuron import BaseNeuron
+from ..mock import MockDendrite
+from ..utils.config import add_validator_args
 
 
 class BaseValidatorNeuron(BaseNeuron):

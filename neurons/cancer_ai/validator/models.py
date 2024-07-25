@@ -1,4 +1,4 @@
-from pydantic import BaseModel, parse_obj_as
+from pydantic import BaseModel
 from typing import List, Dict, Any
 
 

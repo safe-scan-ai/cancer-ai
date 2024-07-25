@@ -23,10 +23,10 @@ import bittensor as bt
 from abc import ABC, abstractmethod
 
 # Sync calls set weights and also resyncs the metagraph.
-from cancer_ai.utils.config import check_config, add_args, config
-from cancer_ai.utils.misc import ttl_get_block
-from cancer_ai import __spec_version__ as spec_version
-from cancer_ai.mock import MockSubtensor, MockMetagraph
+from ..utils.config import check_config, add_args, config
+from ..utils.misc import ttl_get_block
+from .. import __spec_version__ as spec_version
+from ..mock import MockSubtensor, MockMetagraph
 
 
 class BaseNeuron(ABC):
