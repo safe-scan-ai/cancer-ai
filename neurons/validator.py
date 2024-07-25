@@ -22,6 +22,7 @@ import time
 import bittensor as bt
 import requests
 import torch
+import numpy as np
 import uuid
 import json
 
@@ -158,6 +159,7 @@ class Validator(BaseValidatorNeuron):
             if info is None:
                 print(f"Warning: No info available for UID {uid}")
                 continue
+
             miner_state = self.all_uids_info.setdefault(
                 uid,
                 {
@@ -242,32 +244,30 @@ class Validator(BaseValidatorNeuron):
         finally:
             return self.top_researchers
 
-    def update_scores(self, rewards: torch.FloatTensor, uids: list[int]):
-        if torch.isnan(rewards).any():
+    def update_scores(self, rewards: np.ndarray, uids: list[int]):
+        if np.isnan(rewards).any():
             bt.logging.warning(f"NaN values detected in rewards: {rewards}")
-            rewards = torch.nan_to_num(rewards, 0)
+            rewards = np.nan_to_num(rewards, 0)
 
-        # Check if `uids` is already a tensor and clone it to avoid the warning.
-        if isinstance(uids, torch.Tensor):
-            uids_tensor = uids.clone().detach()
-        else:
-            uids_tensor = torch.tensor(uids).to(self.device)
+        # Convert uids to numpy array if not already
+        uids_array = np.array(uids)
 
-        scattered_rewards: torch.FloatTensor = self.scores.scatter(
-            0, uids_tensor, rewards
-        ).to(self.device)
+        # Initialize scores array if not already initialized
+        if not hasattr(self, 'scores'):
+            self.scores = np.zeros_like(rewards)
+
+        # Create an array to hold scattered rewards
+        scattered_rewards = np.zeros_like(self.scores)
+
+        # Scatter the rewards to the appropriate indices
+        scattered_rewards[uids_array] = rewards
 
         # Perform moving average with alpha parameter only on regular miners
-        alpha: float = self.config.neuron.moving_average_alpha
-        self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores.to(
-            self.device
-        )
+        alpha = self.config.neuron.moving_average_alpha
+        self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores
+
         zero_threshold = 1e-4
-        self.scores = torch.where(
-            self.scores.abs() < zero_threshold,
-            torch.zeros_like(self.scores),
-            self.scores,
-        )
+        self.scores = np.where(np.abs(self.scores) < zero_threshold, 0, self.scores)
 
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 

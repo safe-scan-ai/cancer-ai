@@ -70,7 +70,7 @@ def get_rewards(
     if predictions:
         counter = Counter(predictions)
         most_common_prediction, _ = counter.most_common(1)[0]
-
-    return np.ndarray(
+    
+    return np.array(
         [ reward(response, max_time_penalty, factor, most_common_prediction) for response in responses ]
     )

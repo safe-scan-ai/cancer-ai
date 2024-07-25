@@ -244,8 +244,8 @@ class BaseValidatorNeuron(BaseNeuron):
         """
         # Fetch top researchers and calculate the remaining reward pool for regular miners
         top_researchers = self.update_and_get_top_researchers()
-        researchers_uids = np.array(top_researchers.keys())
-        researchers_rewards = np.array(top_researchers.values())
+        researchers_uids = np.array(list(top_researchers.keys()))
+        researchers_rewards = np.array(list(top_researchers.values()))
         remaining_reward_pool = 1 - researchers_rewards.sum()
 
         # Check if self.scores contains any NaN values and log a warning if it does.
@@ -254,12 +254,12 @@ class BaseValidatorNeuron(BaseNeuron):
                 f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
-        # Create a boolean mask to filter out the researchers from the scaling the scores for miners
+        # Create a boolean mask to filter out the researchers from scaling the scores for miners
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
-        all_uids_tensor = torch.tensor(self.all_uids).to(self.device)
-        all_uids_regular_mask = torch.ones_like(all_uids_tensor, dtype=torch.bool)
+        all_uids_array = np.array(self.all_uids)
+        all_uids_regular_mask = np.ones_like(all_uids_array, dtype=bool)
         for uid in researchers_uids:
-            all_uids_regular_mask[all_uids_tensor == uid] = False
+            all_uids_regular_mask[all_uids_array == uid] = False
 
         # Scale the scores for miners only
         regular_rewards = self.scores[all_uids_regular_mask]
@@ -420,7 +420,10 @@ class BaseValidatorNeuron(BaseNeuron):
         """Loads the state of the validator from a file."""
         # Load the state of the validator from file.
         try:
-            state = np.load(self.config.neuron.full_path + "/state.npz")
+            state = np.load(self.config.neuron.full_path + "/state.npz", allow_pickle=True)
+            all_uids_info = state.get("all_uids_info", {})
+            if isinstance(all_uids_info, np.ndarray):
+                all_uids_info = all_uids_info.item()  # Convert to dictionary if needed
         except Exception as e:
             bt.logging.error(e)
             state = {}
@@ -430,8 +433,8 @@ class BaseValidatorNeuron(BaseNeuron):
             np.zeros(self.metagraph.n, dtype=np.float32),
         )
         self.hotkeys = state.get("hotkeys", copy.deepcopy(self.metagraph.hotkeys))
+        print(self.hotkeys)
         self.top_researchers = state.get("top_researchers", {})
-        self.all_uids_info = state.get("all_uids_info", {
-            uid: {"scores": [], "miner_mode": "", "is_tested": False,
-                   "tested_entries_amount": 0} for uid in self.all_uids
-        })
+        self.all_uids_info = all_uids_info if isinstance(all_uids_info, dict) else {
+            uid: {"scores": [], "miner_mode": "", "is_tested": False, "tested_entries_amount": 0} for uid in self.all_uids
+        }
