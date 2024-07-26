@@ -46,8 +46,8 @@ def get_random_uids(self, k: int, exclude: List[int] | None = None) -> np.ndarra
     candidate_uids = []
     avail_uids = []
 
-    top_researchers = self.update_and_get_top_researchers()
-    top_researchers_uids = list(top_researchers.keys())
+    self.update_top_researchers_from_api()
+    top_researchers_uids = list(self.top_researchers.keys())
 
     for uid in range(self.metagraph.n.item()):
         uid_is_available = check_uid_availability(
@@ -86,9 +86,9 @@ def get_all_uids(self, exclude: List[int] | None = None) -> np.ndarray:
     """
     avail_uids = []
 
-    # top_researchers = self.update_and_get_top_researchers()
-    top_researchers = self.update_and_get_top_researchers()
-    top_researchers_uids = list(top_researchers.keys())
+    
+    self.update_top_researchers_from_api()
+    top_researchers_uids = list(self.top_researchers.keys())
 
     for uid in range(self.metagraph.n.item()):
         uid_is_available = check_uid_availability(

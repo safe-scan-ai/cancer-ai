@@ -109,7 +109,7 @@ class Miner(BaseMinerNeuron):
     ):
         feedback: Feedback = synapse.feedback
         #TODO(researcher developer): write your logic to process feedback data
-        print("You got real results and current best model scores.", feedback)
+        bt.logging.info("Researcher feddback from model scores:", feedback)
 
     async def blacklist(
         self, synapse: cancer_ai.protocol.PredictionSynapse

@@ -26,6 +26,13 @@ from ..models import Feedback, FeedbackEntry
 from ..validator.reward import get_rewards
 from ..utils.uids import get_all_uids
 
+# TODO
+from enum import Enum
+
+class MINER_MODE(Enum):
+    Researcher = "researcher"
+    Miner = "miner"
+
 
 async def forward(self, image_url: str):
     all_uids = get_all_uids(self)
@@ -33,6 +40,7 @@ async def forward(self, image_url: str):
     #if the uids is the researcher which is in testing mode send him testing data
     for uid in all_uids:
         if uid.item() in self.all_uids_info and self.all_uids_info[uid.item()]["is_tested"]:
+            print("We got researcher, let's go")
             asyncio.create_task(self.forward_researcher_test(uid.item()))
 
     responses = await self.dendrite(
@@ -43,7 +51,7 @@ async def forward(self, image_url: str):
     )
 
     # Log the results for monitoring purposes.
-    print(f"Received responses: {responses}")
+    bt.logging.debug(f"Received responses: {responses}")
 
     rewards = get_rewards(
         self,
@@ -51,7 +59,7 @@ async def forward(self, image_url: str):
         max_time_penalty=self.config.max_time_penalty,
         factor=12,
     )
-    print(f"Scored rewards: {rewards}")
+    bt.logging.debug(f"Scored rewards: {rewards}")
 
     self.update_scores(rewards, all_uids)
     time.sleep(5)
@@ -75,13 +83,12 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
     # append tested entries num
     if self.all_uids_info[researcher_uid] and response["entries_num"]:
         self.all_uids_info[researcher_uid]["tested_entries_amount"] += response["entries_num"]
-        print(f'Researcher with uid {researcher_uid} responded with {response["entries_num"]} predictions. Total number of entries tested on researcher: {self.all_uids_info[researcher_uid]["tested_entries_amount"]}')
+        bt.logging.info(f'Researcher {researcher_uid} response')
+        bt.logging.debug(f'Researcher {researcher_uid} response {response}')
         
         researcher_score, current_model_score, num_entries, combined_predictions = await self.evaluate_model(response, test_data)
         asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries, combined_predictions, researcher_uid))
-        print(
-            f"Models comparison on {num_entries} entries:\n researcher score: {researcher_score} \n current model score: {current_model_score}"
-        )
+        bt.logging.info(f'Researcher {researcher_uid}  researcher score: {researcher_score} \n current model score: {current_model_score}')
 
         # Send the scores to the miner as a feedback
         feedback_list = [FeedbackEntry(researcher_res=entry[0], current_model_res=entry[1], label=entry[2], image_id=entry[3]) for entry in combined_predictions]
@@ -95,4 +102,5 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
     if self.all_uids_info[researcher_uid]["tested_entries_amount"] >= self.config.researcher_testing_entries_amount:
         self.all_uids_info[researcher_uid]["is_tested"] = False
         self.all_uids_info[researcher_uid]["tested_entries_amount"] = 0
-        print(f"Researcher with uid {researcher_uid} has finished testing.")
+        del self.all_uids_info[researcher_uid]["testing_session_id"]
+        bt.logging.info(f"Researcher with uid {researcher_uid} has finished testing.")

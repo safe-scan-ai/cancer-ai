@@ -149,7 +149,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Check that validator is registered on the network.
         self.sync()
 
-        print(f"Validator starting at block: {self.block}")
+        bt.logging.debug(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
@@ -226,7 +226,7 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.debug("Stopped")
 
     @abstractmethod
-    def update_and_get_top_researchers(self):
+    def update_top_researchers_from_api(self):
         ...
 
     def send_weights_to_api(self, weights, uids):
@@ -248,9 +248,9 @@ class BaseValidatorNeuron(BaseNeuron):
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
         # Fetch top researchers and calculate the remaining reward pool for regular miners
-        top_researchers = self.update_and_get_top_researchers()
-        researchers_uids = np.array(list(top_researchers.keys()))
-        researchers_rewards = np.array(list(top_researchers.values()))
+        self.update_top_researchers_from_api()
+        researchers_uids = np.array(list(self.top_researchers.keys()))
+        researchers_rewards = np.array(list(self.top_researchers.values()))
         remaining_reward_pool = 1 - researchers_rewards.sum()
 
         # Check if self.scores contains any NaN values and log a warning if it does.
@@ -324,7 +324,7 @@ class BaseValidatorNeuron(BaseNeuron):
             version_key=self.spec_version,
         )
         if result is True:
-            print("set_weights on chain successfully!")
+            bt.logging.info("set_weights on chain successfully!")
             self.send_weights_to_api(uint_weights, uint_uids)
         else:
             bt.logging.error("set_weights failed", msg)
@@ -437,7 +437,6 @@ class BaseValidatorNeuron(BaseNeuron):
             np.zeros(self.metagraph.n, dtype=np.float32),
         )
         self.hotkeys = state.get("hotkeys", copy.deepcopy(self.metagraph.hotkeys))
-        print(self.hotkeys)
         self.top_researchers = state.get("top_researchers", {})
         self.all_uids_info = all_uids_info if isinstance(all_uids_info, dict) else {
             uid: {"scores": [], "miner_mode": "", "is_tested": False, "tested_entries_amount": 0} for uid in self.all_uids

@@ -64,6 +64,7 @@ class Validator(BaseValidatorNeuron):
         return await forward(self, challenge_data["image_url"])
 
     async def forward_researcher_test(self, researcher_uid):
+        # TODO run all tests at once 
         bt.logging.info("Forwarding the test data to the researcher miner")
         test_data = []
         while not test_data:
@@ -179,18 +180,29 @@ class Validator(BaseValidatorNeuron):
             miner_state["min_stake"] = info.get("min_stake", 100)
             miner_state["device_info"] = info.get("device_info", {})
 
-            if (
-                info["miner_mode"] == "researcher"
-                and miner_state["miner_mode"] == "regular"
-            ):
-                miner_state["is_tested"] = True
-                miner_state["testing_session_id"] = uuid.uuid4()
-                bt.logging.success("New Researcher with uid {uid} started the testing challenge")
+            if info["miner_mode"] == "researcher":
+
+
+
+                print("researcher setting flag to is_tested")
+
+                if "testing_session_id" not in miner_state:
+                    # let's check if we were tested already and hit the limit 
+                    print(f"researcher tested amount: {miner_state['tested_entries_amount']}")
+                    print("New researcher, settings state")
+                    if "tested_entries_amount" not in miner_state or miner_state["tested_entries_amount"] < self.config.researcher_testing_entries_amount:
+                        print("Reseracher didn't hit testing limit, starting session")
+                        miner_state["is_tested"] = True
+                        miner_state["testing_session_id"] = uuid.uuid4()
+                        bt.logging.success("New Researcher with uid {uid} started the testing challenge!")
+                    else:
+                        print("Reseracher: Reached testing amount limit, skipping")
+                    
+                    
             miner_state["miner_mode"] = info["miner_mode"]
 
         bt.logging.success("Updated miner identity")
         self.save_state()
-        print("ALL_UIDS_INFO", self.all_uids_info)
         bt.logging.info(f"Warning: No info available for UID {not_available_uids}")
 
         # TODO: enable once the cancer-ai API endpoint for storing miner info is ready
@@ -226,26 +238,28 @@ class Validator(BaseValidatorNeuron):
         except Exception as e:
             bt.logging.error(f"Failed to store miner info: {e}")
 
-    def update_and_get_top_researchers(self):
-        """This function fetches top researchers with mapped rewards from cancer-ai external api"""
+    def update_top_researchers_from_api(self):
+        """Fetches top researchers with mapped rewards from cancer-ai external API."""
+        self.top_researchers = {}
+        # bt.logging.debug(f"Stats API: Fetching top researchers for emission")
         try:
-            response = requests.get(url=self.config.stats_api + "/emission-share")
+            response = requests.get(url=f"{self.config.stats_api}/emission-share")
             data = response.json()
 
             if not isinstance(data, dict):
-                raise Exception("Invalid data")
+                raise ValueError("Stats API: Invalid data type received, expected a dictionary")
 
             for key, value in data.items():
                 if not (isinstance(key, int) and isinstance(value, float)):
-                    raise Exception("Invalid data inside top researcher dict")
+                    raise ValueError(f"Stats API: Invalid data inside top researcher dict: {key}: {value}")
 
             self.top_researchers = dict(sorted(data.items()))
+            # bt.logging.info("Refreshed list of top researchers")
+            # bt.logging.debug(f"Top researchers from API: {self.top_researchers}")
         except Exception as e:
             bt.logging.error(
                 f"Failed to fetch top researchers: {e}. Proceeding with cached top researchers."
             )
-        finally:
-            return self.top_researchers
 
     def update_scores(self, rewards: np.ndarray, uids: list[int]):
         if np.isnan(rewards).any():

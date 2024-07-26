@@ -76,7 +76,7 @@ class BaseNeuron(ABC):
 
         # Build Bittensor objects
         # These are core Bittensor classes to interact with the network.
-        print("Setting up bittensor objects.")
+        bt.logging.debug("Setting up bittensor objects.")
 
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:
