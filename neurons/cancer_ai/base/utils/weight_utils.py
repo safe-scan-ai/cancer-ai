@@ -159,6 +159,9 @@ def process_weights_for_netuid(
     non_zero_weight_idx = np.argwhere(weights > 0).squeeze()
     non_zero_weight_uids = uids[non_zero_weight_idx]
     non_zero_weights = weights[non_zero_weight_idx]
+    # Ensure non_zero_weights is a NumPy array
+    if not isinstance(non_zero_weights, np.ndarray):
+        non_zero_weights = np.array(non_zero_weights)
     if non_zero_weights.size == 0 or metagraph.n < min_allowed_weights:
         bittensor.logging.warning("No non-zero weights returning all ones.")
         final_weights = np.ones(metagraph.n) / metagraph.n
