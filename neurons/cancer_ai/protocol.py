@@ -19,7 +19,7 @@
 
 import typing
 import bittensor as bt
-from cancer_ai.miner.models import Feedback
+from cancer_ai.models import Feedback
 
 
 class PredictionSynapse(bt.Synapse):
@@ -38,14 +38,14 @@ class ReasearcherTestingSynapse(bt.Synapse):
     images: dict
     response_dict: typing.Optional[dict] = None
 
-    def deserialize(self) -> dict:
+    def deserialize(self) -> dict | None:
         return self.response_dict
 
 
 class MinerInfoSynapse(bt.Synapse):
     response_dict: typing.Optional[dict] = None
 
-    def deserialize(self) -> dict:
+    def deserialize(self) -> dict | None :
         return self.response_dict
     
 class MinerFeedbackSynapse(bt.Synapse):
