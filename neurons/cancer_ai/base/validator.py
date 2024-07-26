@@ -25,6 +25,7 @@ import argparse
 import threading
 import bittensor as bt
 import requests
+import os
 
 from typing import List, Union
 from traceback import print_exception
@@ -72,7 +73,11 @@ class BaseValidatorNeuron(BaseNeuron):
             uid: {"scores": [], "miner_mode": "", "is_tested": False,
                    "tested_entries_amount": 0} for uid in self.all_uids
         }
-        self.save_state()
+
+        # if running for the first time, create empty state 
+        save_file_path = os.path.join(self.config.neuron.full_path, "/state.npz")
+        if not os.path.isfile(save_file_path):
+            self.save_state()
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -224,7 +229,7 @@ class BaseValidatorNeuron(BaseNeuron):
     def update_and_get_top_researchers(self):
         ...
 
-    def send_weights(self, weights, uids):
+    def send_weights_to_api(self, weights, uids):
         try:
             headers = {"x-api-key": self.config.dataset_api_key}
             requests.post(
@@ -320,13 +325,12 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         if result is True:
             print("set_weights on chain successfully!")
-            self.send_weights(uint_weights, uint_uids)
+            self.send_weights_to_api(uint_weights, uint_uids)
         else:
             bt.logging.error("set_weights failed", msg)
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        print("resync_metagraph()")
 
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
@@ -350,7 +354,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # If so, we need to add new hotkeys and moving averages.
         if len(self.hotkeys) < len(self.metagraph.hotkeys):
             # Update the size of the moving average scores.
-            new_moving_average = np.zeros((self.metagraph.n)).to(self.device)
+            new_moving_average = np.zeros((self.metagraph.n))
             min_len = min(len(self.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             self.scores = new_moving_average
