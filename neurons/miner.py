@@ -22,6 +22,7 @@ import typing
 import bittensor as bt
 import tensorflow as tf
 import numpy as np
+import uuid
 
 # Bittensor Miner cancer_ai:
 import cancer_ai
@@ -29,7 +30,7 @@ import cancer_ai
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
 from cancer_ai.miner.forward import set_info, get_images, get_image, get_mode
-from cancer_ai.models import Feedback
+from cancer_ai.miner.utils import is_valid_uuid
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from io import BytesIO
 
@@ -76,20 +77,21 @@ class Miner(BaseMinerNeuron):
         # simulate delay for testing purposes
         # time.sleep(10)
 
+        print(synapse.response_dict)
         return synapse
 
     async def forward_researcher(
         self, synapse: cancer_ai.protocol.ReasearcherTestingSynapse
     ) -> cancer_ai.protocol.ReasearcherTestingSynapse:
-        if not self.config.researcher:
+        if not self.config.researcher or not is_valid_uuid(self.config.testing_session_id):
             synapse.response_dict = {"identity_error": True}
             return synapse
-
+        
         images = get_images(self, synapse.images)
 
-        # TODO(researcher owner): feed the ML model with the images
+        # TODO(researcher owner): feed the ML model with the images, testing session id must be uuid.
         # MOCK response for testing purposes
-        # mock_response = {"entries_num": len(images), "models_response": {}, "identity_error": False}
+        # mock_response = {"entries_num": len(images), "models_response": {}, "testing_session_id": self.config.testing_session_id, "identity_error": False}
         # for image in images:
         #     mock_response["models_response"][image[0]] = 0.99
         # synapse.response_dict = mock_response
@@ -100,16 +102,16 @@ class Miner(BaseMinerNeuron):
         self, synapse: cancer_ai.protocol.MinerInfoSynapse
     ) -> cancer_ai.protocol.MinerInfoSynapse:
         synapse.response_dict = self.miner_info
-        bt.logging.info(f"Response dict: {self.miner_info}")
+        # bt.logging.info(f"Response dict: {self.miner_info}")
 
         return synapse
 
     async def forward_get_feedback(
         self, synapse: cancer_ai.protocol.MinerFeedbackSynapse
     ):
-        feedback: Feedback = synapse.feedback
+        feedback = synapse.feedback
         #TODO(researcher developer): write your logic to process feedback data
-        bt.logging.info("Researcher feddback from model scores:", feedback)
+        # bt.logging.info("Researcher feddback from model scores:", feedback)
 
     async def blacklist(
         self, synapse: cancer_ai.protocol.PredictionSynapse

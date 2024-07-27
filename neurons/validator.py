@@ -21,7 +21,6 @@
 import time
 import bittensor as bt
 import requests
-import torch
 import numpy as np
 import uuid
 import json
@@ -64,8 +63,7 @@ class Validator(BaseValidatorNeuron):
         return await forward(self, challenge_data["image_url"])
 
     async def forward_researcher_test(self, researcher_uid):
-        # TODO run all tests at once 
-        bt.logging.info("Forwarding the test data to the researcher miner")
+        bt.logging.info(f"Forwarding the test data to the researcher miner with uid {researcher_uid}")
         test_data = []
         while not test_data:
             test_data = await self.get_image_data(
@@ -89,7 +87,7 @@ class Validator(BaseValidatorNeuron):
             headers = {"x-api-key": self.config.dataset_api_key}
             response = requests.get(url=endpoint, headers=headers)
             data = response.json()
-            bt.logging.debug(f"Dataset API response: {data}")
+            # bt.logging.debug(f"Dataset API response: {data}")
             dataset_entries = DatasetEntries(**data)
 
         except requests.RequestException as e:
@@ -133,11 +131,11 @@ class Validator(BaseValidatorNeuron):
         return researcher_model_score, current_model_score, entries_num, combined_result
     
     async def send_researchers_scores(self, researcher_score, current_model_score, num_entries,
-                                       combined_predictions, researcher_uid):
+                                       combined_predictions, researcher_uid, testing_session_id):
         
         entries = [ResearcherEntry(prediction=i[0], current_model_prediction=i[1], is_melanoma=i[2], image_id=i[3]) for i in combined_predictions]
         researcher_scores = ResearcherScores(entries=entries, researcher_score=researcher_score, current_model_score=current_model_score,
-                                             num_entries=num_entries, testing_session_id=str(self.all_uids_info[researcher_uid]["testing_session_id"]))
+                                             num_entries=num_entries, testing_session_id=testing_session_id)
         researcher_scores = researcher_scores.dict()
 
         try:
@@ -172,33 +170,11 @@ class Validator(BaseValidatorNeuron):
                         "gpu_device_name": "Unknown",
                         "gpu_device_count": "Unknown",
                     },
-                    "is_tested": False,
-                    "tested_entries_amount": 0,
                 },
             )
 
             miner_state["min_stake"] = info.get("min_stake", 100)
             miner_state["device_info"] = info.get("device_info", {})
-
-            if info["miner_mode"] == "researcher":
-
-
-
-                print("researcher setting flag to is_tested")
-
-                if "testing_session_id" not in miner_state:
-                    # let's check if we were tested already and hit the limit 
-                    print(f"researcher tested amount: {miner_state['tested_entries_amount']}")
-                    print("New researcher, settings state")
-                    if "tested_entries_amount" not in miner_state or miner_state["tested_entries_amount"] < self.config.researcher_testing_entries_amount:
-                        print("Reseracher didn't hit testing limit, starting session")
-                        miner_state["is_tested"] = True
-                        miner_state["testing_session_id"] = uuid.uuid4()
-                        bt.logging.success("New Researcher with uid {uid} started the testing challenge!")
-                    else:
-                        print("Reseracher: Reached testing amount limit, skipping")
-                    
-                    
             miner_state["miner_mode"] = info["miner_mode"]
 
         bt.logging.success("Updated miner identity")

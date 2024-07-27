@@ -1,10 +1,18 @@
-import torch
 import requests
 import bittensor as bt
 
 try:
-    GPU_DEVICE_NAME = torch.cuda.get_device_name()
-    GPU_DEVICE_COUNT = torch.cuda.device_count()
+    import subprocess
+
+    # Use subprocess to run nvidia-smi command and capture its output
+    result = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    if result.returncode == 0:
+        GPU_DEVICE_NAME = result.stdout.strip()
+        GPU_DEVICE_COUNT = len(GPU_DEVICE_NAME.split('\n'))
+    else:
+        GPU_DEVICE_NAME = "cpu"
+        GPU_DEVICE_COUNT = 0
 except Exception:
     GPU_DEVICE_NAME = "cpu"
     GPU_DEVICE_COUNT = 0

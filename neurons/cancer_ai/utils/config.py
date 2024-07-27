@@ -82,7 +82,7 @@ def add_args(cls, parser):
         "--neuron.epoch_length",
         type=int,
         help="The default epoch length (how often we set weights, measured in 12 second blocks).",
-        default=100,
+        default=10,
     )
 
     parser.add_argument(
@@ -130,7 +130,7 @@ def add_args(cls, parser):
     parser.add_argument(
         "--dataset_api",
         type=str,
-        help="URL dataset api",
+        help="URL for Dataset API",
         default="https://dataset.api.safe-scan.ai",
     )
 
@@ -184,9 +184,15 @@ def add_miner_args(cls, parser):
         "--min_stake",
         type=int,
         help="Min validators stake to be considered by miner",
-        default=100,
+        default=10,
     )
 
+    parser.add_argument(
+        "--testing_session_id",
+        type=str,
+        help="Testing session id unique for each model researcher is testing. It must be uuid to be validated correctly.",
+        default="",
+    )
 
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
@@ -271,19 +277,6 @@ def add_validator_args(cls, parser):
     #     default="https://localhost:8888",
     # )
 
-    parser.add_argument(
-        "--stats_api",
-        type=str,
-        help="URL statistics api",
-        default="https://statistics.api.safe-scan.ai/",
-    ),
-
-    parser.add_argument(
-        "--dataset_api_key",
-        type=str,
-        help="key to access dataset api resources",
-        default="",
-    )
 
     parser.add_argument(
         "--max_time_penalty",
@@ -296,7 +289,7 @@ def add_validator_args(cls, parser):
         "--forward_frequency",
         type=int,
         help="Steps per forward frequency",
-        default=1000,
+        default=5,
     )
 
     parser.add_argument(
@@ -307,17 +300,31 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--dataset_api_key",
+        type=str,
+        help="key to access Dataset API resources",
+        default="",
+    )
+
+    parser.add_argument(
+        "--stats_api",
+        type=str,
+        help="URL for Statistics API",
+        default="https://statistics.api.safe-scan.ai/",
+    ),
+
+    parser.add_argument(
+        "--stats_api_key",
+        type=str,
+        help="key to access Statistics API resources",
+        default="",
+    )
+
+    parser.add_argument(
         "--researcher_testing_entries_package",
         type=int,
         help="Amount of images for researcher test data that are to be fetched on one dataset-api call",
         default=30,
-    )
-
-    parser.add_argument(
-        "--researcher_testing_entries_amount",
-        type=int,
-        help="Amount of images for researcher test data that are to be fetched overall for testing the model purposes",
-        default=300,
     )
 
 def config(cls):
