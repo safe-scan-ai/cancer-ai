@@ -81,13 +81,8 @@ class Validator(BaseValidatorNeuron):
         """This function fetches test data images from cancer-ai external api"""
         dataset_entries = None
         try:
-            endpoint = (
-                self.config.dataset_api + f"/dataset/skin/melanoma?amount={amount}"
-            )
-            headers = {"x-api-key": self.config.dataset_api_key}
-            response = requests.get(url=endpoint, headers=headers)
-            data = response.json()
-            # bt.logging.debug(f"Dataset API response: {data}")
+            data = self.dataset_api.get_image_data(amount)
+            bt.logging.debug(f"Dataset API response: {data}")
             dataset_entries = DatasetEntries(**data)
 
         except requests.RequestException as e:
@@ -139,14 +134,10 @@ class Validator(BaseValidatorNeuron):
         researcher_scores = researcher_scores.dict()
 
         try:
-            headers = {"x-api-key": self.config.dataset_api_key}
-            res = requests.post(
-                self.config.stats_api + f"/researcher/testing/{researcher_uid}",
-                json=researcher_scores,
-                headers=headers,
-            )
-            if not res.ok:
-                raise Exception(f"Received non-2xx status code: {res.status_code} - {res.text}")
+            response_successful, message = self.stats_api.send_researcher_scores(researcher_uid, researcher_scores)
+            if not response_successful:
+                bt.logging.error(f"Failed to send researchers scores to statistics api: {message}")
+            
         except Exception as e:
             bt.logging.error(f"Failed to send researchers scores to statistics api: {e}")
 
@@ -158,7 +149,6 @@ class Validator(BaseValidatorNeuron):
         for uid, info in valid_miners_info.items():
             if info is None:
                 not_available_uids.append(uid)
-                
                 continue
 
             miner_state = self.all_uids_info.setdefault(
@@ -181,9 +171,6 @@ class Validator(BaseValidatorNeuron):
         self.save_state()
         bt.logging.info(f"Warning: No info available for UID {not_available_uids}")
 
-        # TODO: enable once the cancer-ai API endpoint for storing miner info is ready
-        # thread = Thread(target=self.store_miner_info, daemon=True)
-        # thread.start()
 
     async def get_miners_info(self):
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
@@ -204,13 +191,9 @@ class Validator(BaseValidatorNeuron):
 
     def store_miner_info(self):
         try:
-            requests.post(
-                self.config.storage_url + "/store_miner_info",
-                json={
-                    "uid": self.uid,
-                    "info": self.all_uids_info,
-                },
-            )
+            response_successful, message = self.stats_api.send_miner_info(self.all_uids_info)
+            if not response_successful:
+                bt.logging.error(f"Failed to store miner info: {message}")
         except Exception as e:
             bt.logging.error(f"Failed to store miner info: {e}")
 

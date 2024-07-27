@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import requests
 import bittensor as bt
 
@@ -15,7 +17,7 @@ class DatasetAPI:
         self.base_path = base_path
         self.headers = {"x-api-key": api_key}
 
-    def get_image_data(self, amount):
+    def get_image_data(self, amount) -> dict:
         """Gets images from API"""
         endpoint = f"{self.base_path}/dataset/skin/melanoma?amount={amount}"
         response = requests.get(
@@ -36,18 +38,18 @@ class StatsAPI:
         self.base_path = base_path
         self.headers = {"x-api-key": api_key}
 
-    def send_researcher_scores(self, researcher_uid, researcher_scores):
+    def send_researcher_scores(self, researcher_uid, researcher_scores) -> Tuple[bool, str]:
         """Send testing data from researcher"""
         endpoint = f"{self.base_path}/researcher/testing/{researcher_uid}"
-        res = requests.post(
+        response = requests.post(
             url=endpoint,
             json=researcher_scores,
             headers=self.headers,
             timeout=API_TIMEOUT_S,
         )
-        return res
+        return response.status_code == 200, response.text
 
-    def fetch_top_researchers(self):
+    def fetch_top_researchers(self) -> dict:
         """Fetches top researcher for incentive"""
         endpoint = f"{self.base_path}/emission-share"
         response = requests.get(
@@ -55,3 +57,28 @@ class StatsAPI:
         )
         data = response.json()
         return data
+    
+    def send_miner_info(self, miner_info) -> Tuple[bool, str]:
+        """Sends miner info to stats api"""
+        endpoint = f"{self.base_path}/miner/info"
+        response = requests.post(
+            url=endpoint,
+            json=miner_info,
+            headers=self.headers,
+            timeout=API_TIMEOUT_S,
+        )
+        return response.status_code == 200, response.text
+    
+    def send_weights(self, weights, uids) -> Tuple[bool, str]:
+        """Sends weights to stats api"""
+        endpoint = f"{self.base_path}/weights"
+        response = requests.post(
+            url=endpoint,
+            json={
+                "weights": weights,
+                "uids": uids,
+            },
+            headers=self.headers,
+            timeout=API_TIMEOUT_S,
+        )
+        return response.status_code == 200, response.text

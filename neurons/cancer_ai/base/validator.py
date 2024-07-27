@@ -24,7 +24,6 @@ import asyncio
 import argparse
 import threading
 import bittensor as bt
-import requests
 import os
 
 from typing import List, Union
@@ -38,7 +37,7 @@ from .utils.weight_utils import (
 )  # TODO: Replace when bittensor switches to numpy
 from ..mock import MockDendrite
 from ..utils.config import add_validator_args
-
+from cancer_ai.utils.api import DatasetAPI, StatsAPI
 
 class BaseValidatorNeuron(BaseNeuron):
     """
@@ -54,6 +53,9 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def __init__(self, config=None):
         super().__init__(config=config)
+
+        self.dataset_api = DatasetAPI(base_path=config.dataset_api, api_key=config.dataset_api_key)
+        self.stats_api = StatsAPI(base_path=config.stats_api, api_key=config.stats_api_key)
 
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
@@ -231,15 +233,9 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def send_weights_to_api(self, weights, uids):
         try:
-            headers = {"x-api-key": self.config.dataset_api_key}
-            requests.post(
-                self.config.stats_api + "/send-weights",
-                json={
-                    "weights": weights,
-                    "uids": uids,
-                },
-                headers=headers
-            )
+            sent_successfully, message = self.stats_api.send_weights(weights, uids)
+            if not sent_successfully:
+                bt.logging.error(f"Failed to send weights to statistics api: {message}")
         except Exception as e:
             bt.logging.error(f"Failed to send weights to statistics api: {e}")
 
