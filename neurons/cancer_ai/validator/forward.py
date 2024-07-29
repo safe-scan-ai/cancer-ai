@@ -77,11 +77,14 @@ async def forward_to_researcher(self, researcher_uid: int, test_data: list):
         bt.logging.error(
             f"Miner with uid: {researcher_uid} was forwarded researcher synapse while not being a researcher with testing_session_id defined."
         )
-    elif self.all_uids_info[researcher_uid] and response["entries_num"]:
+    elif self.all_uids_info[researcher_uid] and response is not None and response["entries_num"]:
         # bt.logging.debug(f'Researcher with uid {researcher_uid} response {response}')
         
         researcher_score, current_model_score, num_entries, combined_predictions = await self.evaluate_model(response, test_data)
-        asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries,
+        if "testing_session_id" not in response["testing_session_id"]:
+            bt.logging.error("Researcher with uid: {researcher_uid} did not send testing_session_id, not sending results do Stats API")
+        else:
+            asyncio.create_task(self.send_researchers_scores(researcher_score, current_model_score, num_entries,
                                                           combined_predictions, researcher_uid, response["testing_session_id"]))
         bt.logging.info(f'Researcher {researcher_uid}  researcher score: {researcher_score} \n current model score: {current_model_score}')
 

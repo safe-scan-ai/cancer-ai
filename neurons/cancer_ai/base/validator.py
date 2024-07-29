@@ -67,7 +67,7 @@ class BaseValidatorNeuron(BaseNeuron):
             self.dendrite = bt.dendrite(wallet=self.wallet)
 
         # Set up initial scoring weights for validation
-        print("Building validation weights.")
+        bt.logging.debug("Building validation weights.")
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
         self.top_researchers = {}
@@ -102,7 +102,7 @@ class BaseValidatorNeuron(BaseNeuron):
     def serve_axon(self):
         """Serve axon to enable external connections."""
 
-        print("serving ip to chain...")
+        bt.logging.info("serving ip to chain...")
         try:
             self.axon = bt.axon(wallet=self.wallet, config=self.config)
 
@@ -233,6 +233,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def send_weights_to_api(self, weights, uids):
         try:
+
             sent_successfully, message = self.stats_api.send_weights(weights, uids)
             if not sent_successfully:
                 bt.logging.error(f"Failed to send weights to statistics api: {message}")
@@ -323,6 +324,7 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.info("set_weights on chain successfully!")
             self.send_weights_to_api(uint_weights, uint_uids)
         else:
+            bt.logging.error("set_weights failed result", result)
             bt.logging.error("set_weights failed", msg)
 
     def resync_metagraph(self):
