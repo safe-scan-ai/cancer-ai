@@ -90,6 +90,7 @@ class Miner(BaseMinerNeuron):
         
         images = get_images(self, synapse.images)
 
+
         # TODO(researcher owner): feed the ML model with the images
         #MOCK response for testing purposes
         bt.logging.info("Got researcher task")
