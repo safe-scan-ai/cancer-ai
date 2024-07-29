@@ -60,22 +60,23 @@ class Miner(BaseMinerNeuron):
         self, synapse: cancer_ai.protocol.PredictionSynapse
     ) -> cancer_ai.protocol.PredictionSynapse:
         # Convert binary data to an image
+        bt.logging.info("Got task, executing")
         image = get_image(self, synapse.image_url)
         image = load_img(BytesIO(image), target_size=(180, 180, 3))
         img_array = img_to_array(image)
         img_array = np.expand_dims(img_array, axis=0)
-
+        bt.logging.info("Running prediction")
+        now = time.time()
         # Predict using the model
         pred = self.regular_model.predict(img_array)
-
-        not_melanoma_probability, melanoma_probability = pred[0]
+        time_diff = time.time() - now
+        bt.logging.info(f"Time taken to predict: {time_diff}")
+        _, melanoma_probability = pred[0]
         synapse.response_dict = {
             "models_response": float(melanoma_probability),
             "miner_mode": get_mode(self),
             "miner_uid": self.uid,
         }
-        # simulate delay for testing purposes
-        # time.sleep(10)
 
         print(synapse.response_dict)
         return synapse
@@ -89,13 +90,15 @@ class Miner(BaseMinerNeuron):
         
         images = get_images(self, synapse.images)
 
-        # TODO(researcher owner): feed the ML model with the images, testing session id must be uuid.
-        # MOCK response for testing purposes
-        # mock_response = {"entries_num": len(images), "models_response": {}, "testing_session_id": self.config.testing_session_id, "identity_error": False}
-        # for image in images:
-        #     mock_response["models_response"][image[0]] = 0.99
-        # synapse.response_dict = mock_response
-
+        # TODO(researcher owner): feed the ML model with the images
+        #MOCK response for testing purposes
+        bt.logging.info("Got researcher task")
+        import random
+        mock_response = {"entries_num": len(images), "models_response": {}, "identity_error": False}
+        for image in images:
+            mock_response["models_response"][image[0]] = random.randrange(1,100) / 100
+        synapse.response_dict = mock_response
+        
         return synapse
 
     async def forward_info(
@@ -182,7 +185,7 @@ class Miner(BaseMinerNeuron):
         This implementation assigns priority to incoming requests based on the calling entity's stake in the metagraph.
 
         Args:
-            synapse (cancer_ai.protocol.Dummy): The synapse object that contains metadata about the incoming request.
+            synapse (cancer_ai.protocol.PredictionSynapse): The synapse object that contains metadata about the incoming request.
 
         Returns:
             float: A priority score derived from the stake of the calling entity.
@@ -214,5 +217,4 @@ class Miner(BaseMinerNeuron):
 if __name__ == "__main__":
     with Miner() as miner:
         while True:
-            print("Miner running...", time.time())
             time.sleep(5)

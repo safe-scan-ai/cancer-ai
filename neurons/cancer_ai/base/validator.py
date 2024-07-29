@@ -327,6 +327,7 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.info("set_weights on chain successfully!")
             self.send_weights_to_api(uint_weights, uint_uids)
         else:
+            bt.logging.error("set_weights failed result", result)
             bt.logging.error("set_weights failed", msg)
 
     def resync_metagraph(self):
