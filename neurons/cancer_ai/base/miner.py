@@ -16,11 +16,12 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-import torch
 import asyncio
 import threading
 import argparse
 import traceback
+
+from typing import Union
 
 import bittensor as bt
 
@@ -54,7 +55,7 @@ class BaseMinerNeuron(BaseNeuron):
             )
 
         # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(wallet=self.wallet, config=self.config)
+        self.axon = bt.axon(wallet=self.wallet, config=self.config() if callable(self.config) else self.config)
 
         # Attach determiners which functions are called when servicing a request.
         self.axon.attach(
@@ -72,7 +73,7 @@ class BaseMinerNeuron(BaseNeuron):
         # Instantiate runners
         self.should_exit: bool = False
         self.is_running: bool = False
-        self.thread: threading.Thread = None
+        self.thread: Union[threading.Thread, None] = None
         self.lock = asyncio.Lock()
 
     def run(self):
@@ -115,20 +116,10 @@ class BaseMinerNeuron(BaseNeuron):
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while not self.should_exit:
-                while (
-                    self.block - self.metagraph.last_update[self.uid]
-                    < self.config.neuron.epoch_length
-                ):
-                    # Wait before checking again.
-                    time.sleep(1)
-
-                    # Check if we should exit.
-                    if self.should_exit:
-                        break
-
-                # Sync metagraph and potentially set weights.
-                self.sync()
-                self.step += 1
+                bt.logging.debug(f"block: {self.block}")
+                if self.block % self.config.neuron.epoch_length == 0:
+                    self.sync()
+                time.sleep(12)
 
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -160,7 +151,8 @@ class BaseMinerNeuron(BaseNeuron):
         if self.is_running:
             bt.logging.debug("Stopping miner in background thread.")
             self.should_exit = True
-            self.thread.join(5)
+            if self.thread is not None:
+                self.thread.join(5)
             self.is_running = False
             bt.logging.debug("Stopped")
 

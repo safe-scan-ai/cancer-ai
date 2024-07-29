@@ -33,7 +33,9 @@ import cancer_ai
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
 from cancer_ai.miner.forward import set_info, get_images, get_image, get_mode
-from cancer_ai.models import Feedback
+from cancer_ai.miner.utils import is_valid_uuid
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from io import BytesIO
 
 
 class Miner(BaseMinerNeuron):
@@ -55,35 +57,40 @@ class Miner(BaseMinerNeuron):
             "safe-scan-ai/skin-cancer-collection", "melanoma.keras"
         )
         self.regular_model = tf.keras.models.load_model(model_path)
+
         bt.logging.info(f"Regular model built status: {self.regular_model.built}")
 
     async def forward(
         self, synapse: cancer_ai.protocol.PredictionSynapse
     ) -> cancer_ai.protocol.PredictionSynapse:
         # Convert binary data to an image
+        bt.logging.info("Got task, executing")
         image = get_image(self, synapse.image_url)
         image = load_img(BytesIO(image), target_size=(180, 180, 3))
         img_array = img_to_array(image)
         img_array = np.expand_dims(img_array, axis=0)
-
+        bt.logging.info("Running prediction")
+        now = time.time()
         # Predict using the model
         pred = self.regular_model.predict(img_array)
-
-        not_melanoma_probability, melanoma_probability = pred[0]
+        time_diff = time.time() - now
+        bt.logging.info(f"Time taken to predict: {time_diff}")
+        _, melanoma_probability = pred[0]
         synapse.response_dict = {
             "models_response": float(melanoma_probability),
             "miner_mode": get_mode(self),
             "miner_uid": self.uid,
         }
-        # simulate delay for testing purposes
-        # time.sleep(10)
 
+        print(synapse.response_dict)
         return synapse
 
     async def forward_researcher(
         self, synapse: cancer_ai.protocol.ReasearcherTestingSynapse
     ) -> cancer_ai.protocol.ReasearcherTestingSynapse:
-        if not self.config.researcher:
+        if not self.config.researcher or not is_valid_uuid(
+            self.config.testing_session_id
+        ):
             synapse.response_dict = {"identity_error": True}
             return synapse
 
@@ -91,10 +98,18 @@ class Miner(BaseMinerNeuron):
 
         # TODO(researcher owner): feed the ML model with the images
         # MOCK response for testing purposes
-        # mock_response = {"entries_num": len(images), "models_response": {}, "identity_error": False}
-        # for image in images:
-        #     mock_response["models_response"][image[0]] = 0.99
-        # synapse.response_dict = mock_response
+        bt.logging.info("Got researcher task")
+        import random
+
+        mock_response = {
+            "entries_num": len(images),
+            "models_response": {},
+            "identity_error": False,
+            "testing_session_id": self.config.testing_session_id,
+        }
+        for image in images:
+            mock_response["models_response"][image[0]] = random.randrange(1, 100) / 100
+        synapse.response_dict = mock_response
 
         return synapse
 
@@ -102,16 +117,17 @@ class Miner(BaseMinerNeuron):
         self, synapse: cancer_ai.protocol.MinerInfoSynapse
     ) -> cancer_ai.protocol.MinerInfoSynapse:
         synapse.response_dict = self.miner_info
-        bt.logging.info(f"Response dict: {self.miner_info}")
+        # bt.logging.info(f"Response dict: {self.miner_info}")
 
         return synapse
 
     async def forward_get_feedback(
         self, synapse: cancer_ai.protocol.MinerFeedbackSynapse
     ):
-        feedback: Feedback = synapse.feedback
+        feedback = synapse.feedback
         # TODO(researcher developer): write your logic to process feedback data
-        print("You got real results and current best model scores.", feedback)
+        bt.logging.info("Researcher feddback from model scores:", feedback)
+
 
     async def blacklist(
         self, synapse: cancer_ai.protocol.PredictionSynapse
@@ -145,6 +161,10 @@ class Miner(BaseMinerNeuron):
 
         Otherwise, allow the request to be processed further.
         """
+        if synapse.dendrite is None or synapse.dendrite.hotkey is None:
+            bt.logging.warning("Received a request without a dendrite or hotkey.")
+            return True, "Missing dendrite or hotkey"
+
         # TODO(developer): Define how miners should blacklist requests.
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if (
@@ -178,7 +198,7 @@ class Miner(BaseMinerNeuron):
         This implementation assigns priority to incoming requests based on the calling entity's stake in the metagraph.
 
         Args:
-            synapse (cancer_ai.protocol.Dummy): The synapse object that contains metadata about the incoming request.
+            synapse (cancer_ai.protocol.PredictionSynapse): The synapse object that contains metadata about the incoming request.
 
         Returns:
             float: A priority score derived from the stake of the calling entity.
@@ -190,6 +210,9 @@ class Miner(BaseMinerNeuron):
         Example priority logic:
         - A higher stake results in a higher priority value.
         """
+        if synapse.dendrite is None or synapse.dendrite.hotkey is None:
+            bt.logging.warning("Received a request without a dendrite or hotkey.")
+            return 0.0
         # TODO(developer): Define how miners should prioritize requests.
         caller_uid = self.metagraph.hotkeys.index(
             synapse.dendrite.hotkey
@@ -207,5 +230,4 @@ class Miner(BaseMinerNeuron):
 if __name__ == "__main__":
     with Miner() as miner:
         while True:
-            print("Miner running...", time.time())
             time.sleep(5)

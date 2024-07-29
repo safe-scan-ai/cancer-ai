@@ -17,10 +17,25 @@
 # DEALINGS IN THE SOFTWARE.
 
 import os
-import torch
+import subprocess
 import argparse
 import bittensor as bt
-from loguru import logger
+from .logging import setup_events_logger
+
+def is_cuda_available():
+    try:
+        output = subprocess.check_output(["nvidia-smi", "-L"], stderr=subprocess.STDOUT)
+        if "NVIDIA" in output.decode("utf-8"):
+            return "cuda"
+    except Exception:
+        pass
+    try:
+        output = subprocess.check_output(["nvcc", "--version"]).decode("utf-8")
+        if "release" in output:
+            return "cuda"
+    except Exception:
+        pass
+    return "cpu"
 
 
 def check_config(cls, config: "bt.Config"):
@@ -36,27 +51,16 @@ def check_config(cls, config: "bt.Config"):
             config.neuron.name,
         )
     )
-    print("full path:", full_path)
+    bt.logging.info("full path:", full_path)
     config.neuron.full_path = os.path.expanduser(full_path)
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
-    import sys
 
-    logger.add(sys.stdout, format="{time} {level} {message}", level="DEBUG")
-    # if not config.neuron.dont_save_events:
-    #     # Add custom event logger for the events.
-    #     logger.level("EVENTS", no=38, icon="📝")
-    #     logger.add(
-    #         # os.path.join(config.neuron.full_path, "events.log"),
-    #         sys.stdout,
-    #         # rotation=config.neuron.events_retention_size,
-    #         serialize=True,
-    #         enqueue=True,
-    #         backtrace=False,
-    #         diagnose=False,
-    #         level="EVENTS",
-    #         format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
-    #     )
+    if not config.neuron.dont_save_events:
+        events_logger = setup_events_logger(
+            config.neuron.full_path, config.neuron.events_retention_size
+        )
+        bt.logging.register_primary_logger(events_logger.name)
 
 
 def add_args(cls, parser):
@@ -70,14 +74,14 @@ def add_args(cls, parser):
         "--neuron.device",
         type=str,
         help="Device to run on.",
-        default="cuda" if torch.cuda.is_available() else "cpu",
+        default=is_cuda_available(),
     )
 
     parser.add_argument(
         "--neuron.epoch_length",
         type=int,
         help="The default epoch length (how often we set weights, measured in 12 second blocks).",
-        default=100,
+        default=10,
     )
 
     parser.add_argument(
@@ -91,7 +95,7 @@ def add_args(cls, parser):
         "--neuron.events_retention_size",
         type=str,
         help="Events retention size.",
-        default="2 GB",
+        default=2 * 1024 * 1024 * 1024,  # 2 GB
     )
 
     parser.add_argument(
@@ -125,7 +129,7 @@ def add_args(cls, parser):
     parser.add_argument(
         "--dataset_api",
         type=str,
-        help="URL dataset api",
+        help="URL for Dataset API",
         default="https://dataset.api.safe-scan.ai",
     )
 
@@ -179,9 +183,15 @@ def add_miner_args(cls, parser):
         "--min_stake",
         type=int,
         help="Min validators stake to be considered by miner",
-        default=100,
+        default=10,
     )
 
+    parser.add_argument(
+        "--testing_session_id",
+        type=str,
+        help="Testing session id unique for each model researcher is testing. It must be uuid to be validated correctly.",
+        default="",
+    )
 
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
@@ -259,27 +269,6 @@ def add_validator_args(cls, parser):
         default="opentensor-dev",
     )
 
-    # parser.add_argument(
-    #     "--storage_url",
-    #     type=str,
-    #     help="URL for storing miner info",
-    #     default="https://localhost:8888",
-    # )
-
-    parser.add_argument(
-        "--stats_api",
-        type=str,
-        help="URL statistics api",
-        default="https://statistics.api.safe-scan.ai/",
-    ),
-
-    parser.add_argument(
-        "--dataset_api_key",
-        type=str,
-        help="key to access dataset api resources",
-        default="",
-    )
-
     parser.add_argument(
         "--max_time_penalty",
         type=int,
@@ -291,7 +280,7 @@ def add_validator_args(cls, parser):
         "--forward_frequency",
         type=int,
         help="Steps per forward frequency",
-        default=1000,
+        default=5,
     )
 
     parser.add_argument(
@@ -302,17 +291,31 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--dataset_api_key",
+        type=str,
+        help="key to access Dataset API resources",
+        default="",
+    )
+
+    parser.add_argument(
+        "--stats_api",
+        type=str,
+        help="URL for Statistics API",
+        default="https://statistics.api.safe-scan.ai/",
+    ),
+
+    parser.add_argument(
+        "--stats_api_key",
+        type=str,
+        help="key to access Statistics API resources",
+        default="",
+    )
+
+    parser.add_argument(
         "--researcher_testing_entries_package",
         type=int,
         help="Amount of images for researcher test data that are to be fetched on one dataset-api call",
         default=30,
-    )
-
-    parser.add_argument(
-        "--researcher_testing_entries_amount",
-        type=int,
-        help="Amount of images for researcher test data that are to be fetched overall for testing the model purposes",
-        default=300,
     )
 
 def config(cls):

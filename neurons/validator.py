@@ -21,7 +21,7 @@
 import time
 import bittensor as bt
 import requests
-import torch
+import numpy as np
 import uuid
 import json
 
@@ -54,27 +54,29 @@ class Validator(BaseValidatorNeuron):
 
         image_data = await self.get_image_data(1)
         if image_data is None or image_data.entries is None:
-            return
-        # TODO: use skin_type and model name fetched from the dataset api endpoint once its ready to serve this data
-        challenge_data = {
-            "image_url": image_data.entries[0].image_url,
-        }
-
+            # feed fallback image
+            bt.logging.error("!!!!!!! Dataset API missing API key or is down")
+            wikipedia_melaona_url = "https://upload.wikimedia.org/wikipedia/commons/6/6c/Melanoma.jpg"
+            challenge_data = {
+                "image_url": wikipedia_melaona_url,
+            }
+        else:   
+            challenge_data = {
+                "image_url": f"{self.config.dataset_api}{image_data.entries[0].image_url}",
+            }
         return await forward(self, challenge_data["image_url"])
 
     async def forward_researcher_test(self, researcher_uid):
-        bt.logging.info("Forwarding the test data to the researcher miner")
-        test_data = []
-        while not test_data:
-            test_data = await self.get_image_data(
-                self.config.researcher_testing_entries_package
-            )
-            if not test_data:
-                bt.logging.error(
-                    f"Error during fetching test data for researcher. Retrying in {self.config.fetching_interval} seconds"
-                )
-                time.sleep(self.config.fetching_interval)
-
+        bt.logging.info(f"Forwarding the test data to the researcher miner with uid {researcher_uid}")
+        
+        test_data = await self.get_image_data(
+            self.config.researcher_testing_entries_package
+        )
+        if not test_data:
+            bt.logging.error("!!!!!!! Dataset API missing API key or is down")
+            return
+                
+        
         return await forward_to_researcher(self, researcher_uid, test_data.entries)
 
     async def get_image_data(self, amount):
@@ -87,7 +89,7 @@ class Validator(BaseValidatorNeuron):
             headers = {"x-api-key": self.config.dataset_api_key}
             response = requests.get(url=endpoint, headers=headers)
             data = response.json()
-            bt.logging.info(f"Datset API response: {data}")
+            # bt.logging.debug(f"Dataset API response: {data}")
             dataset_entries = DatasetEntries(**data)
 
         except requests.RequestException as e:
@@ -131,11 +133,11 @@ class Validator(BaseValidatorNeuron):
         return researcher_model_score, current_model_score, entries_num, combined_result
     
     async def send_researchers_scores(self, researcher_score, current_model_score, num_entries,
-                                       combined_predictions, researcher_uid):
+                                       combined_predictions, researcher_uid, testing_session_id):
         
         entries = [ResearcherEntry(prediction=i[0], current_model_prediction=i[1], is_melanoma=i[2], image_id=i[3]) for i in combined_predictions]
         researcher_scores = ResearcherScores(entries=entries, researcher_score=researcher_score, current_model_score=current_model_score,
-                                             num_entries=num_entries, testing_session_id=str(self.all_uids_info[researcher_uid]["testing_session_id"]))
+                                             num_entries=num_entries, testing_session_id=testing_session_id)
         researcher_scores = researcher_scores.dict()
 
         try:
@@ -151,13 +153,16 @@ class Validator(BaseValidatorNeuron):
             bt.logging.error(f"Failed to send researchers scores to statistics api: {e}")
 
     async def update_miners_identity(self):
+        not_available_uids = []
         valid_miners_info = await self.get_miners_info()
         if not valid_miners_info:
             bt.logging.warning("No active miner available")
         for uid, info in valid_miners_info.items():
             if info is None:
-                print(f"Warning: No info available for UID {uid}")
+                not_available_uids.append(uid)
+                
                 continue
+
             miner_state = self.all_uids_info.setdefault(
                 uid,
                 {
@@ -167,26 +172,16 @@ class Validator(BaseValidatorNeuron):
                         "gpu_device_name": "Unknown",
                         "gpu_device_count": "Unknown",
                     },
-                    "is_tested": False,
-                    "tested_entries_amount": 0,
                 },
             )
 
             miner_state["min_stake"] = info.get("min_stake", 100)
             miner_state["device_info"] = info.get("device_info", {})
-
-            if (
-                info["miner_mode"] == "researcher"
-                and miner_state["miner_mode"] == "regular"
-            ):
-                miner_state["is_tested"] = True
-                miner_state["testing_session_id"] = uuid.uuid4()
-                bt.logging.success("New Researcher with uid {uid} started the testing challenge")
             miner_state["miner_mode"] = info["miner_mode"]
 
         bt.logging.success("Updated miner identity")
-        self.save_state
-        print("ALL_UIDS_INFO", self.all_uids_info)
+        self.save_state()
+        bt.logging.info(f"Warning: No info available for UID {not_available_uids}")
 
         # TODO: enable once the cancer-ai API endpoint for storing miner info is ready
         # thread = Thread(target=self.store_miner_info, daemon=True)
@@ -221,53 +216,53 @@ class Validator(BaseValidatorNeuron):
         except Exception as e:
             bt.logging.error(f"Failed to store miner info: {e}")
 
-    def update_and_get_top_researchers(self):
-        """This function fetches top researchers with mapped rewards from cancer-ai external api"""
+    def update_top_researchers_from_api(self):
+        """Fetches top researchers with mapped rewards from cancer-ai external API."""
+        self.top_researchers = {}
+        # bt.logging.debug(f"Stats API: Fetching top researchers for emission")
         try:
-            response = requests.get(url=self.config.stats_api + "/emission-share")
+            response = requests.get(url=f"{self.config.stats_api}/emission-share")
             data = response.json()
 
             if not isinstance(data, dict):
-                raise Exception("Invalid data")
+                raise ValueError("Stats API: Invalid data type received, expected a dictionary")
 
             for key, value in data.items():
                 if not (isinstance(key, int) and isinstance(value, float)):
-                    raise Exception("Invalid data inside top researcher dict")
+                    raise ValueError(f"Stats API: Invalid data inside top researcher dict: {key}: {value}")
 
             self.top_researchers = dict(sorted(data.items()))
+            # bt.logging.info("Refreshed list of top researchers")
+            # bt.logging.debug(f"Top researchers from API: {self.top_researchers}")
         except Exception as e:
             bt.logging.error(
                 f"Failed to fetch top researchers: {e}. Proceeding with cached top researchers."
             )
-        finally:
-            return self.top_researchers
 
-    def update_scores(self, rewards: torch.FloatTensor, uids: list[int]):
-        if torch.isnan(rewards).any():
+    def update_scores(self, rewards: np.ndarray, uids: list[int]):
+        if np.isnan(rewards).any():
             bt.logging.warning(f"NaN values detected in rewards: {rewards}")
-            rewards = torch.nan_to_num(rewards, 0)
+            rewards = np.nan_to_num(rewards, 0)
 
-        # Check if `uids` is already a tensor and clone it to avoid the warning.
-        if isinstance(uids, torch.Tensor):
-            uids_tensor = uids.clone().detach()
-        else:
-            uids_tensor = torch.tensor(uids).to(self.device)
+        # Convert uids to numpy array if not already
+        uids_array = np.array(uids)
 
-        scattered_rewards: torch.FloatTensor = self.scores.scatter(
-            0, uids_tensor, rewards
-        ).to(self.device)
+        # Initialize scores array if not already initialized
+        if not hasattr(self, 'scores'):
+            self.scores = np.zeros_like(rewards)
+
+        # Create an array to hold scattered rewards
+        scattered_rewards = np.zeros_like(self.scores)
+
+        # Scatter the rewards to the appropriate indices
+        scattered_rewards[uids_array] = rewards
 
         # Perform moving average with alpha parameter only on regular miners
-        alpha: float = self.config.neuron.moving_average_alpha
-        self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores.to(
-            self.device
-        )
+        alpha = self.config.neuron.moving_average_alpha
+        self.scores = alpha * scattered_rewards + (1 - alpha) * self.scores
+
         zero_threshold = 1e-4
-        self.scores = torch.where(
-            self.scores.abs() < zero_threshold,
-            torch.zeros_like(self.scores),
-            self.scores,
-        )
+        self.scores = np.where(np.abs(self.scores) < zero_threshold, 0, self.scores)
 
         bt.logging.debug(f"Updated moving avg scores: {self.scores}")
 
@@ -276,5 +271,4 @@ class Validator(BaseValidatorNeuron):
 if __name__ == "__main__":
     with Validator() as validator:
         while True:
-            print("Validator running...", time.time())
             time.sleep(5)

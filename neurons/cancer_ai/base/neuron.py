@@ -66,7 +66,7 @@ class BaseNeuron(ABC):
         self.check_config(self.config)
 
         # Set up logging with the provided configuration and directory.
-        bt.logging(config=self.config, logging_dir=self.config.full_path)
+        bt.logging.set_config(config=self.config.logging)
 
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
@@ -76,7 +76,7 @@ class BaseNeuron(ABC):
 
         # Build Bittensor objects
         # These are core Bittensor classes to interact with the network.
-        print("Setting up bittensor objects.")
+        bt.logging.debug("Setting up bittensor objects.")
 
         # The wallet holds the cryptographic key pairs for the miner.
         if self.config.mock:

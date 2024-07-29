@@ -1,7 +1,8 @@
-import torch
+
 import random
 import bittensor as bt
 from typing import List
+import numpy as np
 
 
 def check_uid_availability(
@@ -32,21 +33,21 @@ def check_uid_availability(
     return True
 
 
-def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor:
+def get_random_uids(self, k: int, exclude: List[int] | None = None) -> np.ndarray:
     """Returns k available random uids from the metagraph.
     Args:
         k (int): Number of uids to return.
         exclude (List[int]): List of uids to exclude from the random sampling.
     Returns:
-        uids (torch.LongTensor): Randomly sampled available uids.
+        uids (np.ndarray): Randomly sampled available uids.
     Notes:
         If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.
     """
     candidate_uids = []
     avail_uids = []
 
-    top_researchers = self.update_and_get_top_researchers()
-    top_researchers_uids = list(top_researchers.keys())
+    self.update_top_researchers_from_api()
+    top_researchers_uids = list(self.top_researchers.keys())
 
     for uid in range(self.metagraph.n.item()):
         uid_is_available = check_uid_availability(
@@ -70,24 +71,24 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor
             [uid for uid in avail_uids if uid not in candidate_uids],
             k - len(candidate_uids),
         )
-    uids = torch.tensor(random.sample(available_uids, k))
+    uids = np.array(random.sample(available_uids, k))
     return uids
 
 
-def get_all_uids(self, exclude: List[int] = None) -> torch.LongTensor:
+def get_all_uids(self, exclude: List[int] | None = None) -> np.ndarray:
     """Returns all available uids from the metagrapth.
         Args:
         exclude (List[int]): List of uids to exclude from the random sampling.
     Returns:
-        uids (torch.LongTensor): All available uids.
+        uids (np.ndarray): All available uids.
     Notes:
         Current top researchers are not considered to be
     """
     avail_uids = []
 
-    # top_researchers = self.update_and_get_top_researchers()
-    top_researchers = self.update_and_get_top_researchers()
-    top_researchers_uids = list(top_researchers.keys())
+    
+    self.update_top_researchers_from_api()
+    top_researchers_uids = list(self.top_researchers.keys())
 
     for uid in range(self.metagraph.n.item()):
         uid_is_available = check_uid_availability(
@@ -101,4 +102,4 @@ def get_all_uids(self, exclude: List[int] = None) -> torch.LongTensor:
         if uid_is_available and uid_is_not_excluded:
             avail_uids.append(uid)
 
-    return torch.tensor(avail_uids)
+    return np.array(avail_uids)

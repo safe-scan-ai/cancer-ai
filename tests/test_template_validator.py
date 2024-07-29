@@ -17,7 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import sys
-import torch
+import numpy as np
 import unittest
 import bittensor as bt
 
@@ -88,7 +88,7 @@ class TemplateValidatorNeuronTestCase(unittest.TestCase):
         )
 
         rewards = get_rewards(self.neuron, responses)
-        expected_rewards = torch.FloatTensor([1.0] * len(responses))
+        expected_rewards = np.full(len(responses), 1.0)
         self.assertEqual(rewards, expected_rewards)
 
     def test_reward_with_nan(self):
