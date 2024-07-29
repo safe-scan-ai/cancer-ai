@@ -51,9 +51,7 @@ class Miner(BaseMinerNeuron):
         bt.logging.info(f"Miner info: {self.miner_info}")
 
         # TODO: fetch the model from hugging face
-        self.regular_model = tf.keras.models.load_model(
-            "./data/melanoma.keras"
-        )
+        self.regular_model = tf.keras.models.load_model("./data/melanoma.keras")
         bt.logging.info(f"Regular model built status: {self.regular_model.built}")
 
     async def forward(
@@ -84,22 +82,29 @@ class Miner(BaseMinerNeuron):
     async def forward_researcher(
         self, synapse: cancer_ai.protocol.ReasearcherTestingSynapse
     ) -> cancer_ai.protocol.ReasearcherTestingSynapse:
-        if not self.config.researcher or not is_valid_uuid(self.config.testing_session_id):
+        if not self.config.researcher or not is_valid_uuid(
+            self.config.testing_session_id
+        ):
             synapse.response_dict = {"identity_error": True}
             return synapse
-        
+
         images = get_images(self, synapse.images)
 
-
         # TODO(researcher owner): feed the ML model with the images
-        #MOCK response for testing purposes
+        # MOCK response for testing purposes
         bt.logging.info("Got researcher task")
         import random
-        mock_response = {"entries_num": len(images), "models_response": {}, "identity_error": False}
+
+        mock_response = {
+            "entries_num": len(images),
+            "models_response": {},
+            "identity_error": False,
+            "testing_session_id": self.config.testing_session_id,
+        }
         for image in images:
-            mock_response["models_response"][image[0]] = random.randrange(1,100) / 100
+            mock_response["models_response"][image[0]] = random.randrange(1, 100) / 100
         synapse.response_dict = mock_response
-        
+
         return synapse
 
     async def forward_info(
@@ -114,8 +119,8 @@ class Miner(BaseMinerNeuron):
         self, synapse: cancer_ai.protocol.MinerFeedbackSynapse
     ):
         feedback = synapse.feedback
-        #TODO(researcher developer): write your logic to process feedback data
-        # bt.logging.info("Researcher feddback from model scores:", feedback)
+        # TODO(researcher developer): write your logic to process feedback data
+        bt.logging.info("Researcher feddback from model scores:", feedback)
 
     async def blacklist(
         self, synapse: cancer_ai.protocol.PredictionSynapse
