@@ -231,7 +231,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def send_weights_to_api(self, weights, uids):
         try:
-            headers = {"x-api-key": self.config.dataset_api_key}
+            headers = {"x-api-key": self.config.stats_api}
             requests.post(
                 self.config.stats_api + "/send-weights",
                 json={

@@ -54,27 +54,29 @@ class Validator(BaseValidatorNeuron):
 
         image_data = await self.get_image_data(1)
         if image_data is None or image_data.entries is None:
-            return
-        # TODO: use skin_type and model name fetched from the dataset api endpoint once its ready to serve this data
-        challenge_data = {
-            "image_url": image_data.entries[0].image_url,
-        }
-
+            # feed fallback image
+            bt.logging.error("!!!!!!! Dataset API missing API key or is down")
+            wikipedia_melaona_url = "https://upload.wikimedia.org/wikipedia/commons/6/6c/Melanoma.jpg"
+            challenge_data = {
+                "image_url": wikipedia_melaona_url,
+            }
+        else:   
+            challenge_data = {
+                "image_url": f"{self.config.dataset_api}{image_data.entries[0].image_url}",
+            }
         return await forward(self, challenge_data["image_url"])
 
     async def forward_researcher_test(self, researcher_uid):
         bt.logging.info(f"Forwarding the test data to the researcher miner with uid {researcher_uid}")
-        test_data = []
-        while not test_data:
-            test_data = await self.get_image_data(
-                self.config.researcher_testing_entries_package
-            )
-            if not test_data:
-                bt.logging.error(
-                    f"Error during fetching test data for researcher. Retrying in {self.config.fetching_interval} seconds"
-                )
-                time.sleep(self.config.fetching_interval)
-
+        
+        test_data = await self.get_image_data(
+            self.config.researcher_testing_entries_package
+        )
+        if not test_data:
+            bt.logging.error("!!!!!!! Dataset API missing API key or is down")
+            return
+                
+        
         return await forward_to_researcher(self, researcher_uid, test_data.entries)
 
     async def get_image_data(self, amount):
