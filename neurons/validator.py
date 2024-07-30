@@ -84,7 +84,7 @@ class Validator(BaseValidatorNeuron):
         dataset_entries = None
         try:
             data = self.dataset_api.get_image_data(amount)
-            bt.logging.debug(f"Dataset API response: {data}")
+            # bt.logging.debug(f"Dataset API response: {data}")
             dataset_entries = DatasetEntries(**data)
 
         except requests.RequestException as e:

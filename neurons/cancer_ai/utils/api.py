@@ -24,7 +24,7 @@ class DatasetAPI:
             url=endpoint, headers=self.headers, timeout=API_TIMEOUT_S
         )
         data = response.json()
-        bt.logging.debug(f"Dataset API response: {data}")
+        # bt.logging.debug(f"Dataset API response: {data}")
         return data
 
 
@@ -71,7 +71,7 @@ class StatsAPI:
     
     def send_weights(self, weights, uids) -> Tuple[bool, str]:
         """Sends weights to stats api"""
-        endpoint = f"{self.base_path}/weights"
+        endpoint = f"{self.base_path}/send-weights"
         response = requests.post(
             url=endpoint,
             json={
