@@ -17,12 +17,13 @@
 # DEALINGS IN THE SOFTWARE.
 
 import os
+from typing import Any
 import subprocess
 import argparse
 import bittensor as bt
 from .logging import setup_events_logger
 
-def is_cuda_available():
+def is_cuda_available() -> str:
     try:
         output = subprocess.check_output(["nvidia-smi", "-L"], stderr=subprocess.STDOUT)
         if "NVIDIA" in output.decode("utf-8"):
@@ -38,7 +39,7 @@ def is_cuda_available():
     return "cpu"
 
 
-def check_config(cls, config: "bt.Config"):
+def check_config(cls: Any, config: "bt.Config") -> None:
     r"""Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 
@@ -63,7 +64,7 @@ def check_config(cls, config: "bt.Config"):
         bt.logging.register_primary_logger(events_logger.name)
 
 
-def add_args(cls, parser):
+def add_args(cls: Any, parser: argparse.ArgumentParser) -> None:
     """
     Adds relevant arguments to the parser for operation.
     """
@@ -126,15 +127,7 @@ def add_args(cls, parser):
         default="",
     )
 
-    parser.add_argument(
-        "--dataset_api",
-        type=str,
-        help="URL for Dataset API",
-        default="https://dataset.api.safe-scan.ai",
-    )
-
-
-def add_miner_args(cls, parser):
+def add_miner_args(cls: Any, parser: argparse.ArgumentParser) -> None:
     """Add miner specific arguments to the parser."""
 
     parser.add_argument(
@@ -186,14 +179,7 @@ def add_miner_args(cls, parser):
         default=10,
     )
 
-    parser.add_argument(
-        "--testing_session_id",
-        type=str,
-        help="Testing session id unique for each model researcher is testing. It must be uuid to be validated correctly.",
-        default="",
-    )
-
-def add_validator_args(cls, parser):
+def add_validator_args(cls: Any, parser: argparse.ArgumentParser) -> None:
     """Add validator specific arguments to the parser."""
 
     parser.add_argument(
@@ -280,7 +266,7 @@ def add_validator_args(cls, parser):
         "--forward_frequency",
         type=int,
         help="Steps per forward frequency",
-        default=5,
+        default=50,
     )
 
     parser.add_argument(
@@ -291,10 +277,17 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--dataset_api",
+        type=str,
+        help="URL for  Dataset API",
+        default="https://dataset.api.safe-scan.ai",
+    )
+
+    parser.add_argument(
         "--dataset_api_key",
         type=str,
         help="key to access Dataset API resources",
-        default="",
+        default="8a5e9c0f-5e78-4b3f-9e7b-7b5f1f5e7b5f",
     )
 
     parser.add_argument(
@@ -302,7 +295,7 @@ def add_validator_args(cls, parser):
         type=str,
         help="URL for Statistics API",
         default="https://statistics.api.safe-scan.ai/",
-    ),
+    )
 
     parser.add_argument(
         "--stats_api_key",
@@ -318,7 +311,14 @@ def add_validator_args(cls, parser):
         default=30,
     )
 
-def config(cls):
+    parser.add_argument(
+        "--researcher_testing_entries_amount",
+        type=int,
+        help="Amount of images for researcher test data that are to be fetched overall for testing the model purposes",
+        default=300,
+    )
+
+def config(cls: Any) -> bt.config:
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
     """
