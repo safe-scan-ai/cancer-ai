@@ -98,6 +98,15 @@ In addition, we aim to collaborate with manufacturers of CT scanners who current
 
 ## Participation
 
+
+
+- Basic installation is found under [Installation](./docs/installation.md)
+- Validator installation guide: [Validator](./docs/validator.md)
+- Miner installation guide: [Miner](./docs/miner.md)
+- Researcher installation guide: [Researcher](./docs/researcher.md)
+
+# TODO KONDZIU MOVE BELOW  TO DOCUMENTS
+
 ### Validator
 
 1. Contact us on [Safe Scan Discord, #validator-support](https://discord.gg/PZevpMJrfW) to request the Dataset API key which will enable you to pull resources for testing researchers and generation of synthetic queries.
