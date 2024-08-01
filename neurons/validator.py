@@ -55,7 +55,6 @@ class Validator(BaseValidatorNeuron):
         image_data = await self.get_image_data(1)
         if image_data is None or image_data.entries is None:
             # feed fallback image
-            bt.logging.error("!!!!!!! Dataset API missing API key or is down")
             wikipedia_melaona_url = "https://upload.wikimedia.org/wikipedia/commons/6/6c/Melanoma.jpg"
             challenge_data = {
                 "image_url": wikipedia_melaona_url,
@@ -73,7 +72,6 @@ class Validator(BaseValidatorNeuron):
             self.config.researcher_testing_entries_package
         )
         if not test_data:
-            bt.logging.error("!!!!!!! Dataset API missing API key or is down")
             return
                 
         
@@ -129,12 +127,10 @@ class Validator(BaseValidatorNeuron):
     
     async def send_researchers_scores(self, researcher_score, current_model_score, num_entries,
                                        combined_predictions, researcher_uid, testing_session_id):
-        
         entries = [ResearcherEntry(prediction=i[0], current_model_prediction=i[1], is_melanoma=i[2], image_id=i[3]) for i in combined_predictions]
         researcher_scores = ResearcherScores(entries=entries, researcher_score=researcher_score, current_model_score=current_model_score,
-                                             num_entries=num_entries, testing_session_id=testing_session_id)
+                                             num_entries=num_entries, testing_session_id=testing_session_id, hotkey=self.all_uids_info[researcher_uid]["hotkey"])
         researcher_scores = researcher_scores.dict()
-
         try:
             response_successful, message = self.stats_api.send_researcher_scores(researcher_uid, researcher_scores)
             if not response_successful:
@@ -168,6 +164,7 @@ class Validator(BaseValidatorNeuron):
             miner_state["min_stake"] = info.get("min_stake", 100)
             miner_state["device_info"] = info.get("device_info", {})
             miner_state["miner_mode"] = info["miner_mode"]
+            miner_state["hotkey"] = self.metagraph.hotkeys[uid]
 
         bt.logging.success("Updated miner identity")
         self.save_state()

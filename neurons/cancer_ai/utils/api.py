@@ -71,12 +71,14 @@ class StatsAPI:
     
     def send_weights(self, weights, uids) -> Tuple[bool, str]:
         """Sends weights to stats api"""
+        hotkeys = [self.all_uids_info[uid]["hotkey"] for uid in uids]
         endpoint = f"{self.base_path}/send-weights"
         response = requests.post(
             url=endpoint,
             json={
                 "weights": weights,
                 "uids": uids,
+                "hotkeys": hotkeys,
             },
             headers=self.headers,
             timeout=API_TIMEOUT_S,

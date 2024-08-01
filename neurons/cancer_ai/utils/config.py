@@ -127,6 +127,20 @@ def add_args(cls: Any, parser: argparse.ArgumentParser) -> None:
         default="",
     )
 
+    parser.add_argument(
+        "--dataset_api",
+        type=str,
+        help="URL for  Dataset API",
+        default="https://dataset.api.safe-scan.ai",
+    )
+
+    parser.add_argument(
+        "--dataset_api_key",
+        type=str,
+        help="key to access Dataset API resources",
+        default="",
+    )
+
 def add_miner_args(cls: Any, parser: argparse.ArgumentParser) -> None:
     """Add miner specific arguments to the parser."""
 
@@ -177,6 +191,13 @@ def add_miner_args(cls: Any, parser: argparse.ArgumentParser) -> None:
         type=int,
         help="Min validators stake to be considered by miner",
         default=10,
+    )
+
+    parser.add_argument(
+        "--testing_session_id",
+        type=str,
+        help="Testing session uuid provided by the Researcher to indentify his tested model. Only validated uuid will work here.",
+        default="",
     )
 
 def add_validator_args(cls: Any, parser: argparse.ArgumentParser) -> None:
@@ -274,20 +295,6 @@ def add_validator_args(cls: Any, parser: argparse.ArgumentParser) -> None:
         type=int,
         help="Retry interval between attempts to fetch test data for researcher in seconds",
         default=10,
-    )
-
-    parser.add_argument(
-        "--dataset_api",
-        type=str,
-        help="URL for  Dataset API",
-        default="https://dataset.api.safe-scan.ai",
-    )
-
-    parser.add_argument(
-        "--dataset_api_key",
-        type=str,
-        help="key to access Dataset API resources",
-        default="8a5e9c0f-5e78-4b3f-9e7b-7b5f1f5e7b5f",
     )
 
     parser.add_argument(
