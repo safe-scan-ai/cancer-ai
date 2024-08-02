@@ -22,15 +22,16 @@ import time
 import bittensor as bt
 import requests
 import numpy as np
-import uuid
-import json
+import tensorflow as tf
 
 from cancer_ai.validator import forward, forward_to_researcher
 from cancer_ai.validator.models import DatasetEntries, ResearcherEntry, ResearcherScores
 from cancer_ai.base.validator import BaseValidatorNeuron
 from cancer_ai.protocol import MinerInfoSynapse
 from pydantic import ValidationError
-
+from huggingface_hub import hf_hub_download
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from io import BytesIO
 
 class Validator(BaseValidatorNeuron):
     """
@@ -43,6 +44,13 @@ class Validator(BaseValidatorNeuron):
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
+
+        model_path = hf_hub_download(
+            "safe-scan-ai/skin-cancer-collection", "melanoma.keras"
+        )
+        self.base_model = tf.keras.models.load_model(model_path)
+
+        bt.logging.info(f"Evaluation model built status: {self.base_model.built}")
 
     async def forward(self):
         # How often you actually send synthetic challenges to the miner
@@ -94,7 +102,7 @@ class Validator(BaseValidatorNeuron):
         finally:
             return dataset_entries
 
-    async def evaluate_model(self, researcher_response, test_data):
+    async def evaluate_researcher_model(self, researcher_response, test_data):
         # researcher_response shape: {"models_response": {"sample_photo_id_1": 0.43,"sample_photo_id_2": 0.99, ...}}
         # test_data shape: [{"id": 1, "label": {"melanoma": false}, "image_url": "someurl"}, ...]
 
@@ -113,7 +121,7 @@ class Validator(BaseValidatorNeuron):
         researcher_model_score = 0
         current_model_score = 0
         for entry in combined_result:
-            researcher_pred, current_model_pred, label, id = entry
+            researcher_pred, current_model_pred, label, _ = entry
             if researcher_pred == current_model_pred:
                 continue
             elif (label == True and researcher_pred > current_model_pred) or (
@@ -187,6 +195,40 @@ class Validator(BaseValidatorNeuron):
             for uid, response in zip(self.all_uids, responses)
         }
         return responses
+    
+    def is_miners_model_valid(self, image_url, miners_prediction):
+        base_model_prediction = self.get_base_model_prediction(image_url)
+        if base_model_prediction != miners_prediction:
+            return False
+        return True
+
+    def get_base_model_prediction(self, image_url):
+        # Convert binary data to an image
+        image = self.get_image(image_url)
+        image = load_img(BytesIO(image), target_size=(180, 180, 3))
+        img_array = img_to_array(image)
+        img_array = np.expand_dims(img_array, axis=0)
+
+        # Predict using the model
+        pred = self.base_model.predict(img_array)
+        _, melanoma_probability = pred[0]
+        return float(melanoma_probability)
+
+    def get_image(self, image_url):
+        try:
+            response = requests.get(image_url)
+            response.raise_for_status()
+            if 'image/jpeg' in response.headers.get('Content-Type', ''):
+                jpg_image = response.content
+            else:
+                bt.logging.error(f"URL does not point to a JPEG image: {image_url}")
+
+        except requests.exceptions.RequestException as e:
+            bt.logging.error(f"Error fetching image from {image_url}: {e}")
+        except IOError as e:
+            bt.logging.error(f"Error opening image from {image_url}: {e}")
+        
+        return jpg_image
 
     def store_miner_info(self):
         try:
