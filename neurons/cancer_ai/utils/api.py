@@ -77,8 +77,7 @@ class StatsAPI:
             url=endpoint,
             json={
                 "weights": weights,
-                "uids": uids,
-                "hotkeys": hotkeys,
+                "uids": hotkeys,
             },
             headers=self.headers,
             timeout=API_TIMEOUT_S,
