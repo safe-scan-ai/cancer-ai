@@ -25,10 +25,10 @@ from collections import Counter
 
 
 def reward(
+    self,
     response: PredictionSynapse,
     max_time_penalty: float,
     factor: float,
-    most_common_prediction: float,
 ) -> float:
     if (
         response["response_dict"] is None
@@ -36,15 +36,15 @@ def reward(
     ):
         return 0
 
-    if response["response_dict"]["models_response"] != most_common_prediction:
+    # compare researcher response with base model response to validate
+    is_model_valid = self.is_miners_model_valid(response["response_dict"]["image_url"], response["response_dict"]["models_response"])
+    if not is_model_valid:
         return 0
-
+    
     time_penalty = min(
         max_time_penalty,
         max_time_penalty * pow(response["process_time"], 3) / pow(factor, 3),
     )
-    # TODO Konrad what to log 
-    # bt.logging.info(f"In rewards, query val: {query}, response val: {response}, rewards val: {1.0 if response == query * 2 else 0}")
 
     return 1 - time_penalty
 
@@ -55,22 +55,7 @@ def get_rewards(
     max_time_penalty: float,
     factor: float,
 ) -> np.ndarray:
-    # getting the most common response to validate if miner used the right model
-    predictions = []
-    most_common_prediction = 1
-    for res in responses:
-        if (
-            res is not None
-            and isinstance(res, dict)
-            and "response_dict" in res
-            and isinstance(res["response_dict"], dict)
-            and "models_response" in res["response_dict"]
-        ):
-            predictions.append(res["response_dict"]["models_response"])
-    if predictions:
-        counter = Counter(predictions)
-        most_common_prediction, _ = counter.most_common(1)[0]
-    
+
     return np.array(
-        [ reward(response, max_time_penalty, factor, most_common_prediction) for response in responses ]
+        [ reward(self, response, max_time_penalty, factor) for response in responses ]
     )
