@@ -36,11 +36,6 @@ class MINER_MODE(Enum):
 async def forward(self, image_url: str):
     all_uids = get_all_uids(self)
 
-    #if the uids is the researcher which is in testing mode send him testing data
-    for uid in all_uids:
-        if uid.item() in self.all_uids_info and self.all_uids_info[uid.item()]["miner_mode"] == "researcher":
-            asyncio.create_task(self.forward_researcher_test(uid.item()))
-
     responses = await self.dendrite(
         axons=[self.metagraph.axons[uid] for uid in all_uids],
         synapse=PredictionSynapse(image_url=image_url),
@@ -48,7 +43,6 @@ async def forward(self, image_url: str):
         timeout=12,
     )
 
-    # Log the results for monitoring purposes.
     # bt.logging.debug(f"Received responses: {responses}")
 
     rewards = get_rewards(

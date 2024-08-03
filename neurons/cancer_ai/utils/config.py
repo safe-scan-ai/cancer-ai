@@ -312,24 +312,24 @@ def add_validator_args(cls: Any, parser: argparse.ArgumentParser) -> None:
     )
 
     parser.add_argument(
+        "--update_miners_routine_interval",
+        type=int,
+        help="The duration between querying miners for their identity in seconds",
+        default=60*10,
+    )
+
+    parser.add_argument(
+        "--researcher_testing_interval",
+        type=int,
+        help="The duration between sending testing packages to researchers in minutes",
+        default=10,
+    )
+
+    parser.add_argument(
         "--researcher_testing_entries_package",
         type=int,
         help="Amount of images for researcher test data that are to be fetched on one dataset-api call",
         default=30,
-    )
-
-    parser.add_argument(
-        "--researcher_testing_entries_amount",
-        type=int,
-        help="Amount of images for researcher test data that are to be fetched overall for testing the model purposes",
-        default=300,
-    )
-
-    parser.add_argument(
-        "--update_miners_routine_interval",
-        type=int,
-        help="The duration between querying miners for their identity in seconds",
-        default=30*60,
     )
 
 def config(cls: Any) -> bt.config:

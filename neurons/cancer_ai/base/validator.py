@@ -234,7 +234,7 @@ class BaseValidatorNeuron(BaseNeuron):
     def send_weights_to_api(self, weights, uids):
         try:
 
-            sent_successfully, message = self.stats_api.send_weights(weights, uids)
+            sent_successfully, message = self.stats_api.send_weights(weights, uids, self.all_uids_info)
             if not sent_successfully:
                 bt.logging.error(f"Failed to send weights to statistics api: {message}")
         except Exception as e:

@@ -24,6 +24,7 @@ import requests
 import numpy as np
 import tensorflow as tf
 import asyncio
+from datetime import datetime, timedelta
 
 from cancer_ai.validator import forward, forward_to_researcher
 from cancer_ai.validator.models import DatasetEntries, ResearcherEntry, ResearcherScores
@@ -50,19 +51,46 @@ class Validator(BaseValidatorNeuron):
             "safe-scan-ai/skin-cancer-collection", "melanoma.keras"
         )
         self.base_model = tf.keras.models.load_model(model_path)
-
         bt.logging.info(f"Evaluation model built status: {self.base_model.built}")
+
+        self.researchers_testing_timestamps = {}
 
         bt.logging.info("Starting miners identity update routine")
         asyncio.run_coroutine_threadsafe(self.run_miners_update_routine(), self.loop)
 
+        bt.logging.info("Starting researcher testing watcher")
+        asyncio.run_coroutine_threadsafe(self.run_researcher_testing_watcher(), self.loop)
+        
 
     async def run_miners_update_routine(self):
         while True:
             bt.logging.info("Updating miners identity")
             await self.update_miners_identity()
+            await self.update_researchers_testing_timestamps()
             await asyncio.sleep(self.config.update_miners_routine_interval)
-            
+    
+    async def run_researcher_testing_watcher(self):
+        while True:
+            for uid, latest_update in self.researchers_testing_timestamps.items():
+                if datetime.now() - latest_update > timedelta(minutes=self.config.researcher_testing_interval):
+                    asyncio.create_task(self.forward_researcher_test(uid))
+                    self.researchers_testing_timestamps[uid] = datetime.now()
+            await asyncio.sleep(1)  # Prevent tight loop
+    
+    async def update_researchers_testing_timestamps(self):
+        new_researchers_timestamps = {uid: datetime.now() for uid, data in self.all_uids_info.items() if data.get("miner_mode") == "researcher"}
+
+        # Add new researchers or update existing ones' timestamps
+        for uid, timestamp in new_researchers_timestamps.items():
+            if uid not in self.researchers_testing_timestamps:
+                self.researchers_testing_timestamps[uid] = timestamp
+        
+        # Find and remove researchers that are no longer researchers
+        current_researchers_uids = set(new_researchers_timestamps.keys())
+        existing_researchers_uids = set(self.researchers_testing_timestamps.keys())
+        for uid in existing_researchers_uids - current_researchers_uids:
+            del self.researchers_testing_timestamps[uid]
+
     async def forward(self):
         # How often you actually send synthetic challenges to the miner
         if self.step % self.config.forward_frequency > 0:
@@ -83,13 +111,13 @@ class Validator(BaseValidatorNeuron):
 
     async def forward_researcher_test(self, researcher_uid):
         bt.logging.info(f"Forwarding the test data to the researcher miner with uid {researcher_uid}")
-        
+
         test_data = await self.get_image_data(
             self.config.researcher_testing_entries_package
         )
-        if not test_data:
+        if test_data is None:
+            bt.logging.error(f"Failed to fetch test data for researcher with uid {researcher_uid}")
             return
-                
         
         return await forward_to_researcher(self, researcher_uid, test_data.entries)
 
@@ -161,9 +189,6 @@ class Validator(BaseValidatorNeuron):
         if not valid_miners_info:
             bt.logging.warning("Updating miners identity: No active miner available")
         for uid, info in valid_miners_info.items():
-            if info is None:
-                not_available_uids.append(uid)
-                continue
 
             miner_state = self.all_uids_info.setdefault(
                 uid,
@@ -176,6 +201,11 @@ class Validator(BaseValidatorNeuron):
                     },
                 },
             )
+
+            if info is None:
+                not_available_uids.append(uid)
+                miner_state["miner_mode"] = "Unknown",
+                continue
 
             miner_state["min_stake"] = info.get("min_stake", 100)
             miner_state["device_info"] = info.get("device_info", {})

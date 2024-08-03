@@ -69,9 +69,9 @@ class StatsAPI:
         )
         return response.status_code == 200, response.text
     
-    def send_weights(self, weights, uids) -> Tuple[bool, str]:
+    def send_weights(self, weights, uids, all_uids_info) -> Tuple[bool, str]:
         """Sends weights to stats api"""
-        hotkeys = [self.all_uids_info[uid]["hotkey"] for uid in uids]
+        hotkeys = [all_uids_info[uid]["hotkey"] for uid in uids]
         endpoint = f"{self.base_path}/send-weights"
         response = requests.post(
             url=endpoint,

@@ -132,7 +132,7 @@ class Miner(BaseMinerNeuron):
 
         feedback = synapse.feedback
         # TODO(researcher developer): write your logic to process feedback data
-        bt.logging.info("Researcher miner mode: feedback from model scores:", feedback)
+        # bt.logging.info("Researcher miner mode: feedback from model scores:", feedback)
 
 
     async def blacklist(
