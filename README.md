@@ -98,25 +98,9 @@ In addition, we aim to collaborate with manufacturers of CT scanners who current
 
 ## Participation
 
-### Validator
 
-1. Contact us on [Safe Scan Discord, #validator-support](https://discord.gg/PZevpMJrfW) to request the Dataset API key which will enable you to pull resources for testing researchers and generation of synthetic queries.
-2. Setup config parameters which can be found in ./neurons/cancer_ai/utils/config.py. You can either provide these parameters with the flags when running the validator.py or adjust the default values for the config parameters in the config.py file directly. The fetched in previous step api key is one of the parameters.
-3. Run the validator.py with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
 
-### Miner
-
-1. Setup config parameters which can be found in ./neurons/cancer_ai/utils/config.py. You can either provide these parameters with the flags when running the miner.py or adjust the default values for the config parameters in the config.py file directly. A miner can be both a Regular miner (offering computational power) and the Researcher. To proceed with just Regular miner (without announcing to the subnet participation as a Researcher) make sure that the --researcher flag is set to false (the default value).
-
-2. Run the miner.py script with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
-
-### Researcher
-
-Note that if you are planning to participate as the Researcher it is adviced to run the Researcher Miner in the immunity period (right after registration). The Researcher Miner is at the same time performing Regular Miner job, but as the reward system is based on the response pace it is possible that the general score of the Miner will drop if you are executing both Researcher and Miner tasks on the same machine.
-Hence, if you are already running a Regular Miner successfully after the immunity period it is also adviced to adjust the miner.py to handle the Researcher tasks asynchronously and/or introducing proxy for handling the Researcher processing on another machine.
-
-1. Setup config parameters which can be found in ./neurons/cancer_ai/utils/config.py. You can either provide these parameters with the flags when running the miner.py or adjust the default values for the config parameters in the config.py file directly. A miner can be both a Regular miner (offering computational power) and the Researcher. To proceed as the Researcher Miner make sure that the --researcher flag is set to true.
-
-2. Run the miner.py script with our subnet <subnet_id> flag. Example can be found here: https://github.com/opentensor/bittensor-subnet-template/blob/main/docs/running_on_mainnet.md
-
-3. When the testing is done the outcome can be found on [Statistics API](https://statistics.safe-scan.ai/). If it appears that your Researcher models is better then our current model, reach us on Discord. We will then test your model outside of the subnet to confirm on its accuracy and hopefully introduce it as a new base model for the Subnet and the Skinscan App!
+- Basic installation is found under [Installation](./docs/installation.md)
+- Validator installation guide: [Validator](./docs/validator.md)
+- Miner installation guide: [Miner](./docs/miner.md)
+- Researcher installation guide: [Researcher](./docs/researcher.md)

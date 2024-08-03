@@ -82,7 +82,7 @@ def add_args(cls: Any, parser: argparse.ArgumentParser) -> None:
         "--neuron.epoch_length",
         type=int,
         help="The default epoch length (how often we set weights, measured in 12 second blocks).",
-        default=10,
+        default=100,
     )
 
     parser.add_argument(
@@ -287,14 +287,14 @@ def add_validator_args(cls: Any, parser: argparse.ArgumentParser) -> None:
         "--forward_frequency",
         type=int,
         help="Steps per forward frequency",
-        default=50,
+        default=50, #in steps
     )
 
     parser.add_argument(
         "--fetching_interval",
         type=int,
         help="Retry interval between attempts to fetch test data for researcher in seconds",
-        default=10,
+        default=10, #in seconds
     )
 
     parser.add_argument(
