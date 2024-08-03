@@ -70,6 +70,9 @@ class Miner(BaseMinerNeuron):
     ) -> cancer_ai.protocol.PredictionSynapse:
         # Convert binary data to an image
         image = get_image(self, synapse.image_url)
+        if image is None:
+            return synapse
+        
         image = load_img(BytesIO(image), target_size=(180, 180, 3))
         img_array = img_to_array(image)
         img_array = np.expand_dims(img_array, axis=0)

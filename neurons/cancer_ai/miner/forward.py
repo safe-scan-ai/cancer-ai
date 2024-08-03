@@ -59,6 +59,7 @@ def get_images(self, images_urls: dict):
     return images
 
 def get_image(self, image_url: str):
+    jpg_image = None
     try:
         response = requests.get(image_url)
         response.raise_for_status()

@@ -36,9 +36,16 @@ def reward(
     ):
         return 0
 
+    # check if response is valid
+    image_url = response["response_dict"].get("image_url", {})
+    models_response = response["response_dict"].get("models_response", {})
+    is_response_valid = image_url is not None and models_response is not None
+    if not is_response_valid:
+        return 0
+    
     # compare researcher response with base model response to validate
-    is_model_valid = self.is_miners_model_valid(response["response_dict"]["image_url"], response["response_dict"]["models_response"])
-    if not is_model_valid:
+    is_model_valid = self.is_miners_model_valid(image_url, models_response)  
+    if is_model_valid is not None and is_model_valid == False:
         return 0
     
     time_penalty = min(

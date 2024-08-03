@@ -325,6 +325,13 @@ def add_validator_args(cls: Any, parser: argparse.ArgumentParser) -> None:
         default=300,
     )
 
+    parser.add_argument(
+        "--update_miners_routine_interval",
+        type=int,
+        help="The duration between querying miners for their identity in seconds",
+        default=30*60,
+    )
+
 def config(cls: Any) -> bt.config:
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
