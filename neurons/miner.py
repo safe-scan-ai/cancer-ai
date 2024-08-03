@@ -24,8 +24,10 @@ from io import BytesIO
 import bittensor as bt
 import tensorflow as tf
 import numpy as np
+
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from huggingface_hub import hf_hub_download
+
 
 # Bittensor Miner cancer_ai:
 import cancer_ai
@@ -33,9 +35,12 @@ import cancer_ai
 # import base miner class which takes care of most of the boilerplate
 from cancer_ai.base.miner import BaseMinerNeuron
 from cancer_ai.miner.forward import set_info, get_images, get_image, get_mode
+
 from cancer_ai.miner.utils import is_valid_uuid
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from io import BytesIO
+
+
 
 
 class Miner(BaseMinerNeuron):
@@ -64,25 +69,23 @@ class Miner(BaseMinerNeuron):
         self, synapse: cancer_ai.protocol.PredictionSynapse
     ) -> cancer_ai.protocol.PredictionSynapse:
         # Convert binary data to an image
-        bt.logging.info("Got task, executing")
         image = get_image(self, synapse.image_url)
         image = load_img(BytesIO(image), target_size=(180, 180, 3))
         img_array = img_to_array(image)
         img_array = np.expand_dims(img_array, axis=0)
-        bt.logging.info("Running prediction")
+        bt.logging.info("Regular miner mode: Running prediction")
         now = time.time()
         # Predict using the model
         pred = self.regular_model.predict(img_array)
         time_diff = time.time() - now
-        bt.logging.info(f"Time taken to predict: {time_diff}")
+        bt.logging.info(f"Regular miner mode: Time taken to predict: {time_diff}")
         _, melanoma_probability = pred[0]
         synapse.response_dict = {
             "models_response": float(melanoma_probability),
             "miner_mode": get_mode(self),
             "miner_uid": self.uid,
+            "image_url": synapse.image_url
         }
-
-        print(synapse.response_dict)
         return synapse
 
     async def forward_researcher(
@@ -98,7 +101,7 @@ class Miner(BaseMinerNeuron):
 
         # TODO(researcher owner): feed the ML model with the images
         # MOCK response for testing purposes
-        bt.logging.info("Got researcher task")
+        bt.logging.info("Researcher miner mode: Got researcher task")
         import random
 
         mock_response = {
@@ -117,16 +120,16 @@ class Miner(BaseMinerNeuron):
         self, synapse: cancer_ai.protocol.MinerInfoSynapse
     ) -> cancer_ai.protocol.MinerInfoSynapse:
         synapse.response_dict = self.miner_info
-        # bt.logging.info(f"Response dict: {self.miner_info}")
 
         return synapse
 
     async def forward_get_feedback(
         self, synapse: cancer_ai.protocol.MinerFeedbackSynapse
     ):
+
         feedback = synapse.feedback
         # TODO(researcher developer): write your logic to process feedback data
-        bt.logging.info("Researcher feddback from model scores:", feedback)
+        bt.logging.info("Researcher miner mode: feedback from model scores:", feedback)
 
 
     async def blacklist(

@@ -22,15 +22,16 @@ import time
 import bittensor as bt
 import requests
 import numpy as np
-import uuid
-import json
+import tensorflow as tf
 
 from cancer_ai.validator import forward, forward_to_researcher
 from cancer_ai.validator.models import DatasetEntries, ResearcherEntry, ResearcherScores
 from cancer_ai.base.validator import BaseValidatorNeuron
 from cancer_ai.protocol import MinerInfoSynapse
 from pydantic import ValidationError
-
+from huggingface_hub import hf_hub_download
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from io import BytesIO
 
 class Validator(BaseValidatorNeuron):
     """
@@ -44,6 +45,13 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
+        model_path = hf_hub_download(
+            "safe-scan-ai/skin-cancer-collection", "melanoma.keras"
+        )
+        self.base_model = tf.keras.models.load_model(model_path)
+
+        bt.logging.info(f"Evaluation model built status: {self.base_model.built}")
+
     async def forward(self):
         # How often you actually send synthetic challenges to the miner
         if self.step % self.config.forward_frequency > 0:
@@ -55,7 +63,6 @@ class Validator(BaseValidatorNeuron):
         image_data = await self.get_image_data(1)
         if image_data is None or image_data.entries is None:
             # feed fallback image
-            bt.logging.error("!!!!!!! Dataset API missing API key or is down")
             wikipedia_melaona_url = "https://upload.wikimedia.org/wikipedia/commons/6/6c/Melanoma.jpg"
             challenge_data = {
                 "image_url": wikipedia_melaona_url,
@@ -73,7 +80,6 @@ class Validator(BaseValidatorNeuron):
             self.config.researcher_testing_entries_package
         )
         if not test_data:
-            bt.logging.error("!!!!!!! Dataset API missing API key or is down")
             return
                 
         
@@ -83,12 +89,7 @@ class Validator(BaseValidatorNeuron):
         """This function fetches test data images from cancer-ai external api"""
         dataset_entries = None
         try:
-            endpoint = (
-                self.config.dataset_api + f"/dataset/skin/melanoma?amount={amount}"
-            )
-            headers = {"x-api-key": self.config.dataset_api_key}
-            response = requests.get(url=endpoint, headers=headers)
-            data = response.json()
+            data = self.dataset_api.get_image_data(amount)
             # bt.logging.debug(f"Dataset API response: {data}")
             dataset_entries = DatasetEntries(**data)
 
@@ -101,7 +102,7 @@ class Validator(BaseValidatorNeuron):
         finally:
             return dataset_entries
 
-    async def evaluate_model(self, researcher_response, test_data):
+    async def evaluate_researcher_model(self, researcher_response, test_data):
         # researcher_response shape: {"models_response": {"sample_photo_id_1": 0.43,"sample_photo_id_2": 0.99, ...}}
         # test_data shape: [{"id": 1, "label": {"melanoma": false}, "image_url": "someurl"}, ...]
 
@@ -120,7 +121,7 @@ class Validator(BaseValidatorNeuron):
         researcher_model_score = 0
         current_model_score = 0
         for entry in combined_result:
-            researcher_pred, current_model_pred, label, id = entry
+            researcher_pred, current_model_pred, label, _ = entry
             if researcher_pred == current_model_pred:
                 continue
             elif (label == True and researcher_pred > current_model_pred) or (
@@ -134,21 +135,15 @@ class Validator(BaseValidatorNeuron):
     
     async def send_researchers_scores(self, researcher_score, current_model_score, num_entries,
                                        combined_predictions, researcher_uid, testing_session_id):
-        
         entries = [ResearcherEntry(prediction=i[0], current_model_prediction=i[1], is_melanoma=i[2], image_id=i[3]) for i in combined_predictions]
         researcher_scores = ResearcherScores(entries=entries, researcher_score=researcher_score, current_model_score=current_model_score,
-                                             num_entries=num_entries, testing_session_id=testing_session_id)
+                                             num_entries=num_entries, testing_session_id=testing_session_id, hotkey=self.all_uids_info[researcher_uid]["hotkey"])
         researcher_scores = researcher_scores.dict()
-
         try:
-            headers = {"x-api-key": self.config.dataset_api_key}
-            res = requests.post(
-                self.config.stats_api + f"/researcher/testing/{researcher_uid}",
-                json=researcher_scores,
-                headers=headers,
-            )
-            if not res.ok:
-                raise Exception(f"Received non-2xx status code: {res.status_code} - {res.text}")
+            response_successful, message = self.stats_api.send_researcher_scores(researcher_uid, researcher_scores)
+            if not response_successful:
+                bt.logging.error(f"Failed to send researchers scores to statistics api: {message}")
+            
         except Exception as e:
             bt.logging.error(f"Failed to send researchers scores to statistics api: {e}")
 
@@ -160,7 +155,6 @@ class Validator(BaseValidatorNeuron):
         for uid, info in valid_miners_info.items():
             if info is None:
                 not_available_uids.append(uid)
-                
                 continue
 
             miner_state = self.all_uids_info.setdefault(
@@ -178,14 +172,12 @@ class Validator(BaseValidatorNeuron):
             miner_state["min_stake"] = info.get("min_stake", 100)
             miner_state["device_info"] = info.get("device_info", {})
             miner_state["miner_mode"] = info["miner_mode"]
+            miner_state["hotkey"] = self.metagraph.hotkeys[uid]
 
         bt.logging.success("Updated miner identity")
         self.save_state()
         bt.logging.info(f"Warning: No info available for UID {not_available_uids}")
 
-        # TODO: enable once the cancer-ai API endpoint for storing miner info is ready
-        # thread = Thread(target=self.store_miner_info, daemon=True)
-        # thread.start()
 
     async def get_miners_info(self):
         self.all_uids = [int(uid) for uid in self.metagraph.uids]
@@ -203,16 +195,46 @@ class Validator(BaseValidatorNeuron):
             for uid, response in zip(self.all_uids, responses)
         }
         return responses
+    
+    def is_miners_model_valid(self, image_url, miners_prediction):
+        base_model_prediction = self.get_base_model_prediction(image_url)
+        if base_model_prediction != miners_prediction:
+            return False
+        return True
+
+    def get_base_model_prediction(self, image_url):
+        # Convert binary data to an image
+        image = self.get_image(image_url)
+        image = load_img(BytesIO(image), target_size=(180, 180, 3))
+        img_array = img_to_array(image)
+        img_array = np.expand_dims(img_array, axis=0)
+
+        # Predict using the model
+        pred = self.base_model.predict(img_array)
+        _, melanoma_probability = pred[0]
+        return float(melanoma_probability)
+
+    def get_image(self, image_url):
+        try:
+            response = requests.get(image_url)
+            response.raise_for_status()
+            if 'image/jpeg' in response.headers.get('Content-Type', ''):
+                jpg_image = response.content
+            else:
+                bt.logging.error(f"URL does not point to a JPEG image: {image_url}")
+
+        except requests.exceptions.RequestException as e:
+            bt.logging.error(f"Error fetching image from {image_url}: {e}")
+        except IOError as e:
+            bt.logging.error(f"Error opening image from {image_url}: {e}")
+        
+        return jpg_image
 
     def store_miner_info(self):
         try:
-            requests.post(
-                self.config.storage_url + "/store_miner_info",
-                json={
-                    "uid": self.uid,
-                    "info": self.all_uids_info,
-                },
-            )
+            response_successful, message = self.stats_api.send_miner_info(self.all_uids_info)
+            if not response_successful:
+                bt.logging.error(f"Failed to store miner info: {message}")
         except Exception as e:
             bt.logging.error(f"Failed to store miner info: {e}")
 
