@@ -23,6 +23,7 @@ import bittensor as bt
 import requests
 import numpy as np
 import tensorflow as tf
+import asyncio
 
 from cancer_ai.validator import forward, forward_to_researcher
 from cancer_ai.validator.models import DatasetEntries, ResearcherEntry, ResearcherScores
@@ -52,13 +53,20 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Evaluation model built status: {self.base_model.built}")
 
+        bt.logging.info("Starting miners identity update routine")
+        asyncio.run_coroutine_threadsafe(self.run_miners_update_routine(), self.loop)
+
+
+    async def run_miners_update_routine(self):
+        while True:
+            bt.logging.info("Updating miners identity")
+            await self.update_miners_identity()
+            await asyncio.sleep(self.config.update_miners_routine_interval)
+            
     async def forward(self):
         # How often you actually send synthetic challenges to the miner
         if self.step % self.config.forward_frequency > 0:
             return
-
-        bt.logging.info("Updating available models & uids")
-        await self.update_miners_identity()
 
         image_data = await self.get_image_data(1)
         if image_data is None or image_data.entries is None:
@@ -151,7 +159,7 @@ class Validator(BaseValidatorNeuron):
         not_available_uids = []
         valid_miners_info = await self.get_miners_info()
         if not valid_miners_info:
-            bt.logging.warning("No active miner available")
+            bt.logging.warning("Updating miners identity: No active miner available")
         for uid, info in valid_miners_info.items():
             if info is None:
                 not_available_uids.append(uid)
@@ -174,9 +182,11 @@ class Validator(BaseValidatorNeuron):
             miner_state["miner_mode"] = info["miner_mode"]
             miner_state["hotkey"] = self.metagraph.hotkeys[uid]
 
-        bt.logging.success("Updated miner identity")
         self.save_state()
-        bt.logging.info(f"Warning: No info available for UID {not_available_uids}")
+        api_response = self.stats_api.send_miner_info(self.all_uids_info)
+        bt.logging.info(f"Updating miners identity: statistics API response: {api_response}")
+        bt.logging.success("Updating miners identity: update successfull")
+        bt.logging.info(f"Updating miners identity: No info available for UID {not_available_uids}")
 
 
     async def get_miners_info(self):
@@ -198,6 +208,9 @@ class Validator(BaseValidatorNeuron):
     
     def is_miners_model_valid(self, image_url, miners_prediction):
         base_model_prediction = self.get_base_model_prediction(image_url)
+        if base_model_prediction is None:
+            # Indicate that the validation could not be performed
+            return None
         if base_model_prediction != miners_prediction:
             return False
         return True
@@ -205,6 +218,8 @@ class Validator(BaseValidatorNeuron):
     def get_base_model_prediction(self, image_url):
         # Convert binary data to an image
         image = self.get_image(image_url)
+        if image is None:
+            return None
         image = load_img(BytesIO(image), target_size=(180, 180, 3))
         img_array = img_to_array(image)
         img_array = np.expand_dims(img_array, axis=0)
@@ -215,6 +230,7 @@ class Validator(BaseValidatorNeuron):
         return float(melanoma_probability)
 
     def get_image(self, image_url):
+        jpg_image = None
         try:
             response = requests.get(image_url)
             response.raise_for_status()
