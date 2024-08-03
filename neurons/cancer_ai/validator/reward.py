@@ -39,7 +39,7 @@ def reward(
     # check if response is valid
     image_url = response["response_dict"].get("image_url", {})
     models_response = response["response_dict"].get("models_response", {})
-    is_response_valid = image_url is not None and models_response is not None
+    is_response_valid = image_url is not None and len(image_url) > 0 and models_response is not None
     if not is_response_valid:
         return 0
     
