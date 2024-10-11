@@ -27,17 +27,21 @@ import json
 import bittensor as bt
 import numpy as np
 import wandb
+from huggingface_hub import hf_hub_list, hf_hub_download
 
 from cancer_ai.chain_models_store import ChainModelMetadata, ChainMinerModelStore
 from cancer_ai.validator.rewarder import CompetitionWinnersStore, Rewarder, Score
 from cancer_ai.base.base_validator import BaseValidatorNeuron
-from cancer_ai.validator.competition_manager import CompetitionManager
 from competition_runner import (
     get_competitions_schedule,
     run_competitions_tick,
     CompetitionRunStore,
 )
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
+from cancer_ai.validator.models import (
+    DataPackageReference,
+    OrganizationDataReference,
+)
 
 RUN_EVERY_N_MINUTES = 15  # TODO move to config
 BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"
@@ -68,6 +72,7 @@ class Validator(BaseValidatorNeuron):
         coroutines = [
             self.refresh_miners(),
             self.competition_loop_tick(),
+            self.monitor_datasets(),
         ]
         await asyncio.gather(*coroutines)
 
@@ -203,6 +208,70 @@ class Validator(BaseValidatorNeuron):
         ]
         self.save_state()
 
+    async def fetch_organization_data_reference(self, repo_id: str) -> list[dict]:
+        """Fetch JSON data for organizations data reference from a Hugging Face repo."""
+        files = hf_hub_list(self.config.datasets_config_hf_repo_id)
+        json_data_list = []
+        
+        for file_info in files:
+            file_name = file_info.rfilename
+            
+            if file_name.endswith('.json'):
+                file_path = hf_hub_download(repo_id, file_name)
+                
+                with open(file_path, 'r') as f:
+                    json_data = json.load(f)
+                    json_data_list.extend(json_data)
+
+        return json_data_list
+
+    async def check_for_organizations_data_updates(
+        self,
+        json_data: list[dict],
+    ) -> tuple[list[OrganizationDataReference], bool]:
+        organizations: list[OrganizationDataReference] = []
+        
+        for org in json_data:
+            org_id = org[0]["organization_id"]
+            organization = OrganizationDataReference(
+                organization_id=org_id,
+                contact_email=org[0]["contact_email"],
+                bittensor_hotkey=org[0]["bittensor_hotkey"],
+                data_packages=[],
+            )
+
+            if org_id not in self.organizations_data_index_reference:
+                self.organizations_data_index_reference[org_id] = 0
+
+            current_index = self.organizations_data_index_reference[org_id]
+            if current_index < len(org):
+                for entry in org[current_index:]:
+                    self.organizations_data_index_reference[org_id] += 1
+                    organization.data_packages.append(DataPackageReference(
+                        competition_id=entry["competition_id"],
+                        dataset_hf_repo=entry["dataset_hf_repo"],
+                        dataset_hf_filename=entry["dataset_hf_filename"],
+                        dataset_hf_repo_type=entry["dataset_hf_repo_type"],
+                        dataset_size=entry["dataset_size"],
+                    ))
+            if organization.data_packages:
+                organizations.append(organization)
+
+            self.save_state()
+        return (organizations, bool(organizations))
+
+    async def monitor_datasets(self):
+        """Monitor datasets for updates."""
+        json_data = await self.fetch_organization_data_reference(
+            self.config.datasets_config_hf_repo_id
+        )
+        organizations, has_updates = await self.check_for_organizations_data_updates(
+            json_data
+        )
+        if has_updates:
+            bt.logging.info(f"New data packages found: {organizations}")
+            # TODO (dev): Implement data package download and schedule competition
+
     def save_state(self):
         """Saves the state of the validator to a file."""
         bt.logging.debug("Saving validator state.")
@@ -219,6 +288,9 @@ class Validator(BaseValidatorNeuron):
         if not getattr(self, "chain_models_store", None):
             self.chain_models_store = ChainMinerModelStore(hotkeys={})
             bt.logging.debug("Chain model store empty, creating new one")
+        if not getattr(self, "organizations_data_reference", None):
+            self.organizations_data_index_reference = {}
+            bt.logging.debug("Organizations data index reference empty, creating new one")
 
         np.savez(
             self.config.neuron.full_path + "/state.npz",
@@ -227,6 +299,7 @@ class Validator(BaseValidatorNeuron):
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
             chain_models_store=self.chain_models_store.model_dump(),
+            organizations_data_index_reference=self.organizations_data_index_reference,
         )
 
     def create_empty_state(self):
@@ -238,6 +311,7 @@ class Validator(BaseValidatorNeuron):
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
             chain_models_store=self.chain_models_store.model_dump(),
+            organizations_data_index_reference=self.organizations_data_index_reference,
         )
         return
 
@@ -265,6 +339,9 @@ class Validator(BaseValidatorNeuron):
             self.chain_models_store = ChainMinerModelStore.model_validate(
                 state["chain_models_store"].item()
             )
+            self.organizations_data_index_reference = state[
+                "organizations_data_index_reference"
+            ].item()
         except Exception as e:
             bt.logging.error(f"Error loading state: {e}")
             self.create_empty_state()
