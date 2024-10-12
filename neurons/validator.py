@@ -23,11 +23,12 @@ import asyncio
 import os
 import traceback
 import json
+import yaml
 
 import bittensor as bt
 import numpy as np
 import wandb
-from huggingface_hub import hf_hub_list, hf_hub_download
+from huggingface_hub import HfApi, hf_hub_download
 
 from cancer_ai.chain_models_store import ChainModelMetadata, ChainMinerModelStore
 from cancer_ai.validator.rewarder import CompetitionWinnersStore, Rewarder, Score
@@ -41,6 +42,7 @@ from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.models import (
     DataPackageReference,
     OrganizationDataReference,
+    OrganizationDataReferenceFactory,
 )
 
 RUN_EVERY_N_MINUTES = 15  # TODO move to config
@@ -208,68 +210,104 @@ class Validator(BaseValidatorNeuron):
         ]
         self.save_state()
 
-    async def fetch_organization_data_reference(self, repo_id: str) -> list[dict]:
-        """Fetch JSON data for organizations data reference from a Hugging Face repo."""
-        files = hf_hub_list(self.config.datasets_config_hf_repo_id)
-        json_data_list = []
-        
+    async def fetch_organization_data_references(self):
+        api = HfApi()
+
+        files = api.list_repo_tree(
+            repo_id=self.config.datasets_config_hf_repo_id,
+            repo_type="space",
+            token=self.config.hf_token,
+            recursive=True,
+            expand=True,
+        )
+
+        yaml_files = []
+
         for file_info in files:
-            file_name = file_info.rfilename
+            if file_info.__class__.__name__ == 'RepoFile':
+                file_path = file_info.path
+
+                if file_path.startswith('datasets/') and file_path.endswith('.yaml'):
+                    local_file_path = hf_hub_download(
+                        repo_id=self.config.datasets_config_hf_repo_id,
+                        repo_type="space",
+                        token=self.config.hf_token,
+                        filename=file_path,
+                    )
+
+                    last_commit_info = file_info.last_commit
+                    commit_date = last_commit_info.date if last_commit_info else None
+
+                    if commit_date is not None:
+                        date_uploaded = commit_date
+                    else:
+                        bt.logging.warning(f"Could not get the last commit date for {file_path}")
+                        date_uploaded = None
+
+                    with open(local_file_path, 'r') as f:
+                        yaml_data = yaml.safe_load(f)
+
+                    yaml_files.append({
+                        'file_name': file_path,
+                        'yaml_data': yaml_data,
+                        'date_uploaded': date_uploaded
+                    })
+            else:
+                continue
+        return yaml_files
+    
+    async def check_for_organizations_data_updates(self, fetched_yaml_files: list[dict]) -> bool:
+        factory = OrganizationDataReferenceFactory.get_instance()
+        updated = False
+
+        for file in fetched_yaml_files:
+            yaml_data = file['yaml_data']
+            date_uploaded = file['date_uploaded']
+
+            org_id = yaml_data[0]['organization_id']
+            existing_org = next((org for org in factory.organizations if org.organization_id == org_id), None)
+
+            if not existing_org:
+                updated = True
+                break
             
-            if file_name.endswith('.json'):
-                file_path = hf_hub_download(repo_id, file_name)
-                
-                with open(file_path, 'r') as f:
-                    json_data = json.load(f)
-                    json_data_list.extend(json_data)
+            if existing_org and date_uploaded != existing_org.date_uploaded:
+                updated = True
+                break
 
-        return json_data_list
+        return updated
 
-    async def check_for_organizations_data_updates(
-        self,
-        json_data: list[dict],
-    ) -> tuple[list[OrganizationDataReference], bool]:
-        organizations: list[OrganizationDataReference] = []
-        
-        for org in json_data:
-            org_id = org[0]["organization_id"]
-            organization = OrganizationDataReference(
-                organization_id=org_id,
-                contact_email=org[0]["contact_email"],
-                bittensor_hotkey=org[0]["bittensor_hotkey"],
-                data_packages=[],
+    async def update_organizations_data_references(self, fetched_yaml_files: list[dict]):
+        factory = OrganizationDataReferenceFactory.get_instance()
+        factory.organizations.clear()
+
+        for file in fetched_yaml_files:
+            yaml_data = file['yaml_data']
+            new_org = OrganizationDataReference(
+                organization_id=yaml_data[0]['organization_id'],
+                contact_email=yaml_data[0]['contact_email'],
+                bittensor_hotkey=yaml_data[0]['bittensor_hotkey'],
+                data_packages=[
+                    DataPackageReference(
+                        competition_id=dp['competition_id'],
+                        dataset_hf_repo=dp['dataset_hf_repo'],
+                        dataset_hf_filename=dp['dataset_hf_filename'],
+                        dataset_hf_repo_type=dp['dataset_hf_repo_type'],
+                        dataset_size=dp['dataset_size']
+                    )
+                    for dp in yaml_data
+                ],
+                date_uploaded=file['date_uploaded']
             )
-
-            if org_id not in self.organizations_data_index_reference:
-                self.organizations_data_index_reference[org_id] = 0
-
-            current_index = self.organizations_data_index_reference[org_id]
-            if current_index < len(org):
-                for entry in org[current_index:]:
-                    self.organizations_data_index_reference[org_id] += 1
-                    organization.data_packages.append(DataPackageReference(
-                        competition_id=entry["competition_id"],
-                        dataset_hf_repo=entry["dataset_hf_repo"],
-                        dataset_hf_filename=entry["dataset_hf_filename"],
-                        dataset_hf_repo_type=entry["dataset_hf_repo_type"],
-                        dataset_size=entry["dataset_size"],
-                    ))
-            if organization.data_packages:
-                organizations.append(organization)
-
-            self.save_state()
-        return (organizations, bool(organizations))
+            factory.add_organizations([new_org])
 
     async def monitor_datasets(self):
-        """Monitor datasets for updates."""
-        json_data = await self.fetch_organization_data_reference(
-            self.config.datasets_config_hf_repo_id
-        )
-        organizations, has_updates = await self.check_for_organizations_data_updates(
-            json_data
-        )
+        """Monitor datasets references for updates."""
+        yaml_data = await self.fetch_organization_data_references()
+        has_updates = await self.check_for_organizations_data_updates(yaml_data)
         if has_updates:
-            bt.logging.info(f"New data packages found: {organizations}")
+            await self.update_organizations_data_references(yaml_data)
+            bt.logging.info(f"New data packages found. Starting competitions.")
             # TODO (dev): Implement data package download and schedule competition
 
     def save_state(self):
@@ -288,9 +326,6 @@ class Validator(BaseValidatorNeuron):
         if not getattr(self, "chain_models_store", None):
             self.chain_models_store = ChainMinerModelStore(hotkeys={})
             bt.logging.debug("Chain model store empty, creating new one")
-        if not getattr(self, "organizations_data_reference", None):
-            self.organizations_data_index_reference = {}
-            bt.logging.debug("Organizations data index reference empty, creating new one")
 
         np.savez(
             self.config.neuron.full_path + "/state.npz",
@@ -299,7 +334,6 @@ class Validator(BaseValidatorNeuron):
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
             chain_models_store=self.chain_models_store.model_dump(),
-            organizations_data_index_reference=self.organizations_data_index_reference,
         )
 
     def create_empty_state(self):
@@ -311,7 +345,6 @@ class Validator(BaseValidatorNeuron):
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
             chain_models_store=self.chain_models_store.model_dump(),
-            organizations_data_index_reference=self.organizations_data_index_reference,
         )
         return
 
@@ -339,9 +372,6 @@ class Validator(BaseValidatorNeuron):
             self.chain_models_store = ChainMinerModelStore.model_validate(
                 state["chain_models_store"].item()
             )
-            self.organizations_data_index_reference = state[
-                "organizations_data_index_reference"
-            ].item()
         except Exception as e:
             bt.logging.error(f"Error loading state: {e}")
             self.create_empty_state()

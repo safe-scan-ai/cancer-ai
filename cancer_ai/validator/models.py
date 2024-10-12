@@ -1,6 +1,15 @@
-from typing import List
+from typing import List, ClassVar, Optional
 from pydantic import BaseModel, EmailStr, Field, ValidationError
+from datetime import datetime
 import yaml
+
+class SingletonMeta(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(SingletonMeta, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
 
 class CompetitionModel(BaseModel):
     competition_id: str
@@ -26,3 +35,16 @@ class OrganizationDataReference(BaseModel):
     contact_email: EmailStr = Field(..., description="Contact email address for the organization")
     bittensor_hotkey: str = Field(..., min_length=1, description="Hotkey associated with the organization")
     data_packages: List[DataPackageReference] = Field(..., description="List of data packages for the organization")
+    date_uploaded: datetime = Field(..., description="Date the organization data was uploaded")
+
+class OrganizationDataReferenceFactory(BaseModel):
+    organizations: List[OrganizationDataReference] = Field(default_factory=list)
+    _instance: ClassVar[Optional["OrganizationDataReferenceFactory"]] = None
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def add_organizations(self, organizations: List[OrganizationDataReference]):
+        self.organizations.extend(organizations)

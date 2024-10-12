@@ -323,7 +323,7 @@ def add_validator_args(cls, parser):
         "--datasets_config_hf_repo_id",
         type=str,
         help="The reference to Hugging Face datasets config.",
-        default=""
+        default="safescanai/competition-configuration-testnet"
     )
 
 def path_config(cls=None):
