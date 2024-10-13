@@ -28,20 +28,21 @@ import bittensor as bt
 import numpy as np
 import wandb
 
-from cancer_ai.chain_models_store import ChainModelMetadata, ChainMinerModelStore
+from cancer_ai.chain_models_store import ChainModelMetadata
 from cancer_ai.validator.rewarder import CompetitionWinnersStore, Rewarder, Score
 from cancer_ai.base.base_validator import BaseValidatorNeuron
-from cancer_ai.validator.competition_manager import CompetitionManager
 from competition_runner import (
     get_competitions_schedule,
     run_competitions_tick,
     CompetitionRunStore,
 )
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
+from cancer_ai.validator.model_db import ModelDBController
 
 RUN_EVERY_N_MINUTES = 15  # TODO move to config
 BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"
 BLACKLIST_FILE_PATH_TESTNET = "config/hotkey_blacklist_testnet.json"
+MODELS_QUERY_CUTOFF = 30 # minutes
 
 
 class Validator(BaseValidatorNeuron):
@@ -49,12 +50,13 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
+        self.db_controller = ModelDBController(self.subtensor, self.config.db_path)
         self.competition_scheduler = get_competitions_schedule(
             bt_config = self.config,
             subtensor = self.subtensor,
-            chain_models_store = self.chain_models_store,
             hotkeys = self.hotkeys,
             validator_hotkey = self.hotkey,
+            db_controller = self.db_controller,
             test_mode = False,
         )
         bt.logging.info(f"Scheduler config: {self.competition_scheduler}")
@@ -63,6 +65,7 @@ class Validator(BaseValidatorNeuron):
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
         )
+        self.last_miners_refresh: float
 
     async def concurrent_forward(self):
         coroutines = [
@@ -73,11 +76,11 @@ class Validator(BaseValidatorNeuron):
 
     async def refresh_miners(self):
         """
-        downloads miner's models  from the chain and updates the local store
+        Downloads miner's models from the chain and stores them in the DB
         """
 
-        if self.chain_models_store.last_updated is not None and (
-            time.time() - self.chain_models_store.last_updated
+        if self.last_miners_refresh is not None and (
+            time.time() - self.last_miners_refresh
             < RUN_EVERY_N_MINUTES * 60
         ):
             bt.logging.debug("Skipping model refresh, not enough time passed")
@@ -100,33 +103,24 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.debug(f"Skipping blacklisted hotkey {hotkey}")
                 continue
 
-        new_chain_miner_store = ChainMinerModelStore(hotkeys={})
-        for hotkey in self.hotkeys:
             hotkey = str(hotkey)
-
-            # TODO add test mode for syncing just once. Then you have to delete state.npz file to sync again
-            # if hotkey in self.chain_models_store.hotkeys:
-            #     bt.logging.debug(f"Skipping hotkey {hotkey}, already added")
-            #     continue
-
-            hotkey_metadata = await self.chain_models.retrieve_model_metadata(hotkey)
-            if not hotkey_metadata:
+            chain_model_metadata = await self.chain_models.retrieve_model_metadata(hotkey)
+            if not chain_model_metadata:
                 bt.logging.warning(
                     f"Cannot get miner model for hotkey {hotkey} from the chain, skipping"
-                )
-            new_chain_miner_store.hotkeys[hotkey] = hotkey_metadata
+                    )
+                continue
+            try:
+                self.db_controller.add_model(chain_model_metadata, hotkey)
+            except Exception as e:
+                bt.logging.error(f"An error occured while trying to persist the model info: {e}")
 
-        self.chain_models_store = new_chain_miner_store
-        hotkeys_with_models = [
-            hotkey
-            for hotkey in self.chain_models_store.hotkeys
-            if self.chain_models_store.hotkeys[hotkey]
-        ]
-
+        self.db_controller.clean_old_records(self.hotkeys)
+        latest_models = self.db_controller.get_latest_models(self.hotkeys, MODELS_QUERY_CUTOFF)
         bt.logging.info(
-            f"Amount of miners: {len(self.chain_models_store.hotkeys)},  with models: {len(hotkeys_with_models)}"
+            f"Amount of miners with models: {len(latest_models)}"
         )
-        self.chain_models_store.last_updated = time.time()
+        self.last_miners_refresh = time.time()
         self.save_state()
 
     async def competition_loop_tick(self):
@@ -138,7 +132,6 @@ class Validator(BaseValidatorNeuron):
         self.competition_scheduler = get_competitions_schedule(
             bt_config = self.config,
             subtensor = self.subtensor,
-            chain_models_store = self.chain_models_store,
             hotkeys = self.hotkeys,
             validator_hotkey = self.hotkey,
             test_mode = False,
@@ -216,9 +209,6 @@ class Validator(BaseValidatorNeuron):
         if not getattr(self, "run_log", None):
             self.run_log = CompetitionRunStore(runs=[])
             bt.logging.debug("Competition run store empty, creating new one")
-        if not getattr(self, "chain_models_store", None):
-            self.chain_models_store = ChainMinerModelStore(hotkeys={})
-            bt.logging.debug("Chain model store empty, creating new one")
 
         np.savez(
             self.config.neuron.full_path + "/state.npz",
@@ -226,7 +216,6 @@ class Validator(BaseValidatorNeuron):
             hotkeys=self.hotkeys,
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
-            chain_models_store=self.chain_models_store.model_dump(),
         )
 
     def create_empty_state(self):
@@ -237,7 +226,6 @@ class Validator(BaseValidatorNeuron):
             hotkeys=self.hotkeys,
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
-            chain_models_store=self.chain_models_store.model_dump(),
         )
         return
 
@@ -254,17 +242,12 @@ class Validator(BaseValidatorNeuron):
             state = np.load(
                 self.config.neuron.full_path + "/state.npz", allow_pickle=True
             )
-            bt.logging.trace(state["chain_models_store"])
             self.scores = state["scores"]
             self.hotkeys = state["hotkeys"]
             self.winners_store = CompetitionWinnersStore.model_validate(
                 state["winners_store"].item()
             )
             self.run_log = CompetitionRunStore.model_validate(state["run_log"].item())
-            bt.logging.debug(state["chain_models_store"].item())
-            self.chain_models_store = ChainMinerModelStore.model_validate(
-                state["chain_models_store"].item()
-            )
         except Exception as e:
             bt.logging.error(f"Error loading state: {e}")
             self.create_empty_state()
