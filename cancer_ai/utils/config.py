@@ -299,6 +299,13 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--db_path",
+        type=str,
+        help="Path to the sqlite DB for storing the miners models reference",
+        default="models.db"
+    )
+
+    parser.add_argument(
         "--wandb_project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
