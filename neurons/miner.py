@@ -135,6 +135,8 @@ class MinerManagerCLI:
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
         self.metagraph = self.subtensor.metagraph(self.config.netuid)
+        self.hotkey = self.wallet.hotkey.ss58_address
+
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
         bt.logging.info(f"Metagraph: {self.metagraph}")
@@ -180,6 +182,7 @@ class MinerManagerCLI:
             hf_repo_type=self.config.hf_repo_type,
             hf_code_filename=self.config.hf_code_filename,
             block=None,
+            hotkey=self.hotkey,
         )
         await self.metadata_store.store_model_metadata(model_id)
         bt.logging.success(

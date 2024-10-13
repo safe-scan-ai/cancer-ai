@@ -90,9 +90,8 @@ python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-ho
 ```bash
 # from root
 apt install software-properties-common -y
-add-apt-repository ppa:deadsnakes/ppa
 apt update
-apt install python3.10 python3.10-venv python3.10-dev python3-pip unzip
+apt install python3.12 python3.12-venv python3.12-dev python3-pip unzip
 apt install python3-virtualenv git nodejs npm
 
 npm install pm2 -g

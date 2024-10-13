@@ -3,9 +3,7 @@ from typing import Optional, Type
 
 import bittensor as bt
 from pydantic import BaseModel, Field
-
 from .utils.models_storage_utils import run_in_subprocess
-
 
 class ChainMinerModel(BaseModel):
     """Uniquely identifies a trained model"""
@@ -22,19 +20,22 @@ class ChainMinerModel(BaseModel):
     block: Optional[int] = Field(
         description="Block on which this model was claimed on the chain."
     )
+    hotkey: Optional[str] = Field(
+        description="Hotkey of the model owner"
+    )
 
     class Config:
         arbitrary_types_allowed = True
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
-        return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}"
+        return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}:{self.hotkey}"
 
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ChainMinerModel"]:
         """Returns an instance of this class from a compressed string representation"""
         tokens = cs.split(":")
-        if len(tokens) != 5:
+        if len(tokens) != 6:
             return None
         return cls(
             hf_repo_id=tokens[0],
@@ -42,14 +43,9 @@ class ChainMinerModel(BaseModel):
             hf_code_filename=tokens[2],
             competition_id=tokens[3],
             hf_repo_type=tokens[4],
+            hotkey=tokens[5],
             block=None,
         )
-
-
-class ChainMinerModelStore(BaseModel):
-    hotkeys: dict[str, ChainMinerModel | None]
-    last_updated: float | None = None
-
 
 class ChainModelMetadata:
     """Chain based implementation for storing and retrieving metadata about a model."""

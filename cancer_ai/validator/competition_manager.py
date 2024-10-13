@@ -10,6 +10,7 @@ from .model_manager import ModelManager, ModelInfo
 from .dataset_manager import DatasetManager
 from .model_run_manager import ModelRunManager
 from .exceptions import ModelRunException
+from .model_db import ModelDBController
 
 from .competition_handlers.melanoma_handler import MelanomaCompetitionHandler
 from .competition_handlers.base_handler import ModelEvaluationResult
@@ -17,7 +18,6 @@ from .tests.mock_data import get_mock_hotkeys_with_models
 from cancer_ai.chain_models_store import (
     ChainModelMetadata,
     ChainMinerModel,
-    ChainMinerModelStore,
 )
 
 load_dotenv()
@@ -49,12 +49,12 @@ class CompetitionManager(SerializableManager):
         subtensor: bt.subtensor,
         hotkeys: list[str],
         validator_hotkey: str,
-        chain_miners_store: ChainMinerModelStore,
         competition_id: str,
         category: str,
         dataset_hf_repo: str,
         dataset_hf_id: str,
         dataset_hf_repo_type: str,
+        db_controller: ModelDBController,
         test_mode: bool = False,
     ) -> None:
         """
@@ -85,7 +85,7 @@ class CompetitionManager(SerializableManager):
 
         self.hotkeys = hotkeys
         self.validator_hotkey = validator_hotkey
-        self.chain_miners_store = chain_miners_store
+        self.db_controller = db_controller
         self.test_mode = test_mode
 
     def __repr__(self) -> str:
@@ -157,20 +157,16 @@ class CompetitionManager(SerializableManager):
         """
         bt.logging.info("Selecting models for competition")
         bt.logging.info(f"Amount of hotkeys: {len(self.hotkeys)}")
-        for hotkey in self.chain_miners_store.hotkeys:
-            if self.chain_miners_store.hotkeys[hotkey] is None:
-                continue
+
+        latest_models = self.db_controller.get_latest_models(self.hotkeys)
+        for model in latest_models:
             try:
-                model_info = await self.chain_miner_to_model_info(
-                    self.chain_miners_store.hotkeys[hotkey]
-                )
+                model_info = await self.chain_miner_to_model_info(model)
             except ValueError:
                 bt.logging.warning(
-                    f"Miner {hotkey} does not belong to this competition, skipping"
+                    f"Miner {model.hotkey} does not belong to this competition, skipping"
                 )
-                continue
-            self.model_manager.hotkey_store[hotkey] = model_info
-
+            self.model_manager.hotkey_store[model.hotkey] = model_info
         bt.logging.info(
             f"Amount of hotkeys with valid models: {len(self.model_manager.hotkey_store)}"
         )

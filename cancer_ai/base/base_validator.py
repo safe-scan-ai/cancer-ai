@@ -38,8 +38,6 @@ from ..mock import MockDendrite
 from ..utils.config import add_validator_args
 
 from neurons.competition_runner import CompetitionRunStore
-from cancer_ai.chain_models_store import ChainMinerModelStore
-
 from cancer_ai.validator.rewarder import CompetitionWinnersStore
 from .. import __spec_version__ as spec_version
 
@@ -76,7 +74,6 @@ class BaseValidatorNeuron(BaseNeuron):
         self.winners_store = CompetitionWinnersStore(
             competition_leader_map={}, hotkey_score_map={}
         )
-        self.chain_models_store = ChainMinerModelStore(hotkeys={})
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()

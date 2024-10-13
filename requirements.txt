@@ -150,3 +150,5 @@ Werkzeug==3.0.3
 wrapt==1.16.0
 xxhash==3.4.1
 yarl==1.9.4
+sqlalchemy==1.4.0
+
