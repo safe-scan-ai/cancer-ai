@@ -1,15 +1,6 @@
 from typing import List, ClassVar, Optional
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 from datetime import datetime
-import yaml
-
-class SingletonMeta(type):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(SingletonMeta, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
 
 class CompetitionModel(BaseModel):
     competition_id: str
@@ -23,7 +14,7 @@ class CompetitionModel(BaseModel):
 class CompetitionsListModel(BaseModel):
     competitions: List[CompetitionModel]
 
-class DataPackageReference(BaseModel):
+class DatasetReference(BaseModel):
     competition_id: str = Field(..., min_length=1, description="Competition identifier")
     dataset_hf_repo: str = Field(..., min_length=1, description="Hugging Face repository path for the dataset")
     dataset_hf_filename: str = Field(..., min_length=1, description="Filename for the dataset in the repository")
@@ -34,7 +25,7 @@ class OrganizationDataReference(BaseModel):
     organization_id: str = Field(..., min_length=1, description="Unique identifier for the organization")
     contact_email: EmailStr = Field(..., description="Contact email address for the organization")
     bittensor_hotkey: str = Field(..., min_length=1, description="Hotkey associated with the organization")
-    data_packages: List[DataPackageReference] = Field(..., description="List of data packages for the organization")
+    data_packages: List[DatasetReference] = Field(..., description="List of data packages for the organization")
     date_uploaded: datetime = Field(..., description="Date the organization data was uploaded")
 
 class OrganizationDataReferenceFactory(BaseModel):

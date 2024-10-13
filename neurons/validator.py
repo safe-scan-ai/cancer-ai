@@ -23,12 +23,10 @@ import asyncio
 import os
 import traceback
 import json
-import yaml
 
 import bittensor as bt
 import numpy as np
 import wandb
-from huggingface_hub import HfApi, hf_hub_download
 
 from cancer_ai.chain_models_store import ChainModelMetadata, ChainMinerModelStore
 from cancer_ai.validator.rewarder import CompetitionWinnersStore, Rewarder, Score
@@ -39,10 +37,10 @@ from competition_runner import (
     CompetitionRunStore,
 )
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
-from cancer_ai.validator.models import (
-    DataPackageReference,
-    OrganizationDataReference,
-    OrganizationDataReferenceFactory,
+from cancer_ai.validator.utils import (
+    fetch_organization_data_references,
+    check_for_organizations_data_updates,
+    update_organizations_data_references,
 )
 
 RUN_EVERY_N_MINUTES = 15  # TODO move to config
@@ -210,103 +208,15 @@ class Validator(BaseValidatorNeuron):
         ]
         self.save_state()
 
-    async def fetch_organization_data_references(self):
-        api = HfApi()
-
-        files = api.list_repo_tree(
-            repo_id=self.config.datasets_config_hf_repo_id,
-            repo_type="space",
-            token=self.config.hf_token,
-            recursive=True,
-            expand=True,
-        )
-
-        yaml_files = []
-
-        for file_info in files:
-            if file_info.__class__.__name__ == 'RepoFile':
-                file_path = file_info.path
-
-                if file_path.startswith('datasets/') and file_path.endswith('.yaml'):
-                    local_file_path = hf_hub_download(
-                        repo_id=self.config.datasets_config_hf_repo_id,
-                        repo_type="space",
-                        token=self.config.hf_token,
-                        filename=file_path,
-                    )
-
-                    last_commit_info = file_info.last_commit
-                    commit_date = last_commit_info.date if last_commit_info else None
-
-                    if commit_date is not None:
-                        date_uploaded = commit_date
-                    else:
-                        bt.logging.warning(f"Could not get the last commit date for {file_path}")
-                        date_uploaded = None
-
-                    with open(local_file_path, 'r') as f:
-                        yaml_data = yaml.safe_load(f)
-
-                    yaml_files.append({
-                        'file_name': file_path,
-                        'yaml_data': yaml_data,
-                        'date_uploaded': date_uploaded
-                    })
-            else:
-                continue
-        return yaml_files
-    
-    async def check_for_organizations_data_updates(self, fetched_yaml_files: list[dict]) -> bool:
-        factory = OrganizationDataReferenceFactory.get_instance()
-        updated = False
-
-        for file in fetched_yaml_files:
-            yaml_data = file['yaml_data']
-            date_uploaded = file['date_uploaded']
-
-            org_id = yaml_data[0]['organization_id']
-            existing_org = next((org for org in factory.organizations if org.organization_id == org_id), None)
-
-            if not existing_org:
-                updated = True
-                break
-            
-            if existing_org and date_uploaded != existing_org.date_uploaded:
-                updated = True
-                break
-
-        return updated
-
-    async def update_organizations_data_references(self, fetched_yaml_files: list[dict]):
-        factory = OrganizationDataReferenceFactory.get_instance()
-        factory.organizations.clear()
-
-        for file in fetched_yaml_files:
-            yaml_data = file['yaml_data']
-            new_org = OrganizationDataReference(
-                organization_id=yaml_data[0]['organization_id'],
-                contact_email=yaml_data[0]['contact_email'],
-                bittensor_hotkey=yaml_data[0]['bittensor_hotkey'],
-                data_packages=[
-                    DataPackageReference(
-                        competition_id=dp['competition_id'],
-                        dataset_hf_repo=dp['dataset_hf_repo'],
-                        dataset_hf_filename=dp['dataset_hf_filename'],
-                        dataset_hf_repo_type=dp['dataset_hf_repo_type'],
-                        dataset_size=dp['dataset_size']
-                    )
-                    for dp in yaml_data
-                ],
-                date_uploaded=file['date_uploaded']
-            )
-            factory.add_organizations([new_org])
-
     async def monitor_datasets(self):
         """Monitor datasets references for updates."""
-        yaml_data = await self.fetch_organization_data_references()
-        has_updates = await self.check_for_organizations_data_updates(yaml_data)
+        yaml_data = fetch_organization_data_references(
+            self.config.datasets_config_hf_repo_id,
+            self.config.hf_token
+            )
+        has_updates = check_for_organizations_data_updates(yaml_data)
         if has_updates:
-            await self.update_organizations_data_references(yaml_data)
+            await update_organizations_data_references(yaml_data)
             bt.logging.info(f"New data packages found. Starting competitions.")
             # TODO (dev): Implement data package download and schedule competition
 
