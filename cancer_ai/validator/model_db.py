@@ -198,5 +198,4 @@ class ModelDBController:
             hf_repo_type=model_record.hf_repo_type,
             hf_code_filename=model_record.hf_code_filename,
             block=model_record.block,
-            hotkey=model_record.hotkey,
         )
