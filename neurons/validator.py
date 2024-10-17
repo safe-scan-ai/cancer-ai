@@ -205,15 +205,17 @@ class Validator(BaseValidatorNeuron):
 
     async def monitor_datasets(self):
         """Monitor datasets references for updates."""
-        yaml_data = fetch_organization_data_references(
+        yaml_data = await fetch_organization_data_references(
             self.config.datasets_config_hf_repo_id,
             self.config.hf_token
             )
-        has_updates = check_for_organizations_data_updates(yaml_data)
+        has_updates = await check_for_organizations_data_updates(yaml_data)
         if has_updates:
             await update_organizations_data_references(yaml_data)
             bt.logging.info(f"New data packages found. Starting competitions.")
             # TODO (dev): Implement data package download and schedule competition
+        else:
+            bt.logging.info(f"No new data packages found.")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
