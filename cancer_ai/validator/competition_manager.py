@@ -131,7 +131,7 @@ class CompetitionManager(SerializableManager):
 
     async def chain_miner_to_model_info(
         self, chain_miner_model: ChainMinerModel
-    ) -> ModelInfo | None:
+    ) -> ModelInfo:
         bt.logging.warning(f"Chain miner model: {chain_miner_model.model_dump()}")
         if chain_miner_model.competition_id != self.competition_id:
             bt.logging.debug(
@@ -159,14 +159,15 @@ class CompetitionManager(SerializableManager):
         bt.logging.info(f"Amount of hotkeys: {len(self.hotkeys)}")
 
         latest_models = self.db_controller.get_latest_models(self.hotkeys)
-        for model in latest_models:
+        for hotkey, model in latest_models:
             try:
                 model_info = await self.chain_miner_to_model_info(model)
             except ValueError:
                 bt.logging.warning(
-                    f"Miner {model.hotkey} does not belong to this competition, skipping"
+                    f"Miner {hotkey} does not belong to this competition, skipping"
                 )
-            self.model_manager.hotkey_store[model.hotkey] = model_info
+                continue
+            self.model_manager.hotkey_store[hotkey] = model_info
         bt.logging.info(
             f"Amount of hotkeys with valid models: {len(self.model_manager.hotkey_store)}"
         )
