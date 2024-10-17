@@ -119,7 +119,7 @@ class ModelDBController:
             bt.logging.error(f"Error retrieving block timestamp: {e}")
             raise
 
-    def get_latest_models(self, hotkeys: list[str], cutoff_time: float = None) -> list[ChainMinerModel]:
+    def get_latest_models(self, hotkeys: list[str], cutoff_time: float = None) -> list[tuple[ChainMinerModel, str]]:
         cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
         session = self.Session()
         try:
@@ -135,7 +135,8 @@ class ModelDBController:
                 )
                 if model_record:
                     latest_models.append(
-                        self.convert_db_model_to_chain_model(model_record)
+                        self.convert_db_model_to_chain_model(model_record),
+                        hotkey,
                     )
 
             return latest_models
