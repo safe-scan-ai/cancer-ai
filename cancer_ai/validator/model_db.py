@@ -135,8 +135,7 @@ class ModelDBController:
                 )
                 if model_record:
                     latest_models.append(
-                        self.convert_db_model_to_chain_model(model_record),
-                        hotkey,
+                        (self.convert_db_model_to_chain_model(model_record), hotkey)
                     )
 
             return latest_models
