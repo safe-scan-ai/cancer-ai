@@ -31,7 +31,7 @@ class ChainMinerModel(BaseModel):
     def from_compressed_str(cls, cs: str) -> Type["ChainMinerModel"]:
         """Returns an instance of this class from a compressed string representation"""
         tokens = cs.split(":")
-        if len(tokens) != 6:
+        if len(tokens) != 5:
             return None
         return cls(
             hf_repo_id=tokens[0],
