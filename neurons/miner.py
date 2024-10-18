@@ -176,13 +176,12 @@ class MinerManagerCLI:
 
         # Push model metadata to chain
         model_id = ChainMinerModel(
-            competition_id=self.config.competition.id,
+            competition_id=self.config.competition_id,
             hf_repo_id=self.config.hf_repo_id,
             hf_model_filename=self.config.hf_model_name,
             hf_repo_type=self.config.hf_repo_type,
             hf_code_filename=self.config.hf_code_filename,
             block=None,
-            hotkey=self.hotkey,
         )
         await self.metadata_store.store_model_metadata(model_id)
         bt.logging.success(

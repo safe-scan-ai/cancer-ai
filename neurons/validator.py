@@ -65,7 +65,7 @@ class Validator(BaseValidatorNeuron):
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
         )
-        self.last_miners_refresh: float
+        self.last_miners_refresh: float = None
 
     async def concurrent_forward(self):
         coroutines = [
@@ -134,6 +134,7 @@ class Validator(BaseValidatorNeuron):
             subtensor = self.subtensor,
             hotkeys = self.hotkeys,
             validator_hotkey = self.hotkey,
+            db_controller=self.db_controller,
             test_mode = False,
         )
         try:
