@@ -20,22 +20,18 @@ class ChainMinerModel(BaseModel):
     block: Optional[int] = Field(
         description="Block on which this model was claimed on the chain."
     )
-    hotkey: Optional[str] = Field(
-        description="Hotkey of the model owner"
-    )
-
     class Config:
         arbitrary_types_allowed = True
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
-        return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}:{self.hotkey}"
+        return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}"
 
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ChainMinerModel"]:
         """Returns an instance of this class from a compressed string representation"""
         tokens = cs.split(":")
-        if len(tokens) != 6:
+        if len(tokens) != 5:
             return None
         return cls(
             hf_repo_id=tokens[0],
@@ -43,7 +39,6 @@ class ChainMinerModel(BaseModel):
             hf_code_filename=tokens[2],
             competition_id=tokens[3],
             hf_repo_type=tokens[4],
-            hotkey=tokens[5],
             block=None,
         )
 

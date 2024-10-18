@@ -119,12 +119,12 @@ class ModelDBController:
             bt.logging.error(f"Error retrieving block timestamp: {e}")
             raise
 
-    def get_latest_models(self, hotkeys: list[str], cutoff_time: float = None) -> list[ChainMinerModel]:
+    def get_latest_models(self, hotkeys: list[str], cutoff_time: float = None) -> dict[str, ChainMinerModel]:
         cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
         session = self.Session()
         try:
             # Use a correlated subquery to get the latest record for each hotkey that doesn't violate the cutoff
-            latest_models = []
+            latest_models_to_hotkeys = {}
             for hotkey in hotkeys:
                 model_record = (
                     session.query(ChainMinerModelDB)
@@ -134,11 +134,9 @@ class ModelDBController:
                     .first()  # Get the first (newest) record that meets the cutoff condition
                 )
                 if model_record:
-                    latest_models.append(
-                        self.convert_db_model_to_chain_model(model_record)
-                    )
+                    latest_models_to_hotkeys[hotkey] = self.convert_db_model_to_chain_model(model_record)
 
-            return latest_models
+            return latest_models_to_hotkeys
         finally:
             session.close()
 
@@ -198,5 +196,4 @@ class ModelDBController:
             hf_repo_type=model_record.hf_repo_type,
             hf_code_filename=model_record.hf_code_filename,
             block=model_record.block,
-            hotkey=model_record.hotkey,
         )
