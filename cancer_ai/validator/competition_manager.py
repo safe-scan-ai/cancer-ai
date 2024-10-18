@@ -159,7 +159,7 @@ class CompetitionManager(SerializableManager):
         bt.logging.info(f"Amount of hotkeys: {len(self.hotkeys)}")
 
         latest_models = self.db_controller.get_latest_models(self.hotkeys)
-        for hotkey, model in latest_models:
+        for hotkey, model in latest_models.items():
             try:
                 model_info = await self.chain_miner_to_model_info(model)
             except ValueError:
