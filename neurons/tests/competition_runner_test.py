@@ -14,6 +14,7 @@ from cancer_ai.utils.config import path_config
 from cancer_ai.validator.utils import get_competition_config
 from cancer_ai.mock import MockSubtensor
 from cancer_ai.validator.models import CompetitionsListModel, CompetitionModel
+from cancer_ai.validator.model_db import ModelDBController
 
 
 COMPETITION_FILEPATH = "config/competition_config_testnet.json"
@@ -34,6 +35,7 @@ test_config = SimpleNamespace(
             }
         ),
         "hf_token": "HF_TOKEN",
+        "db_path": "models.db",
     }
 )
 
@@ -55,13 +57,13 @@ async def run_competitions(
             subtensor=subtensor,
             hotkeys=hotkeys,
             validator_hotkey="Walidator",
-            chain_miners_store={},
             competition_id=competition_cfg.competition_id,
             category=competition_cfg.category,
             dataset_hf_repo=competition_cfg.dataset_hf_repo,
             dataset_hf_id=competition_cfg.dataset_hf_filename,
             dataset_hf_repo_type=competition_cfg.dataset_hf_repo_type,
             test_mode=True,
+            db_controller=ModelDBController(subtensor, test_config.db_path)
         )
         results[competition_cfg.competition_id] = await competition_manager.evaluate()
 
@@ -80,13 +82,13 @@ def config_for_scheduler(subtensor: bt.subtensor) -> Dict[str, CompetitionManage
                 subtensor=subtensor,
                 hotkeys=[],
                 validator_hotkey="Walidator",
-                chain_miners_store={},
                 competition_id=competition_cfg.competition_id,
                 category=competition_cfg.category,
                 dataset_hf_repo=competition_cfg.dataset_hf_repo,
                 dataset_hf_id=competition_cfg.dataset_hf_filename,
                 dataset_hf_repo_type=competition_cfg.dataset_hf_repo_type,
                 test_mode=True,
+                db_controller=ModelDBController(subtensor, test_config.db_path)
             )
     return time_arranged_competitions
 
