@@ -37,6 +37,11 @@ from competition_runner import (
     CompetitionRunStore,
 )
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
+from cancer_ai.validator.utils import (
+    fetch_organization_data_references,
+    check_for_organizations_data_updates,
+    update_organizations_data_references,
+)
 from cancer_ai.validator.model_db import ModelDBController
 
 RUN_EVERY_N_MINUTES = 15  # TODO move to config
@@ -65,12 +70,13 @@ class Validator(BaseValidatorNeuron):
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
         )
-        self.last_miners_refresh: float
+        self.last_miners_refresh: float = None
 
     async def concurrent_forward(self):
         coroutines = [
             self.refresh_miners(),
             self.competition_loop_tick(),
+            self.monitor_datasets(),
         ]
         await asyncio.gather(*coroutines)
 
@@ -134,6 +140,7 @@ class Validator(BaseValidatorNeuron):
             subtensor = self.subtensor,
             hotkeys = self.hotkeys,
             validator_hotkey = self.hotkey,
+            db_controller=self.db_controller,
             test_mode = False,
         )
         try:
@@ -195,6 +202,20 @@ class Validator(BaseValidatorNeuron):
             for hotkey in self.metagraph.hotkeys
         ]
         self.save_state()
+
+    async def monitor_datasets(self):
+        """Monitor datasets references for updates."""
+        yaml_data = await fetch_organization_data_references(
+            self.config.datasets_config_hf_repo_id,
+            self.config.hf_token
+            )
+        has_updates = await check_for_organizations_data_updates(yaml_data)
+        if has_updates:
+            await update_organizations_data_references(yaml_data)
+            bt.logging.info(f"New data packages found. Starting competitions.")
+            # TODO (dev): Implement data package download and schedule competition
+        else:
+            bt.logging.info(f"No new data packages found.")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
