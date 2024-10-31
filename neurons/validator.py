@@ -42,11 +42,6 @@ from cancer_ai.validator.utils import (
     check_for_organizations_data_updates,
     update_organizations_data_references,
 )
-from cancer_ai.validator.utils import (
-    fetch_organization_data_references,
-    check_for_organizations_data_updates,
-    update_organizations_data_references,
-)
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory
@@ -79,12 +74,11 @@ class Validator(BaseValidatorNeuron):
             self.subtensor, self.config.netuid, self.wallet
         )
         self.last_miners_refresh: float = None
-        self.last_monitor_datasets: float = None = None
+        self.last_monitor_datasets: float = None
 
     async def concurrent_forward(self):
         coroutines = [
             self.refresh_miners(),
-            self.monitor_datasets(),
             self.monitor_datasets(),
         ]
         await asyncio.gather(*coroutines)
@@ -150,7 +144,6 @@ class Validator(BaseValidatorNeuron):
             hotkeys = self.hotkeys,
             validator_hotkey = self.hotkey,
             db_controller=self.db_controller,
-            db_controller=self.db_controller,
             test_mode = False,
         )
         try:
@@ -209,7 +202,7 @@ class Validator(BaseValidatorNeuron):
             )
         
         # testing utility
-        # yaml_data = await fetch_yaml_data_from_local_repo()
+        # yaml_data = await fetch_yaml_data_from_local_repo("")
         
         list_of_data_references = await check_for_organizations_data_updates(yaml_data)
         if list_of_data_references:
@@ -230,7 +223,7 @@ class Validator(BaseValidatorNeuron):
                     dataset_hf_id=data_reference.dataset_hf_filename,
                     dataset_hf_repo_type=data_reference.dataset_hf_repo_type,
                     db_controller = self.db_controller,
-                    test_mode = False,
+                    test_mode = False, # Toggle to True for testing
                 )
 
                 try:
@@ -258,13 +251,9 @@ class Validator(BaseValidatorNeuron):
                     return
 
                 wandb.init(project=data_reference.competition_id, group="competition_evaluation")
-                run_time_s = (
-                    self.run_log.runs[-1].end_time - self.run_log.runs[-1].start_time
-                ).seconds
                 wandb.log(
                     {
                         "winning_hotkey": winning_hotkey,
-                        "run_time_s": run_time_s,
                         "validator_hotkey": self.wallet.hotkey.ss58_address,
                         "errors": "",
                     }
@@ -272,7 +261,7 @@ class Validator(BaseValidatorNeuron):
                 wandb.finish()
 
                 bt.logging.info(f"Competition result for {data_reference.competition_id}: {winning_hotkey}")
-                self.handle_competition_winner(winning_hotkey, data_reference.competition_id, winning_model_result)
+                await self.handle_competition_winner(winning_hotkey, data_reference.competition_id, winning_model_result)
         else:
             bt.logging.info(f"No new data packages found.")
 
@@ -296,25 +285,8 @@ class Validator(BaseValidatorNeuron):
         ]
         self.save_state()
 
-    async def monitor_datasets(self):
-        """Monitor datasets references for updates."""
-        yaml_data = await fetch_organization_data_references(
-            self.config.datasets_config_hf_repo_id,
-            self.config.hf_token
-            )
-        has_updates = await check_for_organizations_data_updates(yaml_data)
-        if has_updates:
-            await update_organizations_data_references(yaml_data)
-            bt.logging.info(f"New data packages found. Starting competitions.")
-            # TODO (dev): Implement data package download and schedule competition
-        else:
-            bt.logging.info(f"No new data packages found.")
-
     def save_state(self):
         """Saves the state of the validator to a file."""
-        bt.logging.debug("Saving validator state.")
-
-        # Save the state of the validator to file.
         if not getattr(self, "winners_store", None):
             self.winners_store = CompetitionWinnersStore(
                 competition_leader_map={}, hotkey_score_map={}
