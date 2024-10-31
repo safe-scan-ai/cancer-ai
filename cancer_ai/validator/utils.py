@@ -4,6 +4,7 @@ import asyncio
 import bittensor as bt
 import json
 import yaml
+import yaml
 from cancer_ai.validator.models import CompetitionsListModel, CompetitionModel
 from huggingface_hub import HfApi, hf_hub_download
 from cancer_ai.validator.models import (
@@ -12,6 +13,12 @@ from cancer_ai.validator.models import (
     OrganizationDataReferenceFactory,
 )
 from datetime import datetime
+from huggingface_hub import HfApi, hf_hub_download
+from cancer_ai.validator.models import (
+    DatasetReference,
+    OrganizationDataReference,
+    OrganizationDataReferenceFactory,
+)
 
 
 class ModelType(Enum):

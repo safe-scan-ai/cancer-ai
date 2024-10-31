@@ -1,5 +1,6 @@
-from typing import List, ClassVar, Optional
+from typing import List, ClassVar, Optional, ClassVar, Optional
 from pydantic import BaseModel, EmailStr, Field, ValidationError
+from datetime import datetime, EmailStr, Field, ValidationError
 from datetime import datetime
 
 class CompetitionModel(BaseModel):
