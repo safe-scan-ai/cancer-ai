@@ -63,12 +63,14 @@ class ModelDBController:
         finally:
             session.close()
 
-    def get_latest_model(self, hotkey: str):
+    def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel:
+        cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
         session = self.Session()
         try:
             model_record = (
                 session.query(ChainMinerModelDB)
                 .filter(ChainMinerModelDB.hotkey == hotkey)
+                .filter(ChainMinerModelDB.date_submitted < cutoff_time)
                 .order_by(ChainMinerModelDB.date_submitted.desc())
                 .first()
             )

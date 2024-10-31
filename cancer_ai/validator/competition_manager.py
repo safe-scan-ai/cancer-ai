@@ -71,7 +71,7 @@ class CompetitionManager(SerializableManager):
         self.competition_id = competition_id
         self.category = category
         self.results = []
-        self.model_manager = ModelManager(self.config)
+        self.model_manager = ModelManager(self.config, db_controller)
         self.dataset_manager = DatasetManager(
             self.config,
             competition_id,
