@@ -93,14 +93,14 @@ This mode performs the following tasks:
 To evaluate a model locally, use the following command:
 
 ```
-python neurons/miner.py --action evaluate --competition.id <COMPETITION ID> --model_path <NAME OF FILE WITH EXTENSION>
+python neurons/miner.py --action evaluate --competition_id <COMPETITION ID> --model_path <NAME OF FILE WITH EXTENSION>
 ```
 
 Command line argument explanation
 
 - `--action` - action to perform , choices are "upload", "evaluate", "submit"
 - `--model_path` - local path of ONNX model
-- `--competition.id` - ID of competition. List of current competitions are in [competition_config.json](config/competition_config.json)
+- `--competition_id` - ID of competition. List of current competitions are in [competition_config.json](config/competition_config.json)
 - `--clean-after-run` - it will delete dataset after evaluating the model
 
 ### Upload to HuggingFace
@@ -112,7 +112,7 @@ To upload to HuggingFace, use the following command:
 ```bash
 python neurons/miner.py \
     --action upload \
-    --competition.id <COMPETITION ID> \
+    --competition_id <COMPETITION ID> \
     --model_path <NAME OF FILE WITH EXTENSION> \
     --code_directory <CODE DIRECTORY WITHOUT DATASETS> \
     --hf_model_name <MODEL NAME WITH EXTENSION> \
@@ -137,7 +137,7 @@ To submit a model to validators, use the following command:
 ```
 python neurons/miner.py \
     --action submit \
-    --competition.id <COMPETITION ID> \
+    --competition_id <COMPETITION ID> \
     --hf_code_filename <HF FILE NAME WITH EXTENSION> \
     --hf_model_name <HF MODEL NAME WITH EXTENSION> \
     --hf_repo_id <HF REPO ID> \

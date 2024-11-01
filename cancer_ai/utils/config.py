@@ -209,7 +209,7 @@ def add_common_args(cls, parser):
         default="",
     )
     parser.add_argument(
-        "--competition.id",
+        "--competition_id",
         type=str,
         help="Path for storing competition participants models .",
     )
