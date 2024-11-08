@@ -50,7 +50,6 @@ class CompetitionManager(SerializableManager):
         hotkeys: list[str],
         validator_hotkey: str,
         competition_id: str,
-        category: str,
         dataset_hf_repo: str,
         dataset_hf_id: str,
         dataset_hf_repo_type: str,
@@ -63,13 +62,11 @@ class CompetitionManager(SerializableManager):
         Args:
         config (dict): Config dictionary.
         competition_id (str): Unique identifier for the competition.
-        category (str): Category of the competition.
         """
         bt.logging.trace(f"Initializing Competition: {competition_id}")
         self.config = config
         self.subtensor = subtensor
         self.competition_id = competition_id
-        self.category = category
         self.results = []
         self.model_manager = ModelManager(self.config, db_controller)
         self.dataset_manager = DatasetManager(
@@ -121,13 +118,11 @@ class CompetitionManager(SerializableManager):
         return {
             "competition_id": self.competition_id,
             "model_manager": self.model_manager.get_state(),
-            "category": self.category,
         }
 
     def set_state(self, state: dict):
         self.competition_id = state["competition_id"]
         self.model_manager.set_state(state["model_manager"])
-        self.category = state["category"]
 
     async def chain_miner_to_model_info(
         self, chain_miner_model: ChainMinerModel

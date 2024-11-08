@@ -94,6 +94,7 @@ def get_competition_config(path: str) -> CompetitionsListModel:
     return CompetitionsListModel(competitions=competitions)
 
 async def fetch_organization_data_references(hf_repo_id: str, hf_token: str) -> list[dict]:
+    bt.logging.trace(f"Fetching organization data references from Hugging Face repo {hf_repo_id}")
     api = HfApi()
 
     files = api.list_repo_tree(
@@ -165,7 +166,7 @@ async def fetch_yaml_data_from_local_repo(local_repo_path: str) -> list[dict]:
 
     return yaml_data
 
-async def check_for_organizations_data_updates(fetched_yaml_files: list[dict]) -> list[DatasetReference]:
+async def get_new_organization_data_updates(fetched_yaml_files: list[dict]) -> list[DatasetReference]:
     factory = OrganizationDataReferenceFactory.get_instance()
     data_references: list[DatasetReference] = []
 
@@ -199,6 +200,7 @@ async def check_for_organizations_data_updates(fetched_yaml_files: list[dict]) -
     return data_references
 
 async def update_organizations_data_references(fetched_yaml_files: list[dict]):
+    bt.logging.trace("Updating organizations data references")
     factory = OrganizationDataReferenceFactory.get_instance()
     factory.organizations.clear()
 

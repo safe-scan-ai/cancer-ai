@@ -80,7 +80,6 @@ def get_competitions_schedule(
                 hotkeys=hotkeys,
                 validator_hotkey=validator_hotkey,
                 competition_id=competition_cfg.competition_id,
-                category=competition_cfg.category,
                 dataset_hf_repo=competition_cfg.dataset_hf_repo,
                 dataset_hf_id=competition_cfg.dataset_hf_filename,
                 dataset_hf_repo_type=competition_cfg.dataset_hf_repo_type,

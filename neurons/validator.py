@@ -39,7 +39,7 @@ from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     fetch_organization_data_references,
     fetch_yaml_data_from_local_repo,
-    check_for_organizations_data_updates,
+    get_new_organization_data_updates,
     update_organizations_data_references,
 )
 from cancer_ai.validator.model_db import ModelDBController
@@ -92,7 +92,7 @@ class Validator(BaseValidatorNeuron):
             time.time() - self.last_miners_refresh
             < RUN_EVERY_N_MINUTES * 60
         ):
-            bt.logging.debug("Skipping model refresh, not enough time passed")
+            bt.logging.trace("Skipping model refresh, not enough time passed")
             return
 
         bt.logging.info("Synchronizing miners from the chain")
@@ -144,7 +144,7 @@ class Validator(BaseValidatorNeuron):
             hotkeys = self.hotkeys,
             validator_hotkey = self.hotkey,
             db_controller=self.db_controller,
-            test_mode = False,
+            test_mode = self.config.test_mode,
         )
         try:
             winning_hotkey, competition_id, winning_model_result = (
@@ -196,74 +196,74 @@ class Validator(BaseValidatorNeuron):
             return
         self.last_monitor_datasets = time.time()
 
-        yaml_data = await fetch_organization_data_references(
-            self.config.datasets_config_hf_repo_id,
-            self.config.hf_token
-            )
-        
-        # testing utility
-        # yaml_data = await fetch_yaml_data_from_local_repo("")
-        
-        list_of_data_references = await check_for_organizations_data_updates(yaml_data)
-        if list_of_data_references:
-            await update_organizations_data_references(yaml_data)
-            self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-            self.save_state()
+        if self.config.test_mode:
+            yaml_data = await fetch_yaml_data_from_local_repo("/Users/konradmolinski/Programming/safe-scan-cancer-ai/cancer_ai/validator/sample_dataset_references")
+        else:
+            yaml_data = await fetch_organization_data_references(
+                self.config.datasets_config_hf_repo_id,
+                self.config.hf_token
+                )        
             
-            for data_reference in list_of_data_references:
-                bt.logging.info(f"New data packages found. Starting competition.")
-                competition_manager = CompetitionManager(
-                    config=self.config,
-                    subtensor=self.subtensor,
-                    hotkeys=self.hotkeys,
-                    validator_hotkey=self.hotkey,
-                    competition_id=data_reference.competition_id,
-                    category="skin",
-                    dataset_hf_repo=data_reference.dataset_hf_repo,
-                    dataset_hf_id=data_reference.dataset_hf_filename,
-                    dataset_hf_repo_type=data_reference.dataset_hf_repo_type,
-                    db_controller = self.db_controller,
-                    test_mode = False, # Toggle to True for testing
+        list_of_data_references = await get_new_organization_data_updates(yaml_data)
+        if not list_of_data_references:
+            bt.logging.info(f"No new data packages found.")
+            return
+        
+        await update_organizations_data_references(yaml_data)
+        self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+        self.save_state()
+        
+        for data_reference in list_of_data_references:
+            bt.logging.info(f"New data packages found. Starting competition.")
+            competition_manager = CompetitionManager(
+                config=self.config,
+                subtensor=self.subtensor,
+                hotkeys=self.hotkeys,
+                validator_hotkey=self.hotkey,
+                competition_id=data_reference.competition_id,
+                dataset_hf_repo=data_reference.dataset_hf_repo,
+                dataset_hf_id=data_reference.dataset_hf_filename,
+                dataset_hf_repo_type=data_reference.dataset_hf_repo_type,
+                db_controller = self.db_controller,
+                test_mode = self.config.test_mode,
+            )
+
+            try:
+                winning_hotkey, winning_model_result = (
+                    await competition_manager.evaluate()
                 )
-
-                try:
-                    winning_hotkey, winning_model_result = (
-                        await competition_manager.evaluate()
-                    )
-                except Exception:
-                    formatted_traceback = traceback.format_exc()
-                    bt.logging.error(f"Error running competition: {formatted_traceback}")
-                    wandb.init(
-                        reinit=True, project="competition_id", group="competition_evaluation"
-                    )
-                    wandb.log(
-                        {
-                            "winning_evaluation_hotkey": "",
-                            "run_time": "",
-                            "validator_hotkey": self.wallet.hotkey.ss58_address,
-                            "errors": str(formatted_traceback),
-                        }
-                    )
-                    wandb.finish()
-                    return
-
-                if not winning_hotkey:
-                    return
-
-                wandb.init(project=data_reference.competition_id, group="competition_evaluation")
+            except Exception:
+                formatted_traceback = traceback.format_exc()
+                bt.logging.error(f"Error running competition: {formatted_traceback}")
+                wandb.init(
+                    reinit=True, project="competition_id", group="competition_evaluation"
+                )
                 wandb.log(
                     {
-                        "winning_hotkey": winning_hotkey,
+                        "winning_evaluation_hotkey": "",
+                        "run_time": "",
                         "validator_hotkey": self.wallet.hotkey.ss58_address,
-                        "errors": "",
+                        "errors": str(formatted_traceback),
                     }
                 )
                 wandb.finish()
+                return
 
-                bt.logging.info(f"Competition result for {data_reference.competition_id}: {winning_hotkey}")
-                await self.handle_competition_winner(winning_hotkey, data_reference.competition_id, winning_model_result)
-        else:
-            bt.logging.info(f"No new data packages found.")
+            if not winning_hotkey:
+                return
+
+            wandb.init(project=data_reference.competition_id, group="competition_evaluation")
+            wandb.log(
+                {
+                    "winning_hotkey": winning_hotkey,
+                    "validator_hotkey": self.wallet.hotkey.ss58_address,
+                    "errors": "",
+                }
+            )
+            wandb.finish()
+
+            bt.logging.info(f"Competition result for {data_reference.competition_id}: {winning_hotkey}")
+            await self.handle_competition_winner(winning_hotkey, data_reference.competition_id, winning_model_result)
 
     async def handle_competition_winner(self, winning_hotkey, competition_id, winning_model_result):
         await self.rewarder.update_scores(

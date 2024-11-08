@@ -235,7 +235,6 @@ def add_common_args(cls, parser):
         default="./config/competition_config.json",
     )
 
-
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
 
@@ -309,14 +308,14 @@ def add_validator_args(cls, parser):
         "--wandb_project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
-        default="template-validators",
+        default="melanoma-testnet",
     )
 
     parser.add_argument(
         "--wandb_entity",
         type=str,
         help="The name of the project where you are sending the new run.",
-        default="opentensor-dev",
+        default="safe-scan-ai",
     )
 
     parser.add_argument(
