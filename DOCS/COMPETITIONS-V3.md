@@ -1,11 +1,6 @@
-
-
-
-
-
 # Safe Scan: Machine Learning Competitions for Cancer Detection
 
-Welcome to **Safe Scan**, a platform dedicated to organizing machine learning competitions focused on cancer detection. Our goal is to foster innovation in developing accurate and efficient models for cancer detection using machine learning. Here, you can find all the details needed to participate, submit your models, and understand the evaluation process.
+Welcome to **Safe Scan**, a platform dedicated to organizing machine learning competitions focused on cancer detection. Our goal is to foster innovation in developing accurate and efficient models for cancer detection using machine learning. Here, you will find all the details needed to participate, submit your models, and understand the evaluation process.
 
 ## Table of Contents
 
@@ -24,17 +19,17 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
 
 ## Competition Trigger and Data Batch Handling
 
-- **Competition Initiation**: Competitions are triggered by data batch insertions from external medical institutions. This creates a steady stream of new, non-public data for testing purposes.
-- **Data Handling Process**: Medical institutions upload each new batch of data to a central reference repository on Hugging Face, along with a reference entry to the new data batch file.
+- **Competition Initiation**: Competitions are triggered by data batch insertions from external medical institutions, creating a steady stream of new, non-public data for testing purposes.
+- **Data Handling Process**: Medical institutions upload each new batch of data to a central reference repository on Hugging Face, along with a reference entry for the new data batch file.
 - **Automatic Detection and Competition Start**: Validators monitor this centralized repository for new data batch entries. When new data is detected, validators initiate a competition by downloading and processing the data batch.
 
 ## Model Submission Requirements
 
-- **Model Submission**: Participants, referred to as "miners," are required to submit their trained models at the end of each competition.
+- **Model Submission**: Participants, referred to as miners, must submit their trained models at the end of each competition.
 - **Format**: All models must be in ONNX format. This ensures uniform testing and allows for broad deployment options, including on mobile and web platforms.
 - **Training Code**: Each submission should include the code used for training the model to ensure transparency and reproducibility.
 - **Upload Process**: Models are uploaded to Hugging Face at the end of each test. Miners then submit the Hugging Face repository link on the blockchain for evaluation by validators.
-- **Timing Constraint**: Only models submitted at least 30 minutes before the competition start time are eligible for evaluation. This requirement ensures that no models have been retrained with the new data batch, maintaining fairness and integrity across the competition.
+- **Timing Constraint**: Only models submitted at least 30 minutes before the competition start time are eligible for evaluation. This requirement ensures that models have not been retrained with the new data batch, maintaining fairness and integrity across the competition.
 
 ## Evaluation and Scoring
 
@@ -42,7 +37,7 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
 - **Scoring Mechanism**: Detailed scoring mechanisms are outlined in the [DOCS](/DOCS/competitions) directory. Validators run scheduled competitions and assess the models based on these criteria.
 - **Winning Criteria**: The best-performing model, according to the evaluation metrics, is declared the winner of the competition.
 - **Rewards**: The winner receives the full emission for that competition, divided by the number of competitions held.
-- **Rewards time decay**: If a miner stays at the top position for more than 30 days, their rewards start to decrease gradually. Every 7 days after the initial 30 days, their share of the rewards decreases by 10%. This reduction continues until their share reaches a minimum of 10% of the original reward.
+- **Rewards Time Decay**: If a miner stays in the top position for more than 30 days, their rewards start to decrease gradually. Every 7 days after the initial 30 days, their share of the rewards decreases by 10%. This reduction continues until their share reaches a minimum of 10% of the original reward.
   
 ## Command-Line Interface (CLI) Tools
 
@@ -61,7 +56,7 @@ Stay connected and up-to-date with the latest news, discussions, and support:
 
 ## Development
 
-- **Software Lifecycle**: The project follows a structured software lifecycle, including Git flow and integration testing. This ensures robust development practices and encourages community contributions.
+- **Software Lifecycle**: The project follows a structured software lifecycle, including Git flow and integration testing. These practices ensure robust development and encourage community contributions.
 
 
 ## Contribute
@@ -71,4 +66,3 @@ We welcome contributions to this project! Whether you're interested in improving
 - Follow our software lifecycle and Git flow processes.
 - Ensure all code changes pass integration testing.
 - Contact us on our [Safe Scan Discord channel](https://discord.gg/rbBu7WuZ) for more details on how to get started.
-
