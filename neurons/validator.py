@@ -195,13 +195,10 @@ class Validator(BaseValidatorNeuron):
             return
         self.last_monitor_datasets = time.time()
 
-        if self.config.test_mode:
-            yaml_data = await fetch_yaml_data_from_local_repo("")
-        else:
-            yaml_data = await fetch_organization_data_references(
-                self.config.datasets_config_hf_repo_id,
-                self.config.hf_token
-                )        
+        yaml_data = await fetch_organization_data_references(
+            self.config.datasets_config_hf_repo_id,
+            self.config.hf_token
+            )        
             
         list_of_data_references = await get_new_organization_data_updates(yaml_data)
         if not list_of_data_references:
