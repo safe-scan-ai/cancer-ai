@@ -65,6 +65,6 @@ The evaluation will be calculaded on following metrics with described weights.
 ## Rules and Guidelines
 
 - **Timeline**:
- - every day competition will be run one or more times a day. Timings are defined in [competition_config.json](config/competition_config.json)
- - couple of minutes before start of competition, new part of dataset will be published for testing.
+- Competitions are triggered dynamically by new data batch uploads from external medical institutions, with no predefined schedule. Competitions may occur at any time based on the timing of new data insertions.
+- Each time a new data batch is detected in the central reference repository on Hugging Face, a new competition is initiated immediately by validators.
 - Results of competition will be available on the dashboard
