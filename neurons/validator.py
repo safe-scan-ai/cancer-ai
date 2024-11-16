@@ -196,7 +196,7 @@ class Validator(BaseValidatorNeuron):
         self.last_monitor_datasets = time.time()
 
         if self.config.test_mode:
-            yaml_data = await fetch_yaml_data_from_local_repo("/Users/konradmolinski/Programming/safe-scan-cancer-ai/cancer_ai/validator/sample_dataset_references")
+            yaml_data = await fetch_yaml_data_from_local_repo("")
         else:
             yaml_data = await fetch_organization_data_references(
                 self.config.datasets_config_hf_repo_id,
