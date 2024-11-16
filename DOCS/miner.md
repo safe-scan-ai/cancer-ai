@@ -137,7 +137,7 @@ To submit a model to validators, use the following command:
 ```
 python neurons/miner.py \
     --action submit \
-    --competition.id <COMPETITION ID> \
+    --competition_id <COMPETITION ID> \
     --hf_code_filename <HF FILE NAME WITH EXTENSION> \
     --hf_model_name <HF MODEL NAME WITH EXTENSION> \
     --hf_repo_id <HF REPO ID> \

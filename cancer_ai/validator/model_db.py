@@ -49,7 +49,8 @@ class ModelDBController:
             finally:
                 session.close()
         else:
-            bt.logging.debug(f"Model for hotkey {hotkey} and date {date_submitted} already exists, skipping.")
+            bt.logging.debug(f"Model for hotkey {hotkey} and date {date_submitted} already exists, proceeding with updating the model info.")
+            self.update_model(chain_miner_model, hotkey)
 
     def get_model(self, date_submitted: datetime, hotkey: str):
         session = self.Session()
@@ -93,6 +94,38 @@ class ModelDBController:
             return False
         except Exception as e:
             session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    def update_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
+        session = self.Session()
+        try:
+            date_submitted = self.get_block_timestamp(chain_miner_model.block)
+            existing_model = session.query(ChainMinerModelDB).filter_by(
+                date_submitted=date_submitted,
+                hotkey=hotkey
+            ).first()
+            
+            if existing_model:
+                existing_model.competition_id = chain_miner_model.competition_id
+                existing_model.hf_repo_id = chain_miner_model.hf_repo_id
+                existing_model.hf_model_filename = chain_miner_model.hf_model_filename
+                existing_model.hf_repo_type = chain_miner_model.hf_repo_type
+                existing_model.hf_code_filename = chain_miner_model.hf_code_filename
+                existing_model.block = chain_miner_model.block
+                existing_model.date_submitted = date_submitted
+
+                session.commit()
+                bt.logging.debug(f"Successfully updated model for hotkey {hotkey} and date {date_submitted}.")
+                return True
+            else:
+                bt.logging.debug(f"No existing model found for hotkey {hotkey} and date {date_submitted}. Update skipped.")
+                return False
+
+        except Exception as e:
+            session.rollback()
+            bt.logging.error(f"Error updating model for hotkey {hotkey} and date {date_submitted}: {e}")
             raise e
         finally:
             session.close()

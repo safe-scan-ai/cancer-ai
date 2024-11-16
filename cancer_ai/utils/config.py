@@ -128,6 +128,13 @@ def add_args(cls, parser):
         default="",
     )
 
+    parser.add_argument(
+        "--models_query_cutoff",
+        type=int,
+        help="The cutoff for the models query in minutes.",
+        default=30,
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
