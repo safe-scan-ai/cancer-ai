@@ -132,18 +132,12 @@ def add_args(cls, parser):
         "--models_query_cutoff",
         type=int,
         help="The cutoff for the models query in minutes.",
-        default=30,
+        default=0,
     )
 
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
-    parser.add_argument(
-        "--competition_id",
-        type=str,
-        help="Competition ID",
-    )
-
     parser.add_argument(
         "--model_dir",
         type=str,
@@ -216,7 +210,7 @@ def add_common_args(cls, parser):
         default="",
     )
     parser.add_argument(
-        "--competition.id",
+        "--competition_id",
         type=str,
         help="Path for storing competition participants models .",
     )

@@ -101,7 +101,7 @@ class DatasetManager(SerializableManager):
         """Detect dataset type and set handler"""
         if not self.local_compressed_path:
             raise DatasetManagerException(
-                f"Dataset '{self.config.competition.id}' not downloaded"
+                f"Dataset '{self.config.competition_id}' not downloaded"
             )
         # is csv in directory
         if os.path.exists(Path(self.local_extracted_dir, "labels.csv")):

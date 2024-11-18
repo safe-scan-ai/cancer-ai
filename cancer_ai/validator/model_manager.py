@@ -78,7 +78,8 @@ class ModelManager(SerializableManager):
 
     async def get_newest_saved_model_date(self, hotkey):
         """Fetches the newest saved model's date for a given hotkey from the local database."""
-        newest_saved_model = self.db_controller.get_latest_model(hotkey)
+        newest_saved_model = self.db_controller.get_latest_model(hotkey, self.config.models_query_cutoff)
+        bt.logging.warning(f"Newest saved model for hotkey {hotkey}: {newest_saved_model.hf_repo_type}")
         if not newest_saved_model:
             bt.logging.error(f"Failed to get latest model from local DB for hotkey {hotkey}")
             return None
@@ -124,6 +125,7 @@ class ModelManager(SerializableManager):
         try:
             model_info.file_path = self.api.hf_hub_download(
                 repo_id=model_info.hf_repo_id,
+                repo_type=model_info.hf_repo_type,
                 filename=model_info.hf_model_filename,
                 cache_dir=self.config.models.model_dir,
                 revision=commit.commit_id,

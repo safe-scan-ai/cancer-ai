@@ -93,14 +93,14 @@ This mode performs the following tasks:
 To evaluate a model locally, use the following command:
 
 ```
-python neurons/miner.py --action evaluate --competition.id <COMPETITION ID> --model_path <NAME OF FILE WITH EXTENSION>
+python neurons/miner.py --action evaluate --competition_id <COMPETITION ID> --model_path <NAME OF FILE WITH EXTENSION>
 ```
 
 Command line argument explanation
 
 - `--action` - action to perform , choices are "upload", "evaluate", "submit"
 - `--model_path` - local path of ONNX model
-- `--competition.id` - ID of competition. List of current competitions are in [competition_config.json](config/competition_config.json)
+- `--competition_id` - ID of competition. List of current competitions are in [competition_config.json](config/competition_config.json)
 - `--clean-after-run` - it will delete dataset after evaluating the model
 
 ### Upload to HuggingFace
@@ -112,7 +112,7 @@ To upload to HuggingFace, use the following command:
 ```bash
 python neurons/miner.py \
     --action upload \
-    --competition.id <COMPETITION ID> \
+    --competition_id <COMPETITION ID> \
     --model_path <NAME OF FILE WITH EXTENSION> \
     --code_directory <CODE DIRECTORY WITHOUT DATASETS> \
     --hf_model_name <MODEL NAME WITH EXTENSION> \
@@ -137,15 +137,15 @@ To submit a model to validators, use the following command:
 ```
 python neurons/miner.py \
     --action submit \
-    --competition_id <COMPETITION ID> \
-    --hf_code_filename <HF FILE NAME WITH EXTENSION> \
-    --hf_model_name <HF MODEL NAME WITH EXTENSION> \
-    --hf_repo_id <HF REPO ID> \
-    --hf_repo_type model \
-    --wallet.name <WALLET NAME> \
-    --wallet.hotkey <WALLET HOTKEY NAME> \
-    --netuid <NETUID> \
-    --subtensor.network <test|finney> \
+    --competition_id melanoma-testnet \
+    --hf_code_filename skin_melanoma_small.zip \
+    --hf_model_name similar_model_7.onnx \
+    --hf_repo_id safescanai/test_dataset \
+    --hf_repo_type dataset \
+    --wallet.name miner2 \
+    --wallet.hotkey default \
+    --netuid 163 \
+    --subtensor.network test \
     --logging.debug
 ```
 

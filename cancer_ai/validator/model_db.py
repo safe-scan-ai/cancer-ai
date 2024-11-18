@@ -68,14 +68,6 @@ class ModelDBController:
         bt.logging.debug(f"Getting latest model for hotkey {hotkey} with cutoff time {cutoff_time}")
         cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
         session = self.Session()
-        
-        # TODO remove
-        model_record = session.query(ChainMinerModelDB).filter_by(hotkey=hotkey).first()
-        if model_record:
-            bt.logging.debug(f"At least one model record exists in the DB for hotkey {hotkey}")
-        else:
-            bt.logging.debug(f"No model records exist in the DB for hotkey {hotkey}")
-
         try:
             model_record = (
                 session.query(ChainMinerModelDB)
