@@ -1,8 +1,9 @@
 import bittensor as bt
 import os
-from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer
+from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer, func, and_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
 from datetime import datetime, timedelta
 from ..chain_models_store import ChainMinerModel
 
@@ -154,6 +155,39 @@ class ModelDBController:
         except Exception as e:
             bt.logging.error(f"Error retrieving block timestamp: {e}")
             raise
+
+
+    def get_all_models_for_competition(self, competition_id: str, cutoff_time: float | None = None) -> list[tuple[str,ChainMinerModel]]:
+        cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
+        session = self.Session()
+        try:
+            # Subquery to get the latest submission date for each hotkey
+            latest_dates = (
+                session.query(
+                    ChainMinerModelDB.hotkey,
+                    func.max(ChainMinerModelDB.date_submitted).label('max_date')
+                )
+                .filter(ChainMinerModelDB.competition_id == competition_id)
+                .filter(ChainMinerModelDB.date_submitted < cutoff_time)
+                .group_by(ChainMinerModelDB.hotkey)
+                .subquery()
+            )
+
+            # Main query joining with the subquery to get the latest model for each hotkey
+            models = (
+                session.query(ChainMinerModelDB)
+                .join(
+                    latest_dates,
+                    and_(
+                        ChainMinerModelDB.hotkey == latest_dates.c.hotkey,
+                        ChainMinerModelDB.date_submitted == latest_dates.c.max_date
+                    )
+                )
+                .all()
+            )
+            return [(model.hotkey, self.convert_db_model_to_chain_model(model)) for model in models]
+        finally:
+            session.close()
 
     def get_latest_models(self, hotkeys: list[str], cutoff_time: float = None) -> dict[str, ChainMinerModel]:
         cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()

@@ -43,6 +43,8 @@ class ModelManager(SerializableManager):
             bool: True if the model was downloaded successfully, False otherwise.
         """
         model_info = self.hotkey_store[hotkey]
+        bt.logging.debug(f"Downloading miner model for hotkey {hotkey}: {model_info}")
+        
         chain_model_date = await self.get_newest_saved_model_date(hotkey)
         if chain_model_date and chain_model_date.tzinfo is None:
             chain_model_date = chain_model_date.replace(tzinfo=timezone.utc)
