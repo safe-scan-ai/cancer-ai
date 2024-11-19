@@ -1,17 +1,12 @@
-
-
-
-
-
 # Safe Scan: Machine Learning Competitions for Cancer Detection
 
-Welcome to **Safe Scan**, a platform dedicated to organizing machine learning competitions focused on cancer detection. Our goal is to foster innovation in developing accurate and efficient models for cancer detection using machine learning. Here, you can find all the details needed to participate, submit your models, and understand the evaluation process.
+Welcome to **Safe Scan**, a platform dedicated to organizing machine learning competitions focused on cancer detection. Our goal is to foster innovation in developing accurate and efficient models for cancer detection using machine learning. Here, you will find all the details needed to participate, submit your models, and understand the evaluation process.
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Competition Schedule](#competition-schedule)
-3. [Dataset and Model Submission](#dataset-and-model-submission)
+2. [Competition Trigger and Data Batch Handling](#competition-trigger-and-data-batch-handling)
+3. [Model Submission Requirements](#model-submission-requirements)
 4. [Evaluation and Scoring](#evaluation-and-scoring)
 5. [Configuration and Development](#configuration-and-development)
 6. [Command-Line Interface (CLI) Tools](#command-line-interface-cli-tools)
@@ -20,21 +15,21 @@ Welcome to **Safe Scan**, a platform dedicated to organizing machine learning co
    
 ## Overview
 
-Safe Scan organizes continuous competitions focused on cancer detection using machine learning. These competitions aim to advance the field by providing participants with the opportunity to develop and test their models in a structured environment.
+Safe Scan organizes dynamic competitions focused on cancer detection using machine learning. These competitions provide participants with the opportunity to develop and test their models in a responsive and adaptive environment driven by real-world data.
 
-## Competition Schedule
+## Competition Trigger and Data Batch Handling
 
-- **Frequency**: Competitions are held multiple times a day, at specific hours, continuously. This allows participants to join at different times that suit them best.
-- **Timed Events**: Each competition starts with a dataset release 5 minutes before testing, providing a short window for participants to prepare.
-- **Testing and Evaluation**: Models are evaluated immediately after each test, ensuring a quick feedback loop for participants.
+- **Competition Initiation**: Competitions are triggered by data batch insertions from external medical institutions, creating a steady stream of new, non-public data for testing purposes.
+- **Data Handling Process**: Medical institutions upload each new batch of data to a central reference repository on Hugging Face, along with a reference entry for the new data batch file.
+- **Automatic Detection and Competition Start**: Validators monitor this centralized repository for new data batch entries. When new data is detected, validators initiate a competition by downloading and processing the data batch.
 
-## Dataset and Model Submission
+## Model Submission Requirements
 
-- **Dataset Release**: A new dataset is provided for each competition, which is released exactly 5 minutes before testing begins. This dataset is used for training the models.
-- **Model Submission**: Participants, referred to as "miners," are required to submit their trained models at the end of each competition.
-  - **Format**: All models must be in ONNX format. This ensures uniform testing and allows for broad deployment options, including on mobile and web platforms.
-  - **Training Code**: Each submission should include the code used for training the model to ensure transparency and reproducibility.
-  - **Upload Process**: Models are uploaded to Hugging Face at the end of each test. Miners then submit the Hugging Face repository link on the blockchain for evaluation by validators.
+- **Model Submission**: Participants, referred to as miners, must submit their trained models at the end of each competition.
+- **Format**: All models must be in ONNX format. This ensures uniform testing and allows for broad deployment options, including on mobile and web platforms.
+- **Training Code**: Each submission should include the code used for training the model to ensure transparency and reproducibility.
+- **Upload Process**: Models are uploaded to Hugging Face at the end of each test. Miners then submit the Hugging Face repository link on the blockchain for evaluation by validators.
+- **Timing Constraint**: Only models submitted at least 30 minutes before the competition start time are eligible for evaluation. This requirement ensures that models have not been retrained with the new data batch, maintaining fairness and integrity across the competition.
 
 ## Evaluation and Scoring
 
@@ -42,14 +37,8 @@ Safe Scan organizes continuous competitions focused on cancer detection using ma
 - **Scoring Mechanism**: Detailed scoring mechanisms are outlined in the [DOCS](/DOCS/competitions) directory. Validators run scheduled competitions and assess the models based on these criteria.
 - **Winning Criteria**: The best-performing model, according to the evaluation metrics, is declared the winner of the competition.
 - **Rewards**: The winner receives the full emission for that competition, divided by the number of competitions held.
-- **Rewards time decay**: If a miner stays at the top position for more than 30 days, their rewards start to decrease gradually. Every 7 days after the initial 30 days, their share of the rewards decreases by 10%. This reduction continues until their share reaches a minimum of 10% of the original reward.
+- **Rewards Time Decay**: If a miner stays in the top position for more than 30 days, their rewards start to decrease gradually. Every 7 days after the initial 30 days, their share of the rewards decreases by 10%. This reduction continues until their share reaches a minimum of 10% of the original reward.
   
-## Configuration and Development
-
-- **Competition Configuration**: Each competition is configured through a `competition_config.json` file. This file defines all parameters and rules for the competition and is used by both miners and validators.
-- **Tracking Changes**: Changes to the competition configuration are tracked via a GitHub issue tracker, ensuring transparency and allowing for community input.
-- **Software Lifecycle**: The project follows a structured software lifecycle, including Git flow and integration testing. This ensures robust development practices and encourages community contributions.
-
 ## Command-Line Interface (CLI) Tools
 
 - **Local Testing**: Miners are provided with an easy-to-use command-line interface (CLI) for local testing of their models. This tool helps streamline the process of testing models, uploading to Hugging Face, and submitting to the competition.
@@ -65,6 +54,11 @@ Stay connected and up-to-date with the latest news, discussions, and support:
 - **Twitter/X**: Follow us on [Twitter/X](https://x.com/SAFESCAN_AI) for announcements and highlights.
 - **Email**: Contact us directly at [info@safescanai.ai](mailto:info@safescanai.ai) for any inquiries or support.
 
+## Development
+
+- **Software Lifecycle**: The project follows a structured software lifecycle, including Git flow and integration testing. These practices ensure robust development and encourage community contributions.
+
+
 ## Contribute
 
 We welcome contributions to this project! Whether you're interested in improving our codebase, adding new features, or enhancing documentation, your involvement is valued. To contribute:
@@ -72,4 +66,3 @@ We welcome contributions to this project! Whether you're interested in improving
 - Follow our software lifecycle and Git flow processes.
 - Ensure all code changes pass integration testing.
 - Contact us on our [Safe Scan Discord channel](https://discord.gg/rbBu7WuZ) for more details on how to get started.
-
