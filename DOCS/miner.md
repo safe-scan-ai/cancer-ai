@@ -137,6 +137,7 @@ To submit a model to validators, use the following command:
 ```
 python neurons/miner.py \
     --action submit \
+
     --competition_id <COMPETITION ID> \
     --hf_code_filename <HF FILE NAME WITH EXTENSION> \
     --hf_model_name <HF MODEL NAME WITH EXTENSION> \
@@ -146,6 +147,20 @@ python neurons/miner.py \
     --wallet.hotkey <WALLET HOTKEY NAME> \
     --netuid <NETUID> \
     --subtensor.network <test|finney> \
+```
+
+```
+python neurons/miner.py \
+    --action submit \
+    --competition_id melanoma-testnet \
+    --hf_code_filename skin_melanoma_small.zip \
+    --hf_model_name similar_model_7.onnx \
+    --hf_repo_id safescanai/test_dataset \
+    --hf_repo_type dataset \
+    --wallet.name miner2 \
+    --wallet.hotkey default \
+    --netuid 163 \
+    --subtensor.network test \
     --logging.debug
 ```
 

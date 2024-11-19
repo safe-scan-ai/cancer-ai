@@ -1,4 +1,4 @@
-from typing import List, ClassVar, Optional
+from typing import List, ClassVar, Optional, ClassVar, Optional
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 from datetime import datetime
 
@@ -39,3 +39,12 @@ class OrganizationDataReferenceFactory(BaseModel):
 
     def add_organizations(self, organizations: List[OrganizationDataReference]):
         self.organizations.extend(organizations)
+    
+    def update_from_dict(self, data: dict):
+        """Updates the singleton instance's state from a dictionary."""
+        if "organizations" in data:
+            # Convert each dict in 'organizations' to an OrganizationDataReference instance
+            self.organizations = [OrganizationDataReference(**org) for org in data["organizations"]]
+        for key, value in data.items():
+            if key != "organizations":
+                setattr(self, key, value)

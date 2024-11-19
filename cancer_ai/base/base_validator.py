@@ -39,6 +39,7 @@ from ..utils.config import add_validator_args
 
 from neurons.competition_runner import CompetitionRunStore
 from cancer_ai.validator.rewarder import CompetitionWinnersStore
+from cancer_ai.validator.models import OrganizationDataReferenceFactory
 from .. import __spec_version__ as spec_version
 
 
@@ -74,6 +75,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.winners_store = CompetitionWinnersStore(
             competition_leader_map={}, hotkey_score_map={}
         )
+        self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync()
