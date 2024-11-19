@@ -53,6 +53,7 @@ class ModelManager(SerializableManager):
         try:
             commits = self.api.list_repo_commits(
                 repo_id=model_info.hf_repo_id,
+                repo_type=model_info.hf_repo_type,
                 token=self.config.hf_token if hasattr(self.config, "hf_token") else None
             )
             
@@ -104,6 +105,7 @@ class ModelManager(SerializableManager):
                 files = self.api.list_repo_files(
                     repo_id=model_info.hf_repo_id,
                     revision=commit_id,
+                    repo_type=model_info.hf_repo_type,
                     token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
                 )
 
