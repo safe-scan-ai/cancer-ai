@@ -93,11 +93,13 @@ def get_competition_config(path: str) -> CompetitionsListModel:
     competitions = [CompetitionModel(**item) for item in competitions_json]
     return CompetitionsListModel(competitions=competitions)
 
-async def fetch_organization_data_references(hf_repo_id: str, hf_token: str) -> list[dict]:
+async def fetch_organization_data_references(hf_repo_id: str, hf_token: str, hf_api: HfApi) -> list[dict]:
     bt.logging.trace(f"Fetching organization data references from Hugging Face repo {hf_repo_id}")
-    api = HfApi()
 
-    files = api.list_repo_tree(
+    # prevent stale connections
+    custom_headers = {"Connection": "close"}
+
+    files = hf_api.list_repo_tree(
         repo_id=hf_repo_id,
         repo_type="space",
         token=hf_token,
@@ -117,6 +119,7 @@ async def fetch_organization_data_references(hf_repo_id: str, hf_token: str) -> 
                     repo_type="space",
                     token=hf_token,
                     filename=file_path,
+                    headers=custom_headers,
                 )
 
                 last_commit_info = file_info.last_commit

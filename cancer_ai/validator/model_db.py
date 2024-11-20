@@ -155,7 +155,7 @@ class ModelDBController:
             bt.logging.error(f"Error retrieving block timestamp: {e}")
             raise
 
-    def get_latest_models(self, hotkeys: list[str], cutoff_time: float = None) -> dict[str, ChainMinerModel]:
+    def get_latest_models(self, hotkeys: list[str], competition_id: str, cutoff_time: float = None) -> dict[str, ChainMinerModel]:
         cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
         session = self.Session()
         try:
@@ -165,6 +165,7 @@ class ModelDBController:
                 model_record = (
                     session.query(ChainMinerModelDB)
                     .filter(ChainMinerModelDB.hotkey == hotkey)
+                    .filter(ChainMinerModelDB.competition_id == competition_id)
                     .filter(ChainMinerModelDB.date_submitted < cutoff_time)
                     .order_by(ChainMinerModelDB.date_submitted.desc())  # Order by newest first
                     .first()  # Get the first (newest) record that meets the cutoff condition

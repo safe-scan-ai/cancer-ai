@@ -153,11 +153,10 @@ class CompetitionManager(SerializableManager):
         bt.logging.info("Selecting models for competition")
         bt.logging.info(f"Amount of hotkeys: {len(self.hotkeys)}")
 
-        latest_models = self.db_controller.get_latest_models(self.hotkeys, self.config.models_query_cutoff)
+        latest_models = self.db_controller.get_latest_models(self.hotkeys, self.competition_id, self.config.models_query_cutoff)
         for hotkey, model in latest_models.items():
             try:
                 model_info = await self.chain_miner_to_model_info(model)
-                bt.logging.warning(f"hotkey {hotkey} model_repo_type: {model_info.hf_repo_type}")
             except ValueError:
                 bt.logging.warning(
                     f"Miner {hotkey} with competition id {model.competition_id} does not belong to {self.competition_id} competition, skipping"

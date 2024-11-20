@@ -26,6 +26,7 @@ import json
 import bittensor as bt
 import numpy as np
 import wandb
+import requests
 
 from cancer_ai.chain_models_store import ChainModelMetadata
 from cancer_ai.validator.rewarder import CompetitionWinnersStore, Rewarder, Score
@@ -38,13 +39,14 @@ from competition_runner import (
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     fetch_organization_data_references,
-    fetch_yaml_data_from_local_repo,
     get_new_organization_data_updates,
     update_organizations_data_references,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory
+from huggingface_hub import HfApi, hf_hub_download
+
 
 RUN_EVERY_N_MINUTES = 15  # TODO move to config
 RUN_EVERY_N_SECONDS = 10 # TODO move to config
@@ -74,6 +76,10 @@ class Validator(BaseValidatorNeuron):
         )
         self.last_miners_refresh: float = None
         self.last_monitor_datasets: float = None
+
+        # Create the shared session for hugging face api
+        self.hf_api = HfApi()
+
 
     async def concurrent_forward(self):
         coroutines = [
@@ -197,7 +203,8 @@ class Validator(BaseValidatorNeuron):
 
         yaml_data = await fetch_organization_data_references(
             self.config.datasets_config_hf_repo_id,
-            self.config.hf_token
+            self.config.hf_token,
+            self.hf_api,
             )        
             
         list_of_data_references = await get_new_organization_data_updates(yaml_data)
@@ -210,7 +217,7 @@ class Validator(BaseValidatorNeuron):
         self.save_state()
         
         for data_reference in list_of_data_references:
-            bt.logging.info(f"New data packages found. Starting competition.")
+            bt.logging.info(f"New data packages found. Starting competition for {data_reference.competition_id}")
             competition_manager = CompetitionManager(
                 config=self.config,
                 subtensor=self.subtensor,
