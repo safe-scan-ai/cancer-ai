@@ -211,7 +211,7 @@ class Validator(BaseValidatorNeuron):
         if not list_of_data_references:
             bt.logging.info(f"No new data packages found.")
             return
-        
+                
         await update_organizations_data_references(yaml_data)
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
         self.save_state()
@@ -250,10 +250,10 @@ class Validator(BaseValidatorNeuron):
                     }
                 )
                 wandb.finish()
-                return
+                continue
 
             if not winning_hotkey:
-                return
+                continue
 
             wandb.init(project=data_reference.competition_id, group="competition_evaluation")
             wandb.log(
