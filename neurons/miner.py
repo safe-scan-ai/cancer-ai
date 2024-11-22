@@ -36,7 +36,7 @@ class MinerManagerCLI:
             self.config.competition.config_path
         )
 
-        self.code_zip_path = None
+        self.code_zip_path = f"{self.config.code_directory}/code.zip"
 
         self.wallet = None
         self.subtensor = None
@@ -62,7 +62,6 @@ class MinerManagerCLI:
             path_or_fileobj=self.config.model_path,
             path_in_repo=hf_model_path,
             repo_id=self.config.hf_repo_id,
-            repo_type=self.config.hf_repo_type,
             token=self.config.hf_token,
         )
         bt.logging.info("Uploading code to Hugging Face.")
@@ -70,7 +69,6 @@ class MinerManagerCLI:
             path_or_fileobj=self.code_zip_path,
             path_in_repo=hf_code_path,
             repo_id=self.config.hf_repo_id,
-            repo_type=self.config.hf_repo_type,
             token=self.config.hf_token,
         )
 
@@ -163,7 +161,6 @@ class MinerManagerCLI:
         if not huggingface_hub.file_exists(
             repo_id=self.config.hf_repo_id,
             filename=self.config.hf_model_name,
-            repo_type=self.config.hf_repo_type,
         ):
             bt.logging.error(
                 f"{self.config.hf_model_name} not found in Hugging Face repo"
@@ -173,7 +170,6 @@ class MinerManagerCLI:
         if not huggingface_hub.file_exists(
             repo_id=self.config.hf_repo_id,
             filename=self.config.hf_code_filename,
-            repo_type=self.config.hf_repo_type,
         ):
             bt.logging.error(
                 f"{self.config.hf_model_name} not found in Hugging Face repo"
@@ -186,7 +182,7 @@ class MinerManagerCLI:
             competition_id=self.config.competition_id,
             hf_repo_id=self.config.hf_repo_id,
             hf_model_filename=self.config.hf_model_name,
-            hf_repo_type=self.config.hf_repo_type,
+            hf_repo_type="model",
             hf_code_filename=self.config.hf_code_filename,
             block=None,
         )

@@ -98,14 +98,17 @@ python neurons/miner.py --action evaluate --competition_id <COMPETITION ID> --mo
 
 Command line argument explanation
 
-- `--action` - action to perform , choices are "upload", "evaluate", "submit"
+- `--action` - action to perform, choices are "upload", "evaluate", "submit"
 - `--model_path` - local path of ONNX model
 - `--competition_id` - ID of competition. List of current competitions are in [competition_config.json](config/competition_config.json)
 - `--clean-after-run` - it will delete dataset after evaluating the model
+- `--model_dir` - path for storing models (default: "./models")
+- `--dataset_dir` - path for storing datasets (default: "./datasets")
 
 ### Upload to HuggingFace
 
 This mode compresses the code provided by `--code-path` and uploads the model and code to HuggingFace.
+Repository ID should be a repository type "model"
 
 To upload to HuggingFace, use the following command:
 
@@ -116,17 +119,16 @@ python neurons/miner.py \
     --model_path <NAME OF FILE WITH EXTENSION> \
     --code_directory <CODE DIRECTORY WITHOUT DATASETS> \
     --hf_model_name <MODEL NAME WITH EXTENSION> \
-    --hf_repo_id <HF REPO ID > \
-    --hf_repo_type model \
-    --hf_token <HF API TOKEN> 
+    --hf_repo_id <HF REPO ID> \
+    --hf_token <HF API TOKEN>
 ```
 
 Command line argument explanation
 
 - `--code_directory` - local directory of code
 - `--hf_repo_id` - hugging face repository ID - ex. "username/repo"
-- `--hf_repo_type` - hugging face type of repository - "model" or  "dataset"
 - `--hf_token` - hugging face authentication token
+- `--hf_model_name` - name of file to store in hugging face repository
 
 ### Submit Model to Validators
 
@@ -134,40 +136,24 @@ This mode saves model information in the metagraph, allowing validators to retri
 
 To submit a model to validators, use the following command:
 
-```
+```bash
 python neurons/miner.py \
     --action submit \
     --competition_id <COMPETITION ID> \
     --hf_code_filename <HF FILE NAME WITH EXTENSION> \
     --hf_model_name <HF MODEL NAME WITH EXTENSION> \
     --hf_repo_id <HF REPO ID> \
-    --hf_repo_type model \
     --wallet.name <WALLET NAME> \
     --wallet.hotkey <WALLET HOTKEY NAME> \
     --netuid <NETUID> \
-    --subtensor.network <test|finney> \
-```
-
-```
-python neurons/miner.py \
-    --action submit \
-    --competition_id melanoma-testnet \
-    --hf_code_filename skin_melanoma_small.zip \
-    --hf_model_name similar_model_7.onnx \
-    --hf_repo_id safescanai/test_dataset \
-    --hf_repo_type dataset \
-    --wallet.name miner2 \
-    --wallet.hotkey default \
-    --netuid 163 \
-    --subtensor.network test \
-    --logging.debug
+    --subtensor.network <test|finney>
 ```
 
 Command line argument explanation
 
 - `--hf_code_filename` - name of file in hugging face repository containing zipped code
 - `--hf_model_name` - name of file in hugging face repository containing model
-- `--wallet.name` - name of wallet coldkey  used for authentication with Bittensor network
+- `--wallet.name` - name of wallet coldkey used for authentication with Bittensor network
 - `--wallet.hotkey` - name of wallet hotkey used for authentication with Bittensor network
 - `--netuid` - subnet number
 - `--subtensor.network` - Bittensor network to connect to - <test|finney>

@@ -161,11 +161,6 @@ def add_miner_args(cls, parser):
         type=str,
         help="Filename of the code zip  to push to hugging face.",
     )
-    parser.add_argument(
-        "--hf_repo_type",
-        type=str,
-        help="Type of hugging face repository.",
-    )
 
     parser.add_argument(
         "--action",
