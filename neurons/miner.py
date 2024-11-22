@@ -36,6 +36,14 @@ class MinerManagerCLI:
             self.config.competition.config_path
         )
 
+        self.code_zip_path = None
+
+        self.wallet = None
+        self.subtensor = None
+        self.metagraph = None
+        self.hotkey = None
+        self.metadata_store = None
+
     @classmethod
     def add_args(cls, parser: argparse.ArgumentParser):
         """Method for injecting miner arguments to the parser."""
@@ -118,16 +126,15 @@ class MinerManagerCLI:
 
     async def compress_code(self) -> None:
         bt.logging.info("Compressing code")
-        code_zip_path = f"{self.config.code_directory}/code.zip"
+
         out, err = await run_command(
-            f"zip  -r {code_zip_path} {self.config.code_directory}/*"
+            f"zip  -r {self.code_zip_path} {self.config.code_directory}/*"
         )
         if err:
-            "Error zipping code"
+            bt.logging.info("Error zipping code")
             bt.logging.error(err)
             return
-        bt.logging.info(f"Code zip path: {code_zip_path}")
-        self.code_zip_path = code_zip_path
+        bt.logging.info(f"Code zip path: {self.code_zip_path}")
 
     async def submit_model(self) -> None:
         # Check if the required model and files are present in hugging face repo
@@ -152,7 +159,7 @@ class MinerManagerCLI:
         self.metadata_store = ChainModelMetadata(
             subtensor=self.subtensor, netuid=self.config.netuid, wallet=self.wallet
         )
-
+        print(self.config)
         if not huggingface_hub.file_exists(
             repo_id=self.config.hf_repo_id,
             filename=self.config.hf_model_name,
