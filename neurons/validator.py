@@ -109,7 +109,7 @@ class Validator(BaseValidatorNeuron):
             else BLACKLIST_FILE_PATH
         )
 
-        with open(blacklist_file, "r") as f:
+        with open(blacklist_file, "r", encoding="utf-8") as f:
             BLACKLISTED_HOTKEYS = json.load(f)
 
         for hotkey in self.hotkeys:
@@ -221,7 +221,7 @@ class Validator(BaseValidatorNeuron):
             
         list_of_data_references = await get_new_organization_data_updates(yaml_data)
         if not list_of_data_references:
-            bt.logging.info(f"No new data packages found.")
+            bt.logging.info("No new data packages found.")
             return
                 
         await update_organizations_data_references(yaml_data)
@@ -248,16 +248,10 @@ class Validator(BaseValidatorNeuron):
                 winning_hotkey, winning_model_result = (
                     await competition_manager.evaluate()
                 )
+                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=None).hf_link
             except Exception:
                 formatted_traceback = traceback.format_exc()
                 bt.logging.error(f"Error running competition: {formatted_traceback}")
-
-                try:
-                    model = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=None)
-                    winning_model_link = model.hf_link
-                except Exception:
-                    bt.logging.error(f"Error getting latest model for hotkey {winning_hotkey}")
-
                 wandb.init(
                     reinit=True, project="competition_id", group="competition_evaluation"
                 )
@@ -267,7 +261,7 @@ class Validator(BaseValidatorNeuron):
                         "winning_evaluation_hotkey": "",
                         "run_time": "",
                         "validator_hotkey": self.wallet.hotkey.ss58_address,
-                        "winning_model_link": winning_model_link,
+                        "model_link": winning_model_link,
                         "errors": str(formatted_traceback),
                     }
                 )
@@ -283,7 +277,7 @@ class Validator(BaseValidatorNeuron):
                     "log_type": "competition_result",
                     "winning_hotkey": winning_hotkey,
                     "validator_hotkey": self.wallet.hotkey.ss58_address,
-                    "winning_model_link": winning_model_link,
+                    "model_link": winning_model_link,
                     "errors": "",
                 }
             )
