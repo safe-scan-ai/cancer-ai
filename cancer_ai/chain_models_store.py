@@ -5,6 +5,7 @@ import bittensor as bt
 from pydantic import BaseModel, Field
 from .utils.models_storage_utils import run_in_subprocess
 
+
 class ChainMinerModel(BaseModel):
     """Uniquely identifies a trained model"""
 
@@ -20,12 +21,18 @@ class ChainMinerModel(BaseModel):
     block: Optional[int] = Field(
         description="Block on which this model was claimed on the chain."
     )
+
     class Config:
         arbitrary_types_allowed = True
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
         return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}"
+
+    @property
+    def hf_link(self) -> str:
+        """Returns the Hugging Face link for the model."""
+        return f"https://huggingface.co/{self.hf_repo_id}/blob/main/{self.hf_model_filename}"
 
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ChainMinerModel"]:
@@ -41,6 +48,7 @@ class ChainMinerModel(BaseModel):
             hf_repo_type=tokens[4],
             block=None,
         )
+
 
 class ChainModelMetadata:
     """Chain based implementation for storing and retrieving metadata about a model."""

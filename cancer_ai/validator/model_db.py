@@ -52,7 +52,7 @@ class ModelDBController:
             bt.logging.debug(f"Model for hotkey {hotkey} and date {date_submitted} already exists, proceeding with updating the model info.")
             self.update_model(chain_miner_model, hotkey)
 
-    def get_model(self, date_submitted: datetime, hotkey: str):
+    def get_model(self, date_submitted: datetime, hotkey: str) -> ChainMinerModel | None:
         session = self.Session()
         try:
             model_record = session.query(ChainMinerModelDB).filter_by(
@@ -64,7 +64,7 @@ class ModelDBController:
         finally:
             session.close()
 
-    def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel:
+    def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel | None:
         bt.logging.debug(f"Getting latest model for hotkey {hotkey} with cutoff time {cutoff_time}")
         cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
         session = self.Session()
