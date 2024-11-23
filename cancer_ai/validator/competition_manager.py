@@ -93,7 +93,7 @@ class CompetitionManager(SerializableManager):
     ) -> None:
         winning_model_link = self.db_controller.get_latest_model(
             hotkey=miner_hotkey, cutoff_time=None
-        ).model_link
+        ).hf_link
         wandb.init(project=self.competition_id, group="model_evaluation")
         wandb.log(
             {
