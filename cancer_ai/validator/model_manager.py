@@ -87,15 +87,17 @@ class ModelManager(SerializableManager):
         return self.db_controller.get_block_timestamp(newest_saved_model.block)
 
     def get_commit_with_file_change(self, commits, model_info, chain_model_date):
-        """Finds the commit where the specific file exists and matches the date criteria."""
-        older_commit = None
-
+        """
+        Finds the most recent commit (relative to chain_model_date) where the specific file exists
+        and matches the date criteria. Assumes commits are sorted from newest to oldest.
+        """
         for commit in commits:
             commit_id = commit.commit_id
             commit_date = commit.created_at
             if commit_date.tzinfo is None:
                 commit_date = commit_date.replace(tzinfo=timezone.utc)
 
+            # Skip commits newer than the specified date
             if commit_date > chain_model_date:
                 bt.logging.debug(f"Skipping commit {commit_id} because it is newer than chain_model_date")
                 continue
@@ -109,20 +111,18 @@ class ModelManager(SerializableManager):
                     token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
                 )
 
-                if model_info.hf_model_filename in files and (older_commit is None or commit_date > older_commit.created_at):
-                    older_commit = commit
+                if model_info.hf_model_filename in files:
+                    bt.logging.info(f"Found model version of commit {commit_id}")
+                    return commit  # Return the first valid commit and stop searching
 
             except Exception as e:
                 bt.logging.error(f"Failed to list files at commit {commit_id}: {e}")
                 continue
 
-        if older_commit:
-            bt.logging.info(f"Found an older model version of commit {older_commit.commit_id}")
-        else:
-            bt.logging.error("No suitable older commit with the required file was found.")
-        return older_commit
+        bt.logging.error("No suitable older commit with the required file was found.")
+        return None
 
-    
+
     def download_model_at_commit(self, commit, model_info):
         try:
             model_info.file_path = self.api.hf_hub_download(
