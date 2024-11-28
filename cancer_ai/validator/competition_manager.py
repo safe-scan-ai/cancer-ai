@@ -91,9 +91,14 @@ class CompetitionManager(SerializableManager):
     def log_results_to_wandb(
         self, miner_hotkey: str, validator_hotkey: str, evaluation_result: ModelEvaluationResult
     ) -> None:
+        winning_model_link = self.db_controller.get_latest_model(
+            hotkey=miner_hotkey, cutoff_time=None
+        ).hf_link
         wandb.init(project=self.competition_id, group="model_evaluation")
         wandb.log(
             {
+                "log_type": "model_results",
+                "competition_id": self.competition_id,
                 "miner_hotkey": miner_hotkey,
                 "validator_hotkey": validator_hotkey,
                 "tested_entries": evaluation_result.tested_entries,
@@ -106,13 +111,14 @@ class CompetitionManager(SerializableManager):
                     "fpr": evaluation_result.fpr,
                     "tpr": evaluation_result.tpr,
                 },
+                "model_link": winning_model_link,
                 "roc_auc": evaluation_result.roc_auc,
                 "score": evaluation_result.score,
             }
         )
 
         wandb.finish()
-        bt.logging.info("Results: ", evaluation_result)
+        bt.logging.info("Results: {evaluation_result}")
 
     def get_state(self):
         return {
