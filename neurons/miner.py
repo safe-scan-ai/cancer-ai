@@ -161,6 +161,7 @@ class MinerManagerCLI:
         if not huggingface_hub.file_exists(
             repo_id=self.config.hf_repo_id,
             filename=self.config.hf_model_name,
+            repo_type=self.config.hf_repo_type,
         ):
             bt.logging.error(
                 f"{self.config.hf_model_name} not found in Hugging Face repo"
@@ -170,6 +171,7 @@ class MinerManagerCLI:
         if not huggingface_hub.file_exists(
             repo_id=self.config.hf_repo_id,
             filename=self.config.hf_code_filename,
+            repo_type=self.config.hf_repo_type,
         ):
             bt.logging.error(
                 f"{self.config.hf_model_name} not found in Hugging Face repo"
@@ -182,7 +184,7 @@ class MinerManagerCLI:
             competition_id=self.config.competition_id,
             hf_repo_id=self.config.hf_repo_id,
             hf_model_filename=self.config.hf_model_name,
-            hf_repo_type="model",
+            hf_repo_type=self.config.hf_repo_type,
             hf_code_filename=self.config.hf_code_filename,
             block=None,
         )

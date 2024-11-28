@@ -139,14 +139,15 @@ To submit a model to validators, use the following command:
 ```bash
 python neurons/miner.py \
     --action submit \
-    --competition_id <COMPETITION ID> \
-    --hf_code_filename <HF FILE NAME WITH EXTENSION> \
-    --hf_model_name <HF MODEL NAME WITH EXTENSION> \
-    --hf_repo_id <HF REPO ID> \
-    --wallet.name <WALLET NAME> \
-    --wallet.hotkey <WALLET HOTKEY NAME> \
-    --netuid <NETUID> \
-    --subtensor.network <test|finney>
+    --competition_id melanoma-1\
+    --hf_code_filename skin_melanoma_small.zip\
+    --hf_model_name best_model.onnx \
+    --hf_repo_id safescanai/test_dataset \
+    --hf_repo_type dataset \
+    --wallet.name miner2 \
+    --wallet.hotkey default \
+    --netuid 163 \
+    --subtensor.network test
 ```
 
 Command line argument explanation
