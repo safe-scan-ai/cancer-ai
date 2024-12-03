@@ -132,7 +132,11 @@ async def fetch_organization_data_references(hf_repo_id: str, hf_token: str, hf_
                     date_uploaded = None
 
                 with open(local_file_path, 'r') as f:
-                    data = yaml.safe_load(f)
+                    try:
+                        data = yaml.safe_load(f)
+                    except yaml.YAMLError as e:
+                        bt.logging.error(f"Error parsing YAML file {file_path}: {str(e)}")
+                        continue  # Skip this file due to parsing error
 
                 yaml_data.append({
                     'file_name': file_path,

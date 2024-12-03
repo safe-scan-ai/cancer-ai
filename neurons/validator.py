@@ -47,12 +47,8 @@ from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory
 from huggingface_hub import HfApi, hf_hub_download
 
-
-RUN_EVERY_N_MINUTES = 15  # TODO move to config
-RUN_EVERY_N_SECONDS = 10 # TODO move to config
 BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"
 BLACKLIST_FILE_PATH_TESTNET = "config/hotkey_blacklist_testnet.json"
-
 
 class Validator(BaseValidatorNeuron):
     print(cancer_ai_logo)
@@ -95,7 +91,7 @@ class Validator(BaseValidatorNeuron):
 
         if self.last_miners_refresh is not None and (
             time.time() - self.last_miners_refresh
-            < RUN_EVERY_N_MINUTES * 60
+            < self.config.miners_refresh_interval * 60
         ):
             bt.logging.trace("Skipping model refresh, not enough time passed")
             return
@@ -163,12 +159,6 @@ class Validator(BaseValidatorNeuron):
             wandb.init(
                 reinit=True, project="competition_id", group="competition_evaluation"
             )
-            try:
-                model = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=None)
-                winning_model_link = model.hf_link
-            except Exception:
-                bt.logging.error(f"Error getting latest model for hotkey {winning_hotkey}")
-
             wandb.log(
                 {
                     "log_type": "competition_result",
@@ -208,7 +198,7 @@ class Validator(BaseValidatorNeuron):
         """Monitor datasets references for updates."""
         if self.last_monitor_datasets is not None and (
             time.time() - self.last_monitor_datasets
-            < RUN_EVERY_N_SECONDS
+            < self.config.monitor_datasets_interval
         ):
             return
         self.last_monitor_datasets = time.time()
@@ -248,7 +238,10 @@ class Validator(BaseValidatorNeuron):
                 winning_hotkey, winning_model_result = (
                     await competition_manager.evaluate()
                 )
-                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=None).hf_link
+                if not winning_hotkey:
+                    continue
+
+                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=self.config.models_query_cutoff).hf_link
             except Exception:
                 formatted_traceback = traceback.format_exc()
                 bt.logging.error(f"Error running competition: {formatted_traceback}")
@@ -266,9 +259,6 @@ class Validator(BaseValidatorNeuron):
                     }
                 )
                 wandb.finish()
-                continue
-
-            if not winning_hotkey:
                 continue
 
             wandb.init(project=data_reference.competition_id, group="competition_evaluation")

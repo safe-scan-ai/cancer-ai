@@ -132,7 +132,7 @@ def add_args(cls, parser):
         "--models_query_cutoff",
         type=int,
         help="The cutoff for the models query in minutes.",
-        default=0,
+        default=30,
     )
 
 
@@ -188,7 +188,6 @@ def add_miner_args(cls, parser):
     )
 
     parser.add_argument(
-        "--code_directory",
         "--code_directory",
         type=str,
         help="Path to code directory",
@@ -332,7 +331,21 @@ def add_validator_args(cls, parser):
         "--datasets_config_hf_repo_id",
         type=str,
         help="The reference to Hugging Face datasets config.",
-        default="safescanai/competition-configuration-testnet"
+        default="safescanai/competition-configuration",
+    )
+
+    parser.add_argument(
+        "--miners_refresh_interval",
+        type=int,
+        help="The interval at which to refresh the miners in minutes",
+        default=15,
+    )
+
+    parser.add_argument(
+        "--monitor_datasets_interval",
+        type=int,
+        help="The interval at which to monitor the datasets in seconds",
+        default=8*60,
     )
 
 def path_config(cls=None):
