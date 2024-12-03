@@ -159,12 +159,6 @@ class Validator(BaseValidatorNeuron):
             wandb.init(
                 reinit=True, project="competition_id", group="competition_evaluation"
             )
-            try:
-                model = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=None)
-                winning_model_link = model.hf_link
-            except Exception:
-                bt.logging.error(f"Error getting latest model for hotkey {winning_hotkey}")
-
             wandb.log(
                 {
                     "log_type": "competition_result",
@@ -244,7 +238,10 @@ class Validator(BaseValidatorNeuron):
                 winning_hotkey, winning_model_result = (
                     await competition_manager.evaluate()
                 )
-                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=None).hf_link
+                if not winning_hotkey:
+                    continue
+
+                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=self.config.models_query_cutoff).hf_link
             except Exception:
                 formatted_traceback = traceback.format_exc()
                 bt.logging.error(f"Error running competition: {formatted_traceback}")
@@ -262,9 +259,6 @@ class Validator(BaseValidatorNeuron):
                     }
                 )
                 wandb.finish()
-                continue
-
-            if not winning_hotkey:
                 continue
 
             wandb.init(project=data_reference.competition_id, group="competition_evaluation")
