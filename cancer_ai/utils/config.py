@@ -345,7 +345,7 @@ def add_validator_args(cls, parser):
         "--monitor_datasets_interval",
         type=int,
         help="The interval at which to monitor the datasets in seconds",
-        default=120,
+        default=8*60,
     )
 
 def path_config(cls=None):
