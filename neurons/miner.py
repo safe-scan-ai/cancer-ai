@@ -36,6 +36,14 @@ class MinerManagerCLI:
             self.config.competition.config_path
         )
 
+        self.code_zip_path = f"{self.config.code_directory}/code.zip"
+
+        self.wallet = None
+        self.subtensor = None
+        self.metagraph = None
+        self.hotkey = None
+        self.metadata_store = None
+
     @classmethod
     def add_args(cls, parser: argparse.ArgumentParser):
         """Method for injecting miner arguments to the parser."""
@@ -47,14 +55,13 @@ class MinerManagerCLI:
         hf_api = HfApi()
         hf_login(token=self.config.hf_token)
 
-        hf_model_path = f"{self.config.competition.id}-{self.config.hf_model_name}.onnx"
-        hf_code_path = f"{self.config.competition.id}-{self.config.hf_model_name}.zip"
+        hf_model_path = f"{self.config.competition_id}-{self.config.hf_model_name}.onnx"
+        hf_code_path = f"{self.config.competition_id}-{self.config.hf_model_name}.zip"
 
         path = hf_api.upload_file(
             path_or_fileobj=self.config.model_path,
             path_in_repo=hf_model_path,
             repo_id=self.config.hf_repo_id,
-            repo_type=self.config.hf_repo_type,
             token=self.config.hf_token,
         )
         bt.logging.info("Uploading code to Hugging Face.")
@@ -62,7 +69,6 @@ class MinerManagerCLI:
             path_or_fileobj=self.code_zip_path,
             path_in_repo=hf_code_path,
             repo_id=self.config.hf_repo_id,
-            repo_type=self.config.hf_repo_type,
             token=self.config.hf_token,
         )
 
@@ -89,7 +95,7 @@ class MinerManagerCLI:
         )
         dataset_manager = DatasetManager(
             self.config,
-            self.config.competition.id,
+            self.config.competition_id,
             self.competition_config.competitions[0].dataset_hf_repo,
             self.competition_config.competitions[0].dataset_hf_filename,
             self.competition_config.competitions[0].dataset_hf_repo_type,
@@ -98,7 +104,7 @@ class MinerManagerCLI:
 
         X_test, y_test = await dataset_manager.get_data()
 
-        competition_handler = COMPETITION_HANDLER_MAPPING[self.config.competition.id](
+        competition_handler = COMPETITION_HANDLER_MAPPING[self.config.competition_id](
             X_test=X_test, y_test=y_test
         )
 
@@ -118,16 +124,15 @@ class MinerManagerCLI:
 
     async def compress_code(self) -> None:
         bt.logging.info("Compressing code")
-        code_zip_path = f"{self.config.code_directory}/code.zip"
+
         out, err = await run_command(
-            f"zip  -r {code_zip_path} {self.config.code_directory}/*"
+            f"zip  -r {self.code_zip_path} {self.config.code_directory}/*"
         )
         if err:
-            "Error zipping code"
+            bt.logging.info("Error zipping code")
             bt.logging.error(err)
             return
-        bt.logging.info(f"Code zip path: {code_zip_path}")
-        self.code_zip_path = code_zip_path
+        bt.logging.info(f"Code zip path: {self.code_zip_path}")
 
     async def submit_model(self) -> None:
         # Check if the required model and files are present in hugging face repo
@@ -152,7 +157,7 @@ class MinerManagerCLI:
         self.metadata_store = ChainModelMetadata(
             subtensor=self.subtensor, netuid=self.config.netuid, wallet=self.wallet
         )
-
+        print(self.config)
         if not huggingface_hub.file_exists(
             repo_id=self.config.hf_repo_id,
             filename=self.config.hf_model_name,

@@ -80,11 +80,10 @@ def get_competitions_schedule(
                 hotkeys=hotkeys,
                 validator_hotkey=validator_hotkey,
                 competition_id=competition_cfg.competition_id,
-                category=competition_cfg.category,
                 dataset_hf_repo=competition_cfg.dataset_hf_repo,
                 dataset_hf_id=competition_cfg.dataset_hf_filename,
                 dataset_hf_repo_type=competition_cfg.dataset_hf_repo_type,
-                db_controller = db_controller,
+                db_controller=db_controller,
                 test_mode=test_mode,
             )
     return scheduler_config
@@ -94,7 +93,15 @@ async def run_competitions_tick(
     competition_scheduler: CompetitionSchedule,
     run_log: CompetitionRunStore,
 ) -> Tuple[str, str, ModelEvaluationResult] | Tuple[None, None, None]:
-    """Checks if time is right and launches competition, returns winning hotkey and Competition ID. Should be run each minute."""
+    """
+    Checks if time is right and launches competition, 
+    returns winning hotkey and Competition ID. Should be run each minute.
+
+    Returns:
+        winning_hotkey (str)
+        competition_id (str)
+        evaluation_result (ModelEvaluationResult)
+    """
 
     # getting current time
     now = datetime.now(timezone.utc)

@@ -11,6 +11,7 @@ from cancer_ai.validator.models import (
     OrganizationDataReference,
     OrganizationDataReferenceFactory,
 )
+from datetime import datetime
 
 
 class ModelType(Enum):
@@ -92,10 +93,13 @@ def get_competition_config(path: str) -> CompetitionsListModel:
     competitions = [CompetitionModel(**item) for item in competitions_json]
     return CompetitionsListModel(competitions=competitions)
 
-async def fetch_organization_data_references(hf_repo_id: str, hf_token: str) -> list[dict]:
-    api = HfApi()
+async def fetch_organization_data_references(hf_repo_id: str, hf_token: str, hf_api: HfApi) -> list[dict]:
+    bt.logging.trace(f"Fetching organization data references from Hugging Face repo {hf_repo_id}")
 
-    files = api.list_repo_tree(
+    # prevent stale connections
+    custom_headers = {"Connection": "close"}
+
+    files = hf_api.list_repo_tree(
         repo_id=hf_repo_id,
         repo_type="space",
         token=hf_token,
@@ -115,6 +119,7 @@ async def fetch_organization_data_references(hf_repo_id: str, hf_token: str) -> 
                     repo_type="space",
                     token=hf_token,
                     filename=file_path,
+                    headers=custom_headers,
                 )
 
                 last_commit_info = file_info.last_commit
@@ -138,9 +143,35 @@ async def fetch_organization_data_references(hf_repo_id: str, hf_token: str) -> 
             continue
     return yaml_data
 
-async def check_for_organizations_data_updates(fetched_yaml_files: list[dict]) -> bool:
+async def fetch_yaml_data_from_local_repo(local_repo_path: str) -> list[dict]:
+    """
+    Fetches YAML data from all YAML files in the specified local directory.
+    Returns a list of dictionaries containing file name, YAML data, and the last modified date.
+    """
+    yaml_data = []
+
+    # Traverse through the local directory to find YAML files
+    for root, _, files in os.walk(local_repo_path):
+        for file_name in files:
+            if file_name.endswith('.yaml'):
+                file_path = os.path.join(root, file_name)
+                relative_path = os.path.relpath(file_path, local_repo_path)
+                commit_date = datetime.fromtimestamp(os.path.getmtime(file_path))
+
+                with open(file_path, 'r') as f:
+                    data = yaml.safe_load(f)
+
+                yaml_data.append({
+                    'file_name': relative_path,
+                    'yaml_data': data,
+                    'date_uploaded': commit_date
+                })
+
+    return yaml_data
+
+async def get_new_organization_data_updates(fetched_yaml_files: list[dict]) -> list[DatasetReference]:
     factory = OrganizationDataReferenceFactory.get_instance()
-    updated = False
+    data_references: list[DatasetReference] = []
 
     for file in fetched_yaml_files:
         yaml_data = file['yaml_data']
@@ -150,16 +181,29 @@ async def check_for_organizations_data_updates(fetched_yaml_files: list[dict]) -
         existing_org = next((org for org in factory.organizations if org.organization_id == org_id), None)
 
         if not existing_org:
-            updated = True
-            break
+            for entry in yaml_data:
+                data_references.append(DatasetReference(
+                    competition_id=entry['competition_id'],
+                    dataset_hf_repo=entry['dataset_hf_repo'],
+                    dataset_hf_filename=entry['dataset_hf_filename'],
+                    dataset_hf_repo_type=entry['dataset_hf_repo_type'],
+                    dataset_size=entry['dataset_size']
+                ))
         
         if existing_org and date_uploaded != existing_org.date_uploaded:
-            updated = True
-            break
+            last_entry = yaml_data[-1]
+            data_references.append(DatasetReference(
+                competition_id=last_entry['competition_id'],
+                dataset_hf_repo=last_entry['dataset_hf_repo'],
+                dataset_hf_filename=last_entry['dataset_hf_filename'],
+                dataset_hf_repo_type=last_entry['dataset_hf_repo_type'],
+                dataset_size=last_entry['dataset_size']
+            ))
 
-    return updated
+    return data_references
 
 async def update_organizations_data_references(fetched_yaml_files: list[dict]):
+    bt.logging.trace("Updating organizations data references")
     factory = OrganizationDataReferenceFactory.get_instance()
     factory.organizations.clear()
 

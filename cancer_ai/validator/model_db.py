@@ -49,9 +49,10 @@ class ModelDBController:
             finally:
                 session.close()
         else:
-            bt.logging.debug(f"Model for hotkey {hotkey} and date {date_submitted} already exists, skipping.")
+            bt.logging.debug(f"Model for hotkey {hotkey} and date {date_submitted} already exists, proceeding with updating the model info.")
+            self.update_model(chain_miner_model, hotkey)
 
-    def get_model(self, date_submitted: datetime, hotkey: str):
+    def get_model(self, date_submitted: datetime, hotkey: str) -> ChainMinerModel | None:
         session = self.Session()
         try:
             model_record = session.query(ChainMinerModelDB).filter_by(
@@ -63,12 +64,15 @@ class ModelDBController:
         finally:
             session.close()
 
-    def get_latest_model(self, hotkey: str):
+    def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel | None:
+        bt.logging.debug(f"Getting latest model for hotkey {hotkey} with cutoff time {cutoff_time}")
+        cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
         session = self.Session()
         try:
             model_record = (
                 session.query(ChainMinerModelDB)
                 .filter(ChainMinerModelDB.hotkey == hotkey)
+                .filter(ChainMinerModelDB.date_submitted < cutoff_time)
                 .order_by(ChainMinerModelDB.date_submitted.desc())
                 .first()
             )
@@ -91,6 +95,38 @@ class ModelDBController:
             return False
         except Exception as e:
             session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    def update_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
+        session = self.Session()
+        try:
+            date_submitted = self.get_block_timestamp(chain_miner_model.block)
+            existing_model = session.query(ChainMinerModelDB).filter_by(
+                date_submitted=date_submitted,
+                hotkey=hotkey
+            ).first()
+            
+            if existing_model:
+                existing_model.competition_id = chain_miner_model.competition_id
+                existing_model.hf_repo_id = chain_miner_model.hf_repo_id
+                existing_model.hf_model_filename = chain_miner_model.hf_model_filename
+                existing_model.hf_repo_type = chain_miner_model.hf_repo_type
+                existing_model.hf_code_filename = chain_miner_model.hf_code_filename
+                existing_model.block = chain_miner_model.block
+                existing_model.date_submitted = date_submitted
+
+                session.commit()
+                bt.logging.debug(f"Successfully updated model for hotkey {hotkey} and date {date_submitted}.")
+                return True
+            else:
+                bt.logging.debug(f"No existing model found for hotkey {hotkey} and date {date_submitted}. Update skipped.")
+                return False
+
+        except Exception as e:
+            session.rollback()
+            bt.logging.error(f"Error updating model for hotkey {hotkey} and date {date_submitted}: {e}")
             raise e
         finally:
             session.close()
@@ -119,7 +155,7 @@ class ModelDBController:
             bt.logging.error(f"Error retrieving block timestamp: {e}")
             raise
 
-    def get_latest_models(self, hotkeys: list[str], cutoff_time: float = None) -> dict[str, ChainMinerModel]:
+    def get_latest_models(self, hotkeys: list[str], competition_id: str, cutoff_time: float = None) -> dict[str, ChainMinerModel]:
         cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
         session = self.Session()
         try:
@@ -129,6 +165,7 @@ class ModelDBController:
                 model_record = (
                     session.query(ChainMinerModelDB)
                     .filter(ChainMinerModelDB.hotkey == hotkey)
+                    .filter(ChainMinerModelDB.competition_id == competition_id)
                     .filter(ChainMinerModelDB.date_submitted < cutoff_time)
                     .order_by(ChainMinerModelDB.date_submitted.desc())  # Order by newest first
                     .first()  # Get the first (newest) record that meets the cutoff condition
