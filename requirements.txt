@@ -80,7 +80,7 @@ netaddr==1.3.0
 networkx==3.3
 nodeenv==1.9.1
 numpy==1.26.4
-onnx==1.16.2
+onnx==1.17.0
 onnxruntime==1.19.0
 opt-einsum==3.3.0
 optree==0.12.1
