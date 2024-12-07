@@ -146,7 +146,7 @@ uvicorn==0.30.0
 virtualenv==20.26.4
 wandb==0.17.7
 websocket-client==1.8.0
-Werkzeug==3.0.3
+Werkzeug==3.0.6
 wrapt==1.16.0
 xxhash==3.4.1
 yarl==1.9.4
