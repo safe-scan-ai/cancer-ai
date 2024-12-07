@@ -128,15 +128,16 @@ def add_args(cls, parser):
         default="",
     )
 
+    parser.add_argument(
+        "--models_query_cutoff",
+        type=int,
+        help="The cutoff for the models query in minutes.",
+        default=30,
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
-    parser.add_argument(
-        "--competition_id",
-        type=str,
-        help="Competition ID",
-    )
-
     parser.add_argument(
         "--model_dir",
         type=str,
@@ -159,11 +160,6 @@ def add_miner_args(cls, parser):
         "--hf_code_filename",
         type=str,
         help="Filename of the code zip  to push to hugging face.",
-    )
-    parser.add_argument(
-        "--hf_repo_type",
-        type=str,
-        help="Type of hugging face repository.",
     )
 
     parser.add_argument(
@@ -193,7 +189,6 @@ def add_miner_args(cls, parser):
 
     parser.add_argument(
         "--code_directory",
-        "--code_directory",
         type=str,
         help="Path to code directory",
         default=".",
@@ -209,7 +204,7 @@ def add_common_args(cls, parser):
         default="",
     )
     parser.add_argument(
-        "--competition.id",
+        "--competition_id",
         type=str,
         help="Path for storing competition participants models .",
     )
@@ -235,6 +230,12 @@ def add_common_args(cls, parser):
         default="./config/competition_config.json",
     )
 
+    parser.add_argument(
+        "--hf_repo_type",
+        type=str,
+        help="Hugging Face repository type to submit the model from.",
+        default="model",
+    )
 
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
@@ -299,17 +300,24 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--db_path",
+        type=str,
+        help="Path to the sqlite DB for storing the miners models reference",
+        default="models.db"
+    )
+
+    parser.add_argument(
         "--wandb_project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
-        default="template-validators",
+        default="melanoma-testnet",
     )
 
     parser.add_argument(
         "--wandb_entity",
         type=str,
         help="The name of the project where you are sending the new run.",
-        default="opentensor-dev",
+        default="safe-scan-ai",
     )
 
     parser.add_argument(
@@ -319,6 +327,26 @@ def add_validator_args(cls, parser):
         default=False,
     )
 
+    parser.add_argument(
+        "--datasets_config_hf_repo_id",
+        type=str,
+        help="The reference to Hugging Face datasets config.",
+        default="safescanai/competition-configuration",
+    )
+
+    parser.add_argument(
+        "--miners_refresh_interval",
+        type=int,
+        help="The interval at which to refresh the miners in minutes",
+        default=15,
+    )
+
+    parser.add_argument(
+        "--monitor_datasets_interval",
+        type=int,
+        help="The interval at which to monitor the datasets in seconds",
+        default=8*60,
+    )
 
 def path_config(cls=None):
     """

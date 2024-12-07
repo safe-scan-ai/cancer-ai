@@ -3,7 +3,6 @@ from typing import Optional, Type
 
 import bittensor as bt
 from pydantic import BaseModel, Field
-
 from .utils.models_storage_utils import run_in_subprocess
 
 
@@ -30,6 +29,11 @@ class ChainMinerModel(BaseModel):
         """Returns a compressed string representation."""
         return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}"
 
+    @property
+    def hf_link(self) -> str:
+        """Returns the Hugging Face link for the model."""
+        return f"https://huggingface.co/{self.hf_repo_id}/blob/main/{self.hf_model_filename}"
+
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ChainMinerModel"]:
         """Returns an instance of this class from a compressed string representation"""
@@ -44,11 +48,6 @@ class ChainMinerModel(BaseModel):
             hf_repo_type=tokens[4],
             block=None,
         )
-
-
-class ChainMinerModelStore(BaseModel):
-    hotkeys: dict[str, ChainMinerModel | None]
-    last_updated: float | None = None
 
 
 class ChainModelMetadata:
