@@ -83,7 +83,7 @@ class ChainModelMetadata:
         """Retrieves model metadata on this subnet for specific hotkey"""
         # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
         try:
-            metadata = bt.extrinsics.serving.get_metadata(
+            metadata = bt.core.extrinsics.serving.get_metadata(
                 self.subtensor, self.netuid, hotkey
             )
         except Exception as e:
