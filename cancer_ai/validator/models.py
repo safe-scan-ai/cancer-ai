@@ -19,7 +19,7 @@ class OrganizationDataReference(BaseModel):
     organization_id: str = Field(..., min_length=1, description="Unique identifier for the organization")
     contact_email: EmailStr = Field(..., description="Contact email address for the organization")
     dataset_hf_repo: str = Field(..., min_length=1, description="Hugging Face repository path for the dataset")
-    dataset_hf_dir: str = Field(..., min_length=1, description="Filename for the dataset in the repository")
+    dataset_hf_dir: str = Field(..., min_length=1, description="Directory for the datasets in the repository")
 
 class OrganizationDataReferenceFactory(BaseModel):
     organizations: List[OrganizationDataReference] = Field(default_factory=list)
@@ -41,3 +41,8 @@ class OrganizationDataReferenceFactory(BaseModel):
         for key, value in data.items():
             if key != "organizations":
                 setattr(self, key, value)
+
+class NewDatasetFile(BaseModel):
+    competition_id: str = Field(..., min_length=1, description="Competition identifier")
+    dataset_hf_repo: str = Field(..., min_length=1, description="Hugging Face repository path for the dataset")
+    dataset_hf_filename: str = Field(..., min_length=1, description="Filename for the dataset in the repository")

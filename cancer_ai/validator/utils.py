@@ -7,7 +7,7 @@ import yaml
 from cancer_ai.validator.models import CompetitionsListModel, CompetitionModel
 from huggingface_hub import HfApi, hf_hub_download
 from cancer_ai.validator.models import (
-    OrganizationDataReference,
+    NewDatasetFile,
     OrganizationDataReferenceFactory,
 )
 from datetime import datetime
@@ -197,7 +197,7 @@ async def sync_organizations_data_references(fetched_yaml_files: list[dict]):
     factory = OrganizationDataReferenceFactory.get_instance()
     factory.update_from_dict(update_data)
 
-async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates) -> list[dict[str, Any]]:
+async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates: dict) -> list[NewDatasetFile]:
     """
     For each OrganizationDataReference stored in the singleton, this function:
       - Connects to the organization's public Hugging Face repo.
@@ -224,12 +224,10 @@ async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates) -> list
             recursive=True,
             expand=True,
         )
-        
         relevant_files = [
             f for f in files 
             if f.__class__.__name__ == "RepoFile" and f.path.startswith(org.dataset_hf_dir)
         ]
-        
         max_commit_date = None
         for f in relevant_files:
             commit_date = f.last_commit.date if f.last_commit else None
@@ -258,10 +256,10 @@ async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates) -> list
         
         # Append results for any new files found.
         for file_name in new_files:
-            results.append({
-                "competition_id": org.competition_id,
-                "dataset_hf_repo": org.dataset_hf_repo,
-                "dataset_hf_filename": file_name
-            })
+            results.append(NewDatasetFile(
+                competition_id=org.competition_id,
+                dataset_hf_repo=org.dataset_hf_repo,
+                dataset_hf_filename=file_name
+            ))
     
     return results
