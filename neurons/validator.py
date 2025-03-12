@@ -41,6 +41,8 @@ from cancer_ai.validator.utils import (
     fetch_organization_data_references,
     get_new_organization_data_updates,
     update_organizations_data_references,
+    sync_organizations_data_references,
+    check_for_new_dataset_files,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
@@ -209,26 +211,28 @@ class Validator(BaseValidatorNeuron):
             self.hf_api,
             )        
             
-        list_of_data_references = await get_new_organization_data_updates(yaml_data)
+        sync_organizations_data_references(yaml_data)
+        self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+        self.save_state()
+
+        list_of_data_references = check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+        self.save_state()
+
         if not list_of_data_references:
             bt.logging.info("No new data packages found.")
             return
-                
-        await update_organizations_data_references(yaml_data)
-        self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-        self.save_state()
         
         for data_reference in list_of_data_references:
-            bt.logging.info(f"New data packages found. Starting competition for {data_reference.competition_id}")
+            bt.logging.info(f"New data packages found. Starting competition for {data_reference["competition_id"]}")
             competition_manager = CompetitionManager(
                 config=self.config,
                 subtensor=self.subtensor,
                 hotkeys=self.hotkeys,
                 validator_hotkey=self.hotkey,
-                competition_id=data_reference.competition_id,
-                dataset_hf_repo=data_reference.dataset_hf_repo,
-                dataset_hf_id=data_reference.dataset_hf_filename,
-                dataset_hf_repo_type=data_reference.dataset_hf_repo_type,
+                competition_id=data_reference["competition_id"],
+                dataset_hf_repo=data_reference["dataset_hf_repo"],
+                dataset_hf_id=data_reference["dataset_hf_filename"],
+                dataset_hf_repo_type="dataset",
                 db_controller = self.db_controller,
                 test_mode = self.config.test_mode,
             )
@@ -261,7 +265,7 @@ class Validator(BaseValidatorNeuron):
                 wandb.finish()
                 continue
 
-            wandb.init(project=data_reference.competition_id, group="competition_evaluation")
+            wandb.init(project=data_reference["competition_id"], group="competition_evaluation")
             wandb.log(
                 {
                     "log_type": "competition_result",
@@ -273,8 +277,8 @@ class Validator(BaseValidatorNeuron):
             )
             wandb.finish()
 
-            bt.logging.info(f"Competition result for {data_reference.competition_id}: {winning_hotkey}")
-            await self.handle_competition_winner(winning_hotkey, data_reference.competition_id, winning_model_result)
+            bt.logging.info(f"Competition result for {data_reference["competition_id"]}: {winning_hotkey}")
+            await self.handle_competition_winner(winning_hotkey, data_reference["competition_id"], winning_model_result)
 
     async def handle_competition_winner(self, winning_hotkey, competition_id, winning_model_result):
         await self.rewarder.update_scores(
@@ -318,6 +322,7 @@ class Validator(BaseValidatorNeuron):
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
             organizations_data_references=self.organizations_data_references.model_dump(),
+            org_latest_updates=self.org_latest_updates,
         )
 
     def create_empty_state(self):
@@ -329,6 +334,7 @@ class Validator(BaseValidatorNeuron):
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
             organizations_data_references=self.organizations_data_references.model_dump(),
+            org_latest_updates=self.org_latest_updates,
         )
         return
 
@@ -356,6 +362,7 @@ class Validator(BaseValidatorNeuron):
             saved_data = state["organizations_data_references"].item()
             factory.update_from_dict(saved_data)
             self.organizations_data_references = factory
+            self.org_latest_updates = state["org_latest_updates"]
     
         except Exception as e:
             bt.logging.error(f"Error loading state: {e}")

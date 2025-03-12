@@ -12,6 +12,7 @@ from cancer_ai.validator.models import (
     OrganizationDataReferenceFactory,
 )
 from datetime import datetime
+from typing import Any
 
 
 class ModelType(Enum):
@@ -173,6 +174,31 @@ async def fetch_yaml_data_from_local_repo(local_repo_path: str) -> list[dict]:
 
     return yaml_data
 
+async def sync_organizations_data_references(fetched_yaml_files: list[dict]):
+    """
+    Synchronizes the OrganizationDataReferenceFactory state with the full content
+    from the fetched YAML files.
+    
+    Each fetched YAML file is expected to contain a list of organization entries.
+    The 'org_id' key from the YAML is remapped to 'organization_id' to match the model.
+    """
+    all_orgs = []
+    for file in fetched_yaml_files:
+        yaml_data = file["yaml_data"]  # each yaml_data is a list of dicts
+        for entry in yaml_data:
+            # Remap 'org_id' to 'organization_id' if needed.
+            if "org_id" in entry:
+                entry["organization_id"] = entry.pop("org_id")
+            all_orgs.append(entry)
+    
+    # Prepare the dictionary to update the factory.
+    update_data = {"organizations": all_orgs}
+    
+    # Update the singleton instance.
+    factory = OrganizationDataReferenceFactory.get_instance()
+    factory.update_from_dict(update_data)
+
+
 async def get_new_organization_data_updates(fetched_yaml_files: list[dict]) -> list[DatasetReference]:
     factory = OrganizationDataReferenceFactory.get_instance()
     data_references: list[DatasetReference] = []
@@ -230,3 +256,73 @@ async def update_organizations_data_references(fetched_yaml_files: list[dict]):
             date_uploaded=file['date_uploaded']
         )
         factory.add_organizations([new_org])
+
+
+async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates) -> list[dict[str, Any]]:
+    """
+    For each OrganizationDataReference stored in the singleton, this function:
+      - Connects to the organization's public Hugging Face repo.
+      - Lists files under the directory specified by dataset_hf_dir.
+      - Determines the maximum commit date among those files.
+    
+    For a blank state, it returns the file with the latest commit date.
+    On subsequent checks, it returns any file whose commit date is newer than the previously stored update.
+    
+    Returns:
+        A list of dictionaries, each containing:
+          - competition_id: from the OrganizationDataReference.
+          - dataset_hf_repo: from the OrganizationDataReference.
+          - new_file: the path of the new file detected.
+    """
+    results = []
+    factory = OrganizationDataReferenceFactory.get_instance()
+    
+    for org in factory.organizations:
+        files = hf_api.list_repo_tree(
+            repo_id=org.dataset_hf_repo,
+            repo_type="dataset",
+            token=None, # these are public repos
+            recursive=True,
+            expand=True,
+        )
+        
+        relevant_files = [
+            f for f in files 
+            if f.__class__.__name__ == "RepoFile" and f.path.startswith(org.dataset_hf_dir)
+        ]
+        
+        max_commit_date = None
+        for f in relevant_files:
+            commit_date = f.last_commit.date if f.last_commit else None
+            if commit_date and (max_commit_date is None or commit_date > max_commit_date):
+                max_commit_date = commit_date
+        
+        new_files = []
+        stored_update = org_latest_updates.get(org.organization_id)
+        # if there is no stored_update and max_commit_date is present (any commit date is present)
+        if stored_update is None and max_commit_date is not None:
+            for f in relevant_files:
+                commit_date = f.last_commit.date if f.last_commit else None
+                if commit_date == max_commit_date:
+                    new_files.append(f.path)
+                    break
+        # if there is any stored update then we implicitly expect that any commit date on the repo is present as well
+        else:
+            for f in relevant_files:
+                commit_date = f.last_commit.date if f.last_commit else None
+                if commit_date and commit_date > stored_update:
+                    new_files.append(f.path)
+        
+        # update the stored latest update for this organization.
+        if max_commit_date is not None:
+            org_latest_updates[org.organization_id] = max_commit_date
+        
+        # Append results for any new files found.
+        for file_name in new_files:
+            results.append({
+                "competition_id": org.competition_id,
+                "dataset_hf_repo": org.dataset_hf_repo,
+                "dataset_hf_filename": file_name
+            })
+    
+    return results
