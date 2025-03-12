@@ -7,7 +7,6 @@ import yaml
 from cancer_ai.validator.models import CompetitionsListModel, CompetitionModel
 from huggingface_hub import HfApi, hf_hub_download
 from cancer_ai.validator.models import (
-    DatasetReference,
     OrganizationDataReference,
     OrganizationDataReferenceFactory,
 )
@@ -197,66 +196,6 @@ async def sync_organizations_data_references(fetched_yaml_files: list[dict]):
     # Update the singleton instance.
     factory = OrganizationDataReferenceFactory.get_instance()
     factory.update_from_dict(update_data)
-
-
-async def get_new_organization_data_updates(fetched_yaml_files: list[dict]) -> list[DatasetReference]:
-    factory = OrganizationDataReferenceFactory.get_instance()
-    data_references: list[DatasetReference] = []
-
-    for file in fetched_yaml_files:
-        yaml_data = file['yaml_data']
-        date_uploaded = file['date_uploaded']
-
-        org_id = yaml_data[0]['organization_id']
-        existing_org = next((org for org in factory.organizations if org.organization_id == org_id), None)
-
-        if not existing_org:
-            for entry in yaml_data:
-                data_references.append(DatasetReference(
-                    competition_id=entry['competition_id'],
-                    dataset_hf_repo=entry['dataset_hf_repo'],
-                    dataset_hf_filename=entry['dataset_hf_filename'],
-                    dataset_hf_repo_type=entry['dataset_hf_repo_type'],
-                    dataset_size=entry['dataset_size']
-                ))
-        
-        if existing_org and date_uploaded != existing_org.date_uploaded:
-            last_entry = yaml_data[-1]
-            data_references.append(DatasetReference(
-                competition_id=last_entry['competition_id'],
-                dataset_hf_repo=last_entry['dataset_hf_repo'],
-                dataset_hf_filename=last_entry['dataset_hf_filename'],
-                dataset_hf_repo_type=last_entry['dataset_hf_repo_type'],
-                dataset_size=last_entry['dataset_size']
-            ))
-
-    return data_references
-
-async def update_organizations_data_references(fetched_yaml_files: list[dict]):
-    bt.logging.trace("Updating organizations data references")
-    factory = OrganizationDataReferenceFactory.get_instance()
-    factory.organizations.clear()
-
-    for file in fetched_yaml_files:
-        yaml_data = file['yaml_data']
-        new_org = OrganizationDataReference(
-            organization_id=yaml_data[0]['organization_id'],
-            contact_email=yaml_data[0]['contact_email'],
-            bittensor_hotkey=yaml_data[0]['bittensor_hotkey'],
-            data_packages=[
-                DatasetReference(
-                    competition_id=dp['competition_id'],
-                    dataset_hf_repo=dp['dataset_hf_repo'],
-                    dataset_hf_filename=dp['dataset_hf_filename'],
-                    dataset_hf_repo_type=dp['dataset_hf_repo_type'],
-                    dataset_size=dp['dataset_size']
-                )
-                for dp in yaml_data
-            ],
-            date_uploaded=file['date_uploaded']
-        )
-        factory.add_organizations([new_org])
-
 
 async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates) -> list[dict[str, Any]]:
     """
