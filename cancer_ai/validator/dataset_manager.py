@@ -91,9 +91,10 @@ class DatasetManager(SerializableManager):
         bt.logging.debug(f"Dataset extracted to: { self.local_compressed_path}")
         os.system(f"rm -R {self.local_extracted_dir}")
         # TODO add error handling
-        out, err = await run_command(
-            f"unzip {self.local_compressed_path} -d {self.local_extracted_dir}"
-        )
+        zip_file_path = self.local_compressed_path
+        extract_dir = self.local_extracted_dir
+        command = f'unzip "{zip_file_path}" -d {extract_dir}'
+        out, err = await run_command(command)
         if err:
             bt.logging.error(f"Error unzipping dataset: {err}")
             raise DatasetManagerException(f"Error unzipping dataset: {err}")
