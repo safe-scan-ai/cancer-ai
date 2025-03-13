@@ -99,6 +99,7 @@ class MinerManagerCLI:
             self.competition_config.competitions[0].dataset_hf_repo,
             self.competition_config.competitions[0].dataset_hf_filename,
             self.competition_config.competitions[0].dataset_hf_repo_type,
+            use_auth=False
         )
         await dataset_manager.prepare_dataset()
 
@@ -145,6 +146,7 @@ class MinerManagerCLI:
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
         bt.logging.info(f"Metagraph: {self.metagraph}")
+
         if not self.subtensor.is_hotkey_registered(
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
@@ -154,30 +156,18 @@ class MinerManagerCLI:
                 f" Please register the hotkey using `btcli subnets register` before trying again"
             )
             exit()
+
         self.metadata_store = ChainModelMetadata(
             subtensor=self.subtensor, netuid=self.config.netuid, wallet=self.wallet
         )
+
         print(self.config)
-        if not huggingface_hub.file_exists(
-            repo_id=self.config.hf_repo_id,
-            filename=self.config.hf_model_name,
-            repo_type=self.config.hf_repo_type,
-        ):
-            bt.logging.error(
-                f"{self.config.hf_model_name} not found in Hugging Face repo"
-            )
+
+        if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_model_name, self.config.hf_repo_type):
             return
 
-        if not huggingface_hub.file_exists(
-            repo_id=self.config.hf_repo_id,
-            filename=self.config.hf_code_filename,
-            repo_type=self.config.hf_repo_type,
-        ):
-            bt.logging.error(
-                f"{self.config.hf_model_name} not found in Hugging Face repo"
-            )
+        if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_code_filename, self.config.hf_repo_type):
             return
-        bt.logging.info("Model and code found in Hugging Face repo")
 
         # Push model metadata to chain
         model_id = ChainMinerModel(
@@ -192,6 +182,12 @@ class MinerManagerCLI:
         bt.logging.success(
             f"Successfully pushed model metadata on chain. Model ID: {model_id}"
         )
+
+    def _check_hf_file_exists(self, repo_id, filename, repo_type):
+        if not huggingface_hub.file_exists(repo_id=repo_id, filename=filename, repo_type=repo_type):
+            bt.logging.error(f"{filename} not found in Hugging Face repo")
+            return False
+        return True
 
     async def main(self) -> None:
 
