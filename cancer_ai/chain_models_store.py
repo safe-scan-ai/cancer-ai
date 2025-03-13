@@ -70,11 +70,14 @@ class ChainModelMetadata:
         if self.wallet is None:
             raise ValueError("No wallet available to write to the chain.")
 
-        self.subtensor.commit(
-        self.wallet,
-        self.netuid,
-        model_id.to_compressed_str(),
+        # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
+        partial = functools.partial(
+            self.subtensor.commit,
+            self.wallet,
+            self.netuid,
+            model_id.to_compressed_str(),
         )
+        run_in_subprocess(partial, 60)
 
     async def retrieve_model_metadata(self, hotkey: str) -> Optional[ChainMinerModel]:
         """Retrieves model metadata on this subnet for specific hotkey"""
@@ -93,7 +96,7 @@ class ChainModelMetadata:
         commitment_dict = commitment[0]
         key = list(commitment_dict.keys())[0]
         data_tuple = commitment_dict[key][0]
-        hex_str = ''.join(f"{i:02x}" for i in data_tuple)
+        hex_str = "".join(f"{i:02x}" for i in data_tuple)
         chain_str = bytes.fromhex(hex_str).decode()
         try:
             model = ChainMinerModel.from_compressed_str(chain_str)
