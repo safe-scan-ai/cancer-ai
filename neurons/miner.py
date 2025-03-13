@@ -2,6 +2,7 @@ import asyncio
 import copy
 import time
 import os
+from pathlib import Path
 
 import bittensor as bt
 from dotenv import load_dotenv
@@ -36,7 +37,7 @@ class MinerManagerCLI:
             self.config.competition.config_path
         )
 
-        self.code_zip_path = f"{self.config.code_directory}/code.zip"
+        self.code_zip_path = None
 
         self.wallet = None
         self.subtensor = None
@@ -55,8 +56,10 @@ class MinerManagerCLI:
         hf_api = HfApi()
         hf_login(token=self.config.hf_token)
 
-        hf_model_path = f"{self.config.competition_id}-{self.config.hf_model_name}.onnx"
-        hf_code_path = f"{self.config.competition_id}-{self.config.hf_model_name}.zip"
+        hf_model_path = self.config.hf_model_name
+        hf_code_path = self.code_zip_path
+        bt.logging.info(f"Model path: {hf_model_path}")
+        bt.logging.info(f"Code path: {hf_code_path}")
 
         path = hf_api.upload_file(
             path_or_fileobj=self.config.model_path,
@@ -67,12 +70,28 @@ class MinerManagerCLI:
         bt.logging.info("Uploading code to Hugging Face.")
         path = hf_api.upload_file(
             path_or_fileobj=self.code_zip_path,
-            path_in_repo=hf_code_path,
+            path_in_repo=Path(hf_code_path).name,
             repo_id=self.config.hf_repo_id,
             token=self.config.hf_token,
         )
-
+        bt.logging.info(f"Code uploaded to Hugging Face: {path}")
         bt.logging.info(f"Uploaded model to Hugging Face: {path}")
+        
+        # Print ready-to-run submit command
+        submit_command = (
+            f"python neurons/miner.py "
+            f"--action submit "
+            f"--competition_id {self.config.competition_id} "
+            f"--hf_code_filename {Path(hf_code_path).name} "
+            f"--hf_model_name {hf_model_path} "
+            f"--hf_repo_id {self.config.hf_repo_id} "
+            f"--wallet.name {self.config.wallet.name or '<WALLET_NAME>'} "
+            f"--wallet.hotkey {self.config.wallet.hotkey or '<HOTKEY>'} "
+            f"--netuid {self.config.netuid or '<NETUID>'} "
+            f"--logging.debug"
+        )
+        bt.logging.info("\nReady to submit your model. Run this command (adjust placeholders):")
+        bt.logging.info(submit_command)
 
     @staticmethod
     def is_onnx_model(model_path: str) -> bool:
@@ -125,9 +144,13 @@ class MinerManagerCLI:
 
     async def compress_code(self) -> None:
         bt.logging.info("Compressing code")
-
+        bt.logging.info(f"Code directory: {self.config.code_directory}")
+        
+        code_dir = Path(self.config.code_directory)
+        self.code_zip_path = str(code_dir.parent / f"{code_dir.name}.zip")
+        
         out, err = await run_command(
-            f"zip  -r {self.code_zip_path} {self.config.code_directory}/*"
+            f"zip -r {self.code_zip_path} {self.config.code_directory}/*"
         )
         if err:
             bt.logging.info("Error zipping code")

@@ -71,13 +71,11 @@ class ChainModelMetadata:
             raise ValueError("No wallet available to write to the chain.")
 
         # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
-        partial = functools.partial(
-            self.subtensor.commit,
+        self.subtensor.commit(
             self.wallet,
             self.netuid,
             model_id.to_compressed_str(),
         )
-        run_in_subprocess(partial, 60)
 
     async def retrieve_model_metadata(self, hotkey: str) -> Optional[ChainMinerModel]:
         """Retrieves model metadata on this subnet for specific hotkey"""
