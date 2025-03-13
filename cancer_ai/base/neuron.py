@@ -108,7 +108,7 @@ class BaseNeuron(ABC):
     @abstractmethod
     def run(self): ...
 
-    def sync(self, retries=5, delay=10):
+    def sync(self, retries=5, delay=10, force_sync=False):
         """
         Wrapper for synchronizing the state of the network for the given miner or validator.
         """
@@ -118,8 +118,9 @@ class BaseNeuron(ABC):
                 # Ensure miner or validator hotkey is still registered on the network.
                 self.check_registered()
 
-                if self.should_sync_metagraph():
-                    self.resync_metagraph()
+                if self.should_sync_metagraph() or force_sync:
+                    bt.logging.info("Resyncing metagraph in progress.")
+                    self.resync_metagraph(force_sync=True)
 
                 if self.should_set_weights():
                     self.set_weights()

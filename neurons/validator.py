@@ -107,7 +107,7 @@ class Validator(BaseValidatorNeuron):
 
         with open(blacklist_file, "r", encoding="utf-8") as f:
             BLACKLISTED_HOTKEYS = json.load(f)
-
+        
         for hotkey in self.hotkeys:
             if hotkey in BLACKLISTED_HOTKEYS:
                 bt.logging.debug(f"Skipping blacklisted hotkey {hotkey}")
