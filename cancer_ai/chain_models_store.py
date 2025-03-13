@@ -64,6 +64,7 @@ class ChainModelMetadata:
             wallet  # Wallet is only needed to write to the chain, not to read.
         )
         self.netuid = netuid
+        
 
     async def store_model_metadata(self, model_id: ChainMinerModel):
         """Stores model metadata on this subnet for a specific wallet."""
@@ -79,23 +80,53 @@ class ChainModelMetadata:
 
     async def retrieve_model_metadata(self, hotkey: str) -> Optional[ChainMinerModel]:
         """Retrieves model metadata on this subnet for specific hotkey"""
+
+
         # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
-        try:
-            metadata = bt.core.extrinsics.serving.get_metadata(
-                self.subtensor, self.netuid, hotkey
-            )
-        except Exception as e:
-            bt.logging.error(f"Error retrieving metadata for hotkey {hotkey}: {e}")
-            return None
+        # try:
+        #     metadata = bt.core.extrinsics.serving.get_metadata(
+        #         self.subtensor, self.netuid, hotkey
+        #     )
+        # except Exception as e:
+        #     bt.logging.error(f"Error retrieving metadata for hotkey {hotkey}: {e}")
+        #     return None
+        # if not metadata:
+        #     return None
+        # bt.logging.trace(f"Model metadata: {metadata['info']['fields']}")
+        # commitment = metadata["info"]["fields"][0]
+        # commitment_dict = commitment[0]
+        # key = list(commitment_dict.keys())[0]
+        # data_tuple = commitment_dict[key][0]
+        # hex_str = "".join(f"{i:02x}" for i in data_tuple)
+        # chain_str = bytes.fromhex(hex_str).decode()
+                # Wrap calls to the subtensor in a thread with a timeout to handle potential hangs.
+
+        ttl = 60
+        # metadata_partial = functools.partial(
+        #     bt.core.extrinsics.serving.get_metadata,
+        #     self.subtensor,
+        #     self.netuid,
+        #     hotkey,
+        # # )
+        subnet_metadata = self.subtensor.metagraph(self.netuid)
+        uids = subnet_metadata.uids
+        hotkeys = subnet_metadata.hotkeys
+        # bt.logging.error("hotkeys: ", hotkeys)
+        uid = next((uid for uid, hk in zip(uids, hotkeys) if hk == hotkey), None)
+        bt.logging.info(f"Found uid {uid} for hotkey {hotkey}")
+
+        metadata = bt.core.extrinsics.serving.get_metadata(self.subtensor, self.netuid, hotkey)
+
+        chain_str = self.subtensor.get_commitment(self.netuid, uid)
+
+        # metadata = commitment_partial()
+
         if not metadata:
             return None
-        bt.logging.trace(f"Model metadata: {metadata['info']['fields']}")
-        commitment = metadata["info"]["fields"][0]
-        commitment_dict = commitment[0]
-        key = list(commitment_dict.keys())[0]
-        data_tuple = commitment_dict[key][0]
-        hex_str = "".join(f"{i:02x}" for i in data_tuple)
-        chain_str = bytes.fromhex(hex_str).decode()
+
+        # chain_str 
+
+        model = None
         try:
             model = ChainMinerModel.from_compressed_str(chain_str)
             bt.logging.debug(f"Model: {model}")
