@@ -40,7 +40,7 @@ from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     fetch_organization_data_references,
     sync_organizations_data_references,
-    check_for_new_dataset_files,
+    get_new_dataset_files,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
@@ -213,7 +213,7 @@ class Validator(BaseValidatorNeuron):
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
         self.save_state()
 
-        list_of_new_data_packages: list[NewDatasetFile] = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+        list_of_new_data_packages: list[NewDatasetFile] = await get_new_dataset_files(self.hf_api, self.org_latest_updates)
         self.save_state()
 
         if not list_of_new_data_packages:
