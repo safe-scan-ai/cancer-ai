@@ -60,7 +60,7 @@ pip install -r requirements.txt
 To run the validator script, use the following command:
 
 ```bash
-python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-hotkey --netuid=46
+python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-hotkey --netuid=76
 
 ```
 
@@ -70,7 +70,7 @@ python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-ho
 - `--wallet.name`: Specifies the wallet name to be used by the validator.
 - `--wallet.hotkey`: Specifies the hotkey associated with the wallet.
 - `--subtensor.network`: Specifies the network name. Default is `"finney"`.
-- `--netuid`: Specifies the Netuid of the network. Default is `"46"`.
+- `--netuid`: Specifies the Netuid of the network. Default is `"76"`.
 - `--logging.debug`: Enables debug logging if set to `1`. Default is `1`.
 
 ## How It Works
