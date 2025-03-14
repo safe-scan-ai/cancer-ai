@@ -205,7 +205,6 @@ class Validator(BaseValidatorNeuron):
 
         yaml_data = await fetch_organization_data_references(
             self.config.datasets_config_hf_repo_id,
-            self.config.hf_token,
             self.hf_api,
             )        
             
