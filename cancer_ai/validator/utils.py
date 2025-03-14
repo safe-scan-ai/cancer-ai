@@ -183,17 +183,15 @@ async def sync_organizations_data_references(fetched_yaml_files: list[dict]):
     """
     all_orgs = []
     for file in fetched_yaml_files:
-        yaml_data = file["yaml_data"]  # each yaml_data is a list of dicts
+        yaml_data = file["yaml_data"]
         for entry in yaml_data:
             # Remap 'org_id' to 'organization_id' if needed.
             if "org_id" in entry:
                 entry["organization_id"] = entry.pop("org_id")
             all_orgs.append(entry)
     
-    # Prepare the dictionary to update the factory.
     update_data = {"organizations": all_orgs}
     
-    # Update the singleton instance.
     factory = OrganizationDataReferenceFactory.get_instance()
     factory.update_from_dict(update_data)
 
@@ -206,12 +204,6 @@ async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates: dict) -
     
     For a blank state, it returns the file with the latest commit date.
     On subsequent checks, it returns any file whose commit date is newer than the previously stored update.
-    
-    Returns:
-        A list of dictionaries, each containing:
-          - competition_id: from the OrganizationDataReference.
-          - dataset_hf_repo: from the OrganizationDataReference.
-          - new_file: the path of the new file detected.
     """
     results = []
     factory = OrganizationDataReferenceFactory.get_instance()
@@ -254,7 +246,6 @@ async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates: dict) -
         if max_commit_date is not None:
             org_latest_updates[org.organization_id] = max_commit_date
         
-        # Append results for any new files found.
         for file_name in new_files:
             results.append(NewDatasetFile(
                 competition_id=org.competition_id,

@@ -76,22 +76,6 @@ class MinerManagerCLI:
         )
         bt.logging.info(f"Code uploaded to Hugging Face: {path}")
         bt.logging.info(f"Uploaded model to Hugging Face: {path}")
-        
-        # Print ready-to-run submit command
-        submit_command = (
-            f"python neurons/miner.py "
-            f"--action submit "
-            f"--competition_id {self.config.competition_id} "
-            f"--hf_code_filename {Path(hf_code_path).name} "
-            f"--hf_model_name {hf_model_path} "
-            f"--hf_repo_id {self.config.hf_repo_id} "
-            f"--wallet.name {self.config.wallet.name or '<WALLET_NAME>'} "
-            f"--wallet.hotkey {self.config.wallet.hotkey or '<HOTKEY>'} "
-            f"--netuid {self.config.netuid or '<NETUID>'} "
-            f"--logging.debug"
-        )
-        bt.logging.info("\nReady to submit your model. Run this command (adjust placeholders):")
-        bt.logging.info(submit_command)
 
     @staticmethod
     def is_onnx_model(model_path: str) -> bool:
