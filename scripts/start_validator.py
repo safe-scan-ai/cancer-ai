@@ -209,7 +209,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--netuid", default="46", help="Netuid of the network."
+        "--netuid", default="76", help="Netuid of the network."
     )
 
     parser.add_argument(
