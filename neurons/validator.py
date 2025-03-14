@@ -39,13 +39,13 @@ from competition_runner import (
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     fetch_organization_data_references,
-    get_new_organization_data_updates,
-    update_organizations_data_references,
+    sync_organizations_data_references,
+    check_for_new_dataset_files,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
-from cancer_ai.validator.models import OrganizationDataReferenceFactory
-from huggingface_hub import HfApi, hf_hub_download
+from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
+from huggingface_hub import HfApi
 
 BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"
 BLACKLIST_FILE_PATH_TESTNET = "config/hotkey_blacklist_testnet.json"
@@ -107,7 +107,7 @@ class Validator(BaseValidatorNeuron):
 
         with open(blacklist_file, "r", encoding="utf-8") as f:
             BLACKLISTED_HOTKEYS = json.load(f)
-
+        
         for hotkey in self.hotkeys:
             if hotkey in BLACKLISTED_HOTKEYS:
                 bt.logging.debug(f"Skipping blacklisted hotkey {hotkey}")
@@ -128,7 +128,7 @@ class Validator(BaseValidatorNeuron):
         self.db_controller.clean_old_records(self.hotkeys)
         latest_models = self.db_controller.get_latest_models(self.hotkeys, self.config.models_query_cutoff)
         bt.logging.info(
-            f"Amount of miners with models: {len(latest_models)}"
+            f"Amount of latest miners with models: {len(latest_models)}"
         )
         self.last_miners_refresh = time.time()
         self.save_state()
@@ -209,26 +209,28 @@ class Validator(BaseValidatorNeuron):
             self.hf_api,
             )        
             
-        list_of_data_references = await get_new_organization_data_updates(yaml_data)
-        if not list_of_data_references:
-            bt.logging.info("No new data packages found.")
-            return
-                
-        await update_organizations_data_references(yaml_data)
+        await sync_organizations_data_references(yaml_data)
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
         self.save_state()
+
+        list_of_new_data_packages: list[NewDatasetFile] = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+        self.save_state()
+
+        if not list_of_new_data_packages:
+            bt.logging.info("No new data packages found.")
+            return
         
-        for data_reference in list_of_data_references:
-            bt.logging.info(f"New data packages found. Starting competition for {data_reference.competition_id}")
+        for data_package in list_of_new_data_packages:
+            bt.logging.info(f"New data packages found. Starting competition for {data_package.competition_id}")
             competition_manager = CompetitionManager(
                 config=self.config,
                 subtensor=self.subtensor,
                 hotkeys=self.hotkeys,
                 validator_hotkey=self.hotkey,
-                competition_id=data_reference.competition_id,
-                dataset_hf_repo=data_reference.dataset_hf_repo,
-                dataset_hf_id=data_reference.dataset_hf_filename,
-                dataset_hf_repo_type=data_reference.dataset_hf_repo_type,
+                competition_id=data_package.competition_id,
+                dataset_hf_repo=data_package.dataset_hf_repo,
+                dataset_hf_id=data_package.dataset_hf_filename,
+                dataset_hf_repo_type="dataset",
                 db_controller = self.db_controller,
                 test_mode = self.config.test_mode,
             )
@@ -261,7 +263,7 @@ class Validator(BaseValidatorNeuron):
                 wandb.finish()
                 continue
 
-            wandb.init(project=data_reference.competition_id, group="competition_evaluation")
+            wandb.init(project=data_package.competition_id, group="competition_evaluation")
             wandb.log(
                 {
                     "log_type": "competition_result",
@@ -273,8 +275,8 @@ class Validator(BaseValidatorNeuron):
             )
             wandb.finish()
 
-            bt.logging.info(f"Competition result for {data_reference.competition_id}: {winning_hotkey}")
-            await self.handle_competition_winner(winning_hotkey, data_reference.competition_id, winning_model_result)
+            bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
+            await self.handle_competition_winner(winning_hotkey, data_package.competition_id, winning_model_result)
 
     async def handle_competition_winner(self, winning_hotkey, competition_id, winning_model_result):
         await self.rewarder.update_scores(
@@ -318,6 +320,7 @@ class Validator(BaseValidatorNeuron):
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
             organizations_data_references=self.organizations_data_references.model_dump(),
+            org_latest_updates=self.org_latest_updates,
         )
 
     def create_empty_state(self):
@@ -329,6 +332,7 @@ class Validator(BaseValidatorNeuron):
             winners_store=self.winners_store.model_dump(),
             run_log=self.run_log.model_dump(),
             organizations_data_references=self.organizations_data_references.model_dump(),
+            org_latest_updates={},
         )
         return
 
@@ -356,6 +360,8 @@ class Validator(BaseValidatorNeuron):
             saved_data = state["organizations_data_references"].item()
             factory.update_from_dict(saved_data)
             self.organizations_data_references = factory
+            self.org_latest_updates = state["org_latest_updates"].item()
+
     
         except Exception as e:
             bt.logging.error(f"Error loading state: {e}")

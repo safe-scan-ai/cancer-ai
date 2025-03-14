@@ -78,7 +78,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
         self.load_state()
         # Init sync with the network. Updates the metagraph.
-        self.sync()
+        self.sync(force_sync=True)
 
         # Serve axon to enable external connections.
         if not self.config.neuron.axon_off:
@@ -283,9 +283,9 @@ class BaseValidatorNeuron(BaseNeuron):
         else:
             bt.logging.error("set_weights failed", msg)
 
-    def resync_metagraph(self):
+    def resync_metagraph(self, force_sync=False):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        bt.logging.info("resync_metagraph()")
+        bt.logging.info("resync_metagraph() validator")
 
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
@@ -294,7 +294,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.metagraph.sync(subtensor=self.subtensor)
 
         # Check if the metagraph axon info has changed.
-        if previous_metagraph.axons == self.metagraph.axons:
+        if previous_metagraph.axons == self.metagraph.axons and not force_sync:
             return
 
         bt.logging.info(

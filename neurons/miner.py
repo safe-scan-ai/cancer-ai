@@ -2,6 +2,7 @@ import asyncio
 import copy
 import time
 import os
+from pathlib import Path
 
 import bittensor as bt
 from dotenv import load_dotenv
@@ -36,7 +37,7 @@ class MinerManagerCLI:
             self.config.competition.config_path
         )
 
-        self.code_zip_path = f"{self.config.code_directory}/code.zip"
+        self.code_zip_path = None
 
         self.wallet = None
         self.subtensor = None
@@ -55,8 +56,10 @@ class MinerManagerCLI:
         hf_api = HfApi()
         hf_login(token=self.config.hf_token)
 
-        hf_model_path = f"{self.config.competition_id}-{self.config.hf_model_name}.onnx"
-        hf_code_path = f"{self.config.competition_id}-{self.config.hf_model_name}.zip"
+        hf_model_path = self.config.hf_model_name
+        hf_code_path = self.code_zip_path
+        bt.logging.info(f"Model path: {hf_model_path}")
+        bt.logging.info(f"Code path: {hf_code_path}")
 
         path = hf_api.upload_file(
             path_or_fileobj=self.config.model_path,
@@ -67,11 +70,11 @@ class MinerManagerCLI:
         bt.logging.info("Uploading code to Hugging Face.")
         path = hf_api.upload_file(
             path_or_fileobj=self.code_zip_path,
-            path_in_repo=hf_code_path,
+            path_in_repo=Path(hf_code_path).name,
             repo_id=self.config.hf_repo_id,
             token=self.config.hf_token,
         )
-
+        bt.logging.info(f"Code uploaded to Hugging Face: {path}")
         bt.logging.info(f"Uploaded model to Hugging Face: {path}")
 
     @staticmethod
@@ -99,6 +102,7 @@ class MinerManagerCLI:
             self.competition_config.competitions[0].dataset_hf_repo,
             self.competition_config.competitions[0].dataset_hf_filename,
             self.competition_config.competitions[0].dataset_hf_repo_type,
+            use_auth=False
         )
         await dataset_manager.prepare_dataset()
 
@@ -124,9 +128,13 @@ class MinerManagerCLI:
 
     async def compress_code(self) -> None:
         bt.logging.info("Compressing code")
-
+        bt.logging.info(f"Code directory: {self.config.code_directory}")
+        
+        code_dir = Path(self.config.code_directory)
+        self.code_zip_path = str(code_dir.parent / f"{code_dir.name}.zip")
+        
         out, err = await run_command(
-            f"zip  -r {self.code_zip_path} {self.config.code_directory}/*"
+            f"zip -r {self.code_zip_path} {self.config.code_directory}/*"
         )
         if err:
             bt.logging.info("Error zipping code")
@@ -145,6 +153,7 @@ class MinerManagerCLI:
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
         bt.logging.info(f"Metagraph: {self.metagraph}")
+
         if not self.subtensor.is_hotkey_registered(
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
@@ -154,30 +163,18 @@ class MinerManagerCLI:
                 f" Please register the hotkey using `btcli subnets register` before trying again"
             )
             exit()
+
         self.metadata_store = ChainModelMetadata(
             subtensor=self.subtensor, netuid=self.config.netuid, wallet=self.wallet
         )
+
         print(self.config)
-        if not huggingface_hub.file_exists(
-            repo_id=self.config.hf_repo_id,
-            filename=self.config.hf_model_name,
-            repo_type=self.config.hf_repo_type,
-        ):
-            bt.logging.error(
-                f"{self.config.hf_model_name} not found in Hugging Face repo"
-            )
+
+        if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_model_name, self.config.hf_repo_type):
             return
 
-        if not huggingface_hub.file_exists(
-            repo_id=self.config.hf_repo_id,
-            filename=self.config.hf_code_filename,
-            repo_type=self.config.hf_repo_type,
-        ):
-            bt.logging.error(
-                f"{self.config.hf_model_name} not found in Hugging Face repo"
-            )
+        if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_code_filename, self.config.hf_repo_type):
             return
-        bt.logging.info("Model and code found in Hugging Face repo")
 
         # Push model metadata to chain
         model_id = ChainMinerModel(
@@ -192,6 +189,12 @@ class MinerManagerCLI:
         bt.logging.success(
             f"Successfully pushed model metadata on chain. Model ID: {model_id}"
         )
+
+    def _check_hf_file_exists(self, repo_id, filename, repo_type):
+        if not huggingface_hub.file_exists(repo_id=repo_id, filename=filename, repo_type=repo_type):
+            bt.logging.error(f"{filename} not found in Hugging Face repo")
+            return False
+        return True
 
     async def main(self) -> None:
 

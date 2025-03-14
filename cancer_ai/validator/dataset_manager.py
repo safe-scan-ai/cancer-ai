@@ -19,6 +19,7 @@ class DatasetManager(SerializableManager):
         hf_repo_id: str,
         hf_filename: str,
         hf_repo_type: str,
+        use_auth: bool = True,
     ) -> None:
         """
         Initializes a new instance of the DatasetManager class.
@@ -38,6 +39,7 @@ class DatasetManager(SerializableManager):
         self.hf_filename = hf_filename
         self.hf_repo_type = hf_repo_type
         self.competition_id = competition_id
+        self.use_auth = use_auth
         self.local_compressed_path = ""
         self.local_extracted_dir = Path(self.config.models.dataset_dir, competition_id)
         self.data: Tuple[List, List] = ()
@@ -59,7 +61,7 @@ class DatasetManager(SerializableManager):
             self.hf_filename,
             cache_dir=Path(self.config.models.dataset_dir),
             repo_type=self.hf_repo_type,
-            token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
+            token=self.config.hf_token if self.use_auth and hasattr(self.config, "hf_token") else None,
         )
 
     def delete_dataset(self) -> None:
@@ -89,9 +91,10 @@ class DatasetManager(SerializableManager):
         bt.logging.debug(f"Dataset extracted to: { self.local_compressed_path}")
         os.system(f"rm -R {self.local_extracted_dir}")
         # TODO add error handling
-        out, err = await run_command(
-            f"unzip {self.local_compressed_path} -d {self.local_extracted_dir}"
-        )
+        zip_file_path = self.local_compressed_path
+        extract_dir = self.local_extracted_dir
+        command = f'unzip "{zip_file_path}" -d {extract_dir}'
+        out, err = await run_command(command)
         if err:
             bt.logging.error(f"Error unzipping dataset: {err}")
             raise DatasetManagerException(f"Error unzipping dataset: {err}")

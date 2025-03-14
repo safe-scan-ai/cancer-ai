@@ -3,7 +3,6 @@ from typing import Optional, Type
 
 import bittensor as bt
 from pydantic import BaseModel, Field
-from .utils.models_storage_utils import run_in_subprocess
 
 
 class ChainMinerModel(BaseModel):
@@ -70,31 +69,35 @@ class ChainModelMetadata:
         if self.wallet is None:
             raise ValueError("No wallet available to write to the chain.")
 
+        # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
         self.subtensor.commit(
-        self.wallet,
-        self.netuid,
-        model_id.to_compressed_str(),
+            self.wallet,
+            self.netuid,
+            model_id.to_compressed_str(),
         )
 
     async def retrieve_model_metadata(self, hotkey: str) -> Optional[ChainMinerModel]:
         """Retrieves model metadata on this subnet for specific hotkey"""
-        # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
+
+        subnet_metadata = self.subtensor.metagraph(self.netuid)
+        uids = subnet_metadata.uids
+        hotkeys = subnet_metadata.hotkeys
+
+        uid = next((uid for uid, hk in zip(uids, hotkeys) if hk == hotkey), None)
+
+        metadata = bt.core.extrinsics.serving.get_metadata(
+            self.subtensor, self.netuid, hotkey
+        )
         try:
-            metadata = bt.core.extrinsics.serving.get_metadata(
-                self.subtensor, self.netuid, hotkey
-            )
+            chain_str = self.subtensor.get_commitment(self.netuid, uid)
         except Exception as e:
-            bt.logging.error(f"Error retrieving metadata for hotkey {hotkey}: {e}")
+            bt.logging.debug(f"Failed to retrieve commitment for hotkey {hotkey}: {e}")
             return None
+
         if not metadata:
             return None
-        bt.logging.trace(f"Model metadata: {metadata['info']['fields']}")
-        commitment = metadata["info"]["fields"][0]
-        commitment_dict = commitment[0]
-        key = list(commitment_dict.keys())[0]
-        data_tuple = commitment_dict[key][0]
-        hex_str = ''.join(f"{i:02x}" for i in data_tuple)
-        chain_str = bytes.fromhex(hex_str).decode()
+
+        model = None
         try:
             model = ChainMinerModel.from_compressed_str(chain_str)
             bt.logging.debug(f"Model: {model}")
@@ -103,7 +106,7 @@ class ChainModelMetadata:
                     f"Metadata might be in old format on the chain for hotkey {hotkey}. Raw value: {chain_str}"
                 )
                 return None
-        except:
+        except Exception:
             # If the metadata format is not correct on the chain then we return None.
             bt.logging.error(
                 f"Failed to parse the metadata on the chain for hotkey {hotkey}. Raw value: {chain_str}"
