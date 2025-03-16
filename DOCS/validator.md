@@ -27,11 +27,6 @@ Key features of the script include:
 - **PM2**: PM2 must be installed and available on your system. It is used to manage the validator process.
 - **zip and unzip**
 
-### Wandb API key requirement
-
-- Contact us [on discord](https://discord.com/channels/1259812760280236122/1262734148020338780) to get Wandb API key
-- Put your key in .env.example file
-
 ## Installation and Setup
 
 1. **Clone the Repository**: Make sure you have cloned the repository containing this script and have navigated to the correct directory.
