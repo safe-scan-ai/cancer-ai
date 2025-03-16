@@ -17,9 +17,9 @@ Key features of the script include:
 
 ### Server requirements
 
-- 64GB of RAM
-- storage: 500GB, extendable
-- GPU - nVidia RTX, 12GB VRAM (will work without GPU, but slower)
+- 16GB of RAM
+- storage: 50GB, extendable
+- GPU - nVidia RTX, 6GB VRAM (will work without GPU, but slower)
 
 ### System requirements
 
