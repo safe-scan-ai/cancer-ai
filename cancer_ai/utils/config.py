@@ -135,6 +135,13 @@ def add_args(cls, parser):
         default=30,
     )
 
+    parser.add_argument(
+        "--datasets_config_hf_repo_id",
+        type=str,
+        help="The reference to Hugging Face datasets config.",
+        default="safescanai/competition-configuration",
+    )
+
 
 def add_miner_args(cls, parser):
     """Add miner specific arguments to the parser."""
@@ -327,12 +334,6 @@ def add_validator_args(cls, parser):
         default=False,
     )
 
-    parser.add_argument(
-        "--datasets_config_hf_repo_id",
-        type=str,
-        help="The reference to Hugging Face datasets config.",
-        default="safescanai/competition-configuration",
-    )
 
     parser.add_argument(
         "--miners_refresh_interval",
