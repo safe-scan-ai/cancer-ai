@@ -359,11 +359,11 @@ async def check_for_new_dataset_files(
 
     return results
 
-
 @retry(tries=10, delay=5, logger=bt.logging)
 def list_repo_tree_with_retry(hf_api, repo_id, repo_type, token, recursive, expand):
+
     return hf_api.list_repo_tree(
-        repo_id=repo_id,
+        repo_id=hf_repo_id,
         repo_type=repo_type,
         token=token,
         recursive=recursive,
