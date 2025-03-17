@@ -76,6 +76,7 @@ class BaseValidatorNeuron(BaseNeuron):
             competition_leader_map={}, hotkey_score_map={}
         )
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+        self.org_latest_updates = {}
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync(force_sync=True)

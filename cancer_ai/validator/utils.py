@@ -12,6 +12,8 @@ from cancer_ai.validator.models import (
 )
 from datetime import datetime
 from typing import Any
+from retry import retry
+
 
 
 class ModelType(Enum):
@@ -99,13 +101,18 @@ async def fetch_organization_data_references(hf_repo_id: str, hf_api: HfApi) -> 
     # prevent stale connections
     custom_headers = {"Connection": "close"}
 
-    files = hf_api.list_repo_tree(
-        repo_id=hf_repo_id,
-        repo_type="space",
-        token=None,
-        recursive=True,
-        expand=True,
-    )
+    try:
+        files = list_repo_tree_with_retry(
+            hf_api=hf_api,
+            hf_repo_id=hf_repo_id,
+            repo_type="space",
+            token=None,
+            recursive=True,
+            expand=True
+        )
+    except Exception as e:
+        bt.logging.error("Failed to list repo tree after 10 attempts: %s", e)
+        files = None
 
     yaml_data = []
 
@@ -254,3 +261,13 @@ async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates: dict) -
             ))
     
     return results
+
+@retry(tries=10, delay=5)
+def list_repo_tree_with_retry(hf_api, repo_id, repo_type, token, recursive, expand):
+    return hf_api.list_repo_tree(
+        repo_id=repo_id,
+        repo_type=repo_type,
+        token=token,
+        recursive=recursive,
+        expand=expand,
+    )
