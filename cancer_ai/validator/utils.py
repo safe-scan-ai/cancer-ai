@@ -263,9 +263,9 @@ async def check_for_new_dataset_files(hf_api: HfApi, org_latest_updates: dict) -
     return results
 
 @retry(tries=10, delay=5)
-def list_repo_tree_with_retry(hf_api, repo_id, repo_type, token, recursive, expand):
+def list_repo_tree_with_retry(hf_api, hf_repo_id, repo_type, token, recursive, expand):
     return hf_api.list_repo_tree(
-        repo_id=repo_id,
+        repo_id=hf_repo_id,
         repo_type=repo_type,
         token=token,
         recursive=recursive,
