@@ -104,6 +104,7 @@ Command line argument explanation
 - `--clean-after-run` - it will delete dataset after evaluating the model
 - `--model_dir` - path for storing models (default: "./models")
 - `--dataset_dir` - path for storing datasets (default: "./datasets")
+- `--datasets_config_hf_repo_id` - hugging face repository ID for datasets configuration - ex. "safescanai/competition-configuration-testnet" in case of testnet
 
 ### Upload to HuggingFace
 

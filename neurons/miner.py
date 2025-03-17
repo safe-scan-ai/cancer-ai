@@ -19,7 +19,7 @@ from cancer_ai.validator.competition_manager import COMPETITION_HANDLER_MAPPING
 from cancer_ai.base.base_miner import BaseNeuron
 from cancer_ai.chain_models_store import ChainMinerModel, ChainModelMetadata
 from cancer_ai.utils.config import path_config, add_miner_args
-from cancer_ai.validator.utils import get_competition_config
+from cancer_ai.validator.utils import get_competition_config, get_newest_competition_packages
 
 
 class MinerManagerCLI:
@@ -96,35 +96,37 @@ class MinerManagerCLI:
         run_manager = ModelRunManager(
             config=self.config, model=ModelInfo(file_path=self.config.model_path)
         )
-        dataset_manager = DatasetManager(
-            self.config,
-            self.config.competition_id,
-            self.competition_config.competitions[0].dataset_hf_repo,
-            self.competition_config.competitions[0].dataset_hf_filename,
-            self.competition_config.competitions[0].dataset_hf_repo_type,
-            use_auth=False
-        )
-        await dataset_manager.prepare_dataset()
+        dataset_packages = await get_newest_competition_packages(self.config, self.config.competition_id)
+        for package in dataset_packages:
+            dataset_manager = DatasetManager(
+                self.config,
+                self.config.competition_id,
+                package["dataset_hf_repo"],
+                package["dataset_hf_filename"],
+                package["dataset_hf_repo_type"],
+                use_auth=False
+            )
+            await dataset_manager.prepare_dataset()
 
-        X_test, y_test = await dataset_manager.get_data()
+            X_test, y_test = await dataset_manager.get_data()
 
-        competition_handler = COMPETITION_HANDLER_MAPPING[self.config.competition_id](
-            X_test=X_test, y_test=y_test
-        )
+            competition_handler = COMPETITION_HANDLER_MAPPING[self.config.competition_id](
+                X_test=X_test, y_test=y_test
+            )
 
-        y_test = competition_handler.prepare_y_pred(y_test)
+            y_test = competition_handler.prepare_y_pred(y_test)
 
-        start_time = time.time()
-        y_pred = await run_manager.run(X_test)
-        run_time_s = time.time() - start_time
+            start_time = time.time()
+            y_pred = await run_manager.run(X_test)
+            run_time_s = time.time() - start_time
 
-        # print(y_pred)
-        model_result = competition_handler.get_model_result(y_test, y_pred, run_time_s)
-        bt.logging.info(
-            f"Evalutaion results:\n{model_result.model_dump_json(indent=4)}"
-        )
-        if self.config.clean_after_run:
-            dataset_manager.delete_dataset()
+            # print(y_pred)
+            model_result = competition_handler.get_model_result(y_test, y_pred, run_time_s)
+            bt.logging.info(
+                f"Evalutaion results:\n{model_result.model_dump_json(indent=4)}"
+            )
+            if self.config.clean_after_run:
+                dataset_manager.delete_dataset()
 
     async def compress_code(self) -> None:
         bt.logging.info("Compressing code")

@@ -3,6 +3,8 @@ from typing import Optional, Type
 
 import bittensor as bt
 from pydantic import BaseModel, Field
+from retry import retry
+
 
 
 class ChainMinerModel(BaseModel):
@@ -85,9 +87,8 @@ class ChainModelMetadata:
 
         uid = next((uid for uid, hk in zip(uids, hotkeys) if hk == hotkey), None)
 
-        metadata = bt.core.extrinsics.serving.get_metadata(
-            self.subtensor, self.netuid, hotkey
-        )
+        metadata = get_metadata_with_retry(self.subtensor, self.netuid, hotkey)
+
         try:
             chain_str = self.subtensor.get_commitment(self.netuid, uid)
         except Exception as e:
@@ -115,3 +116,7 @@ class ChainModelMetadata:
         # The block id at which the metadata is stored
         model.block = metadata["block"]
         return model
+
+@retry(tries=10, delay=5)
+def get_metadata_with_retry(subtensor, netuid, hotkey):
+    return bt.core.extrinsics.serving.get_metadata(subtensor, netuid, hotkey)

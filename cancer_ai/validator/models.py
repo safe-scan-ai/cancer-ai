@@ -19,7 +19,7 @@ class OrganizationDataReference(BaseModel):
     organization_id: str = Field(..., min_length=1, description="Unique identifier for the organization")
     contact_email: EmailStr = Field(..., description="Contact email address for the organization")
     dataset_hf_repo: str = Field(..., min_length=1, description="Hugging Face repository path for the dataset")
-    dataset_hf_dir: str = Field(..., min_length=1, description="Directory for the datasets in the repository")
+    dataset_hf_dir: str = Field("", min_length=0, description="Directory for the datasets in the repository")
 
 class OrganizationDataReferenceFactory(BaseModel):
     organizations: List[OrganizationDataReference] = Field(default_factory=list)
@@ -41,6 +41,13 @@ class OrganizationDataReferenceFactory(BaseModel):
         for key, value in data.items():
             if key != "organizations":
                 setattr(self, key, value)
+            
+    def find_organization_by_competition_id(self, competition_id: str) -> Optional[OrganizationDataReference]:
+        """Find an organization by competition ID.
+        Returns:
+            The organization data reference for the given competition ID, or None if not found
+        """
+        return next((o for o in self.organizations if o.competition_id == competition_id), None)
 
 class NewDatasetFile(BaseModel):
     competition_id: str = Field(..., min_length=1, description="Competition identifier")
