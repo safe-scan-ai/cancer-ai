@@ -134,13 +134,22 @@ class ModelDBController:
     def get_block_timestamp(self, block_number):
         """Gets the timestamp of a block given its number."""
         try:
-            block_hash = self.subtensor.get_block_hash(block_number)
+            # Identify if the connected subtensor is testnet based on the chain endpoint
+            is_testnet = "test" in self.subtensor.chain_endpoint.lower()
+
+            # Use the correct subtensor (archive for mainnet, normal for testnet)
+            if is_testnet:
+                block_hash = self.subtensor.get_block_hash(block_number)
+            else:
+                archive_subtensor = bt.subtensor(network="finney", chain_endpoint="archive")
+                block_hash = archive_subtensor.get_block_hash(block_number)
+
             if block_hash is None:
                 raise ValueError(f"Block hash not found for block number {block_number}")
-            
+
             timestamp_info = self.subtensor.substrate.query(
-                module='Timestamp',
-                storage_function='Now',
+                module="Timestamp",
+                storage_function="Now",
                 block_hash=block_hash
             )
 
