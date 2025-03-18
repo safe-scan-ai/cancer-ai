@@ -109,7 +109,9 @@ Command line argument explanation
 ### Upload to HuggingFace
 
 This mode compresses the code provided by `--code-path` and uploads the model and code to HuggingFace.
-Repository ID should be a repository type "model"
+Repository ID should be a repository type "model".
+
+The repository needs to be public for validator to pick it up.
 
 To upload to HuggingFace, use the following command:
 
@@ -134,6 +136,8 @@ Command line argument explanation
 ### Submit Model to Validators
 
 This mode saves model information in the metagraph, allowing validators to retrieve information about your model for testing.
+
+The repository you are submitting needs to be public for validator to pick it up.
 
 To submit a model to validators, use the following command:
 
