@@ -44,14 +44,14 @@
       recommended_gpu: "NVIDIA RTX"       # provide a recommended GPU to purchase/rent
 
     memory:
-      min_ram: 64          # Minimum RAM (GB)
+      min_ram: 16          # Minimum RAM (GB)
       min_swap: 4          # Minimum swap space (GB)
-      recommended_swap: 12  # Recommended swap space (GB)
+      recommended_swap: 4  # Recommended swap space (GB)
       ram_type: "DDR4"     # RAM type (e.g., DDR4, DDR3, etc.)
 
     storage:
-      min_space: 500           # Minimum free storage space (GB)
-      recommended_space: 1000  # Recommended free storage space (GB)
+      min_space: 300           # Minimum free storage space (GB)
+      recommended_space: 500  # Recommended free storage space (GB)
       type: "SSD"             # Preferred storage type (e.g., SSD, HDD)
 
     os:
