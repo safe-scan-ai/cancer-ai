@@ -317,7 +317,7 @@ async def check_for_new_dataset_files(
             f
             for f in files
             if f.__class__.__name__ == "RepoFile"
-            and f.path.startswith(org.dataset_hf_dir)
+            and f.path.startswith(org.dataset_hf_dir) and f.path.endswith(".zip")
         ]
         max_commit_date = None
         for f in relevant_files:
