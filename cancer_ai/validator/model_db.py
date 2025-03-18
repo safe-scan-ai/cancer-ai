@@ -141,7 +141,7 @@ class ModelDBController:
             if is_testnet:
                 block_hash = self.subtensor.get_block_hash(block_number)
             else:
-                archive_subtensor = bt.subtensor(network="finney", chain_endpoint="archive")
+                archive_subtensor = bt.subtensor(network="archive")
                 block_hash = archive_subtensor.get_block_hash(block_number)
 
             if block_hash is None:
