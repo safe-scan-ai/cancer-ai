@@ -96,7 +96,13 @@ class MinerManagerCLI:
         run_manager = ModelRunManager(
             config=self.config, model=ModelInfo(file_path=self.config.model_path)
         )
-        dataset_packages = await get_newest_competition_packages(self.config, self.config.competition_id)
+
+        try:
+            dataset_packages = await get_newest_competition_packages(self.config)
+        except Exception as e:
+            bt.logging.error(f"Error retrieving competition packages: {e}")
+            return
+        
         for package in dataset_packages:
             dataset_manager = DatasetManager(
                 self.config,

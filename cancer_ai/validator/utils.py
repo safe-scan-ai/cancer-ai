@@ -217,47 +217,37 @@ async def sync_organizations_data_references(fetched_yaml_files: list[dict]):
     factory.update_from_dict(update_data)
 
 
-async def get_newest_competition_packages(config: bt.Config, competition_id: str, hf_api: HfApi = None, packages_count: int = 30) -> list[dict]:
+async def get_newest_competition_packages(config: bt.Config, hf_api: HfApi = None, packages_count: int = 30) -> list[dict]:
     """
     Gets the link to the newest package for a specific competition.
-    
-    Args:
-        competition_id: The ID of the competition to get the newest package for
-        hf_api: Optional HfApi instance. If not provided, a new one will be created.
-        
-    Returns:
-        A dictionary containing:
-            - dataset_hf_repo: The Hugging Face repository path
-            - dataset_hf_filename: The filename of the newest dataset in the repository
-            - dataset_hf_repo_type: The repository type (typically 'dataset')
     """
+    newest_competition_packages: list[dict] = []
+
     if hf_api is None:
         hf_api = HfApi()
     
     datasets_references = await fetch_organization_data_references(config.datasets_config_hf_repo_id, hf_api)
     await sync_organizations_data_references(datasets_references)
     org_reference = OrganizationDataReferenceFactory.get_instance()
-    # Find the organization data reference for the given competition
-    org = org_reference.find_organization_by_competition_id(competition_id)
+    org = org_reference.find_organization_by_competition_id(config.competition_id)
     
     if not org:
-        bt.logging.error(f"No organization found for competition ID: {competition_id}")
-        return None
-    
-    # List all files in the repository
+        bt.logging.info(f"No organization found for competition ID: {config.competition_id}")
+        return newest_competition_packages
+
     try:
-        files = hf_api.list_repo_tree(
+        files = list_repo_tree_with_retry(
+            hf_api=hf_api,
             repo_id=org.dataset_hf_repo,
-            repo_type="dataset",  # Assuming dataset is the default type
-            token=None,  # Public repos
+            repo_type="dataset",
+            token=None,
             recursive=True,
             expand=True,
         )
     except Exception as e:
         bt.logging.error(f"Failed to list repository tree for {org.dataset_hf_repo}: {e}")
-        return None
+        raise 
     
-    # Filter for relevant files in the specified directory
     relevant_files = [
         f for f in files
         if f.__class__.__name__ == "RepoFile"
@@ -266,28 +256,29 @@ async def get_newest_competition_packages(config: bt.Config, competition_id: str
     
     if not relevant_files:
         bt.logging.warning(f"No relevant files found in {org.dataset_hf_repo}/{org.dataset_hf_dir}")
-        return None
+        return newest_competition_packages
     
-    # Sort files by commit date (newest first)
     sorted_files = sorted(
         relevant_files,
         key=lambda f: f.last_commit.date if f.last_commit else datetime.min,
         reverse=True
     )
     
-    # Get the top X files based on packages_count
     top_files = sorted_files[:packages_count]
     
     if not top_files:
-        return None
-    return [
+        return newest_competition_packages
+    newest_competition_packages = [
         {
             "dataset_hf_repo": org.dataset_hf_repo,
             "dataset_hf_filename": file.path,
-            "dataset_hf_repo_type": "dataset"
+            "dataset_hf_repo_type": "dataset",
         }
         for file in top_files
     ]
+
+    return newest_competition_packages
+
 
 
 async def check_for_new_dataset_files(
