@@ -3,7 +3,7 @@ import os
 from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from ..chain_models_store import ChainMinerModel
 
 Base = declarative_base()
@@ -35,8 +35,8 @@ class ModelDBController:
     
     def add_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
         session = self.Session()
-        date_submitted = self.get_block_timestamp(chain_miner_model.block)
-        existing_model = self.get_model(date_submitted, hotkey)
+        # date_submitted = self.get_block_timestamp(chain_miner_model.block)
+        existing_model = self.get_model(hotkey)
         if not existing_model:
             try:
                 model_record = self.convert_chain_model_to_db_model(chain_miner_model, hotkey)
@@ -49,14 +49,14 @@ class ModelDBController:
             finally:
                 session.close()
         else:
-            bt.logging.debug(f"Model for hotkey {hotkey} and date {date_submitted} already exists, proceeding with updating the model info.")
+            bt.logging.debug(f"Model for hotkey {hotkey} already exists, proceeding with updating the model info.")
             self.update_model(chain_miner_model, hotkey)
 
-    def get_model(self, date_submitted: datetime, hotkey: str) -> ChainMinerModel | None:
+    def get_model(self, hotkey: str) -> ChainMinerModel | None:
         session = self.Session()
         try:
             model_record = session.query(ChainMinerModelDB).filter_by(
-                date_submitted=date_submitted, hotkey=hotkey
+                hotkey=hotkey
             ).first()
             if model_record:
                 return self.convert_db_model_to_chain_model(model_record)
@@ -66,13 +66,13 @@ class ModelDBController:
 
     def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel | None:
         bt.logging.debug(f"Getting latest model for hotkey {hotkey} with cutoff time {cutoff_time}")
-        cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
+        # cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
         session = self.Session()
         try:
             model_record = (
                 session.query(ChainMinerModelDB)
                 .filter(ChainMinerModelDB.hotkey == hotkey)
-                .filter(ChainMinerModelDB.date_submitted < cutoff_time)
+                # .filter(ChainMinerModelDB.date_submitted < cutoff_time)
                 .order_by(ChainMinerModelDB.date_submitted.desc())
                 .first()
             )
@@ -102,9 +102,8 @@ class ModelDBController:
     def update_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
         session = self.Session()
         try:
-            date_submitted = self.get_block_timestamp(chain_miner_model.block)
+            # date_submitted = self.get_block_timestamp(chain_miner_model.block)
             existing_model = session.query(ChainMinerModelDB).filter_by(
-                date_submitted=date_submitted,
                 hotkey=hotkey
             ).first()
             
@@ -114,14 +113,14 @@ class ModelDBController:
                 existing_model.hf_model_filename = chain_miner_model.hf_model_filename
                 existing_model.hf_repo_type = chain_miner_model.hf_repo_type
                 existing_model.hf_code_filename = chain_miner_model.hf_code_filename
-                existing_model.block = chain_miner_model.block
-                existing_model.date_submitted = date_submitted
+                # existing_model.block = chain_miner_model.block
+                # existing_model.date_submitted = date_submitted
 
                 session.commit()
-                bt.logging.debug(f"Successfully updated model for hotkey {hotkey} and date {date_submitted}.")
+                bt.logging.debug(f"Successfully updated model for hotkey {hotkey}.")
                 return True
             else:
-                bt.logging.debug(f"No existing model found for hotkey {hotkey} and date {date_submitted}. Update skipped.")
+                bt.logging.debug(f"No existing model found for hotkey {hotkey}. Update skipped.")
                 return False
 
         except Exception as e:
@@ -164,8 +163,8 @@ class ModelDBController:
             bt.logging.error(f"Error retrieving block timestamp: {e}")
             raise
 
-    def get_latest_models(self, hotkeys: list[str], competition_id: str, cutoff_time: float = None) -> dict[str, ChainMinerModel]:
-        cutoff_time = datetime.now() - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now()
+    def get_latest_models(self, hotkeys: list[str], competition_id: str) -> dict[str, ChainMinerModel]:
+        # cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
         session = self.Session()
         try:
             # Use a correlated subquery to get the latest record for each hotkey that doesn't violate the cutoff
@@ -175,8 +174,8 @@ class ModelDBController:
                     session.query(ChainMinerModelDB)
                     .filter(ChainMinerModelDB.hotkey == hotkey)
                     .filter(ChainMinerModelDB.competition_id == competition_id)
-                    .filter(ChainMinerModelDB.date_submitted < cutoff_time)
-                    .order_by(ChainMinerModelDB.date_submitted.desc())  # Order by newest first
+                    # .filter(ChainMinerModelDB.date_submitted < cutoff_time)
+                    # .order_by(ChainMinerModelDB.date_submitted.desc())  # Order by newest first
                     .first()  # Get the first (newest) record that meets the cutoff condition
                 )
                 if model_record:
@@ -222,15 +221,14 @@ class ModelDBController:
             session.close()
 
     def convert_chain_model_to_db_model(self, chain_miner_model: ChainMinerModel, hotkey: str) -> ChainMinerModelDB:
-        date_submitted = self.get_block_timestamp(chain_miner_model.block)
         return ChainMinerModelDB(
             competition_id = chain_miner_model.competition_id,
             hf_repo_id = chain_miner_model.hf_repo_id,
             hf_model_filename = chain_miner_model.hf_model_filename,
             hf_repo_type = chain_miner_model.hf_repo_type,
             hf_code_filename = chain_miner_model.hf_code_filename,
-            date_submitted = date_submitted,
-            block = chain_miner_model.block,
+            date_submitted = datetime.now(timezone.utc), # temporary fix, can't be null
+            block = 1, # temporary fix , can't be null
             hotkey = hotkey
         )
 

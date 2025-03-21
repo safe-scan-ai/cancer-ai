@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, asdict, is_dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import bittensor as bt
 from huggingface_hub import HfApi, hf_hub_url, HfFileSystem
@@ -43,13 +43,7 @@ class ModelManager(SerializableManager):
             bool: True if the model was downloaded successfully, False otherwise.
         """
         model_info = self.hotkey_store[hotkey]
-        chain_model_date = await self.get_newest_saved_model_date(hotkey)
-        if chain_model_date and chain_model_date.tzinfo is None:
-            chain_model_date = chain_model_date.replace(tzinfo=timezone.utc)
-        if not chain_model_date:
-            bt.logging.error(f"Failed to get the newest saved model's date for hotkey {hotkey} from the local DB. Model download skipped.")
-            return False
-
+        
         if self.config.hf_token:
             fs = HfFileSystem(token=self.config.hf_token)
         else:
@@ -75,24 +69,12 @@ class ModelManager(SerializableManager):
             bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}")
             return False
             
-        # Ensure file_date is a datetime with timezone
-        try:
-            if isinstance(file_date, str):
-                file_date = datetime.fromisoformat(file_date)
-            if file_date.tzinfo is None:
-                file_date = file_date.replace(tzinfo=timezone.utc)
-        except Exception as e:
-            bt.logging.error(f"Failed to parse file date {file_date}: {e}")
+        # Parse and check if the model is too recent to download
+        is_too_recent, parsed_date = self.is_model_too_recent(file_date, model_info.hf_model_filename, hotkey)
+        if is_too_recent:
             return False
-            
-        bt.logging.info(f"File {model_info.hf_model_filename} was uploaded on: {file_date}")
         
-        # Check if file is newer than our cutoff date
-        if file_date < chain_model_date:
-            bt.logging.info(f"Downloading model for hotkey {hotkey} because file date {file_date} is older than chain model date {chain_model_date}")
-        else:
-            bt.logging.info(f"Skipping model for hotkey {hotkey} because file date {file_date} is newer than or equal to chain model date {chain_model_date}")
-            return False
+        file_date = parsed_date
         
         # Download the file
         try:
@@ -115,6 +97,42 @@ class ModelManager(SerializableManager):
         bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
         return True
 
+    def is_model_too_recent(self, file_date, filename, hotkey):
+        """Checks if a model file was uploaded too recently based on the cutoff time.
+        
+        Args:
+            file_date: The date when the file was uploaded (string or datetime)
+            filename: The name of the model file
+            hotkey: The hotkey of the miner
+            
+        Returns:
+            tuple: (is_too_recent, parsed_date) where is_too_recent is a boolean indicating if the model
+                  is too recent to download, and parsed_date is the parsed datetime object with timezone
+        """
+        # Ensure file_date is a datetime with timezone
+        try:
+            if isinstance(file_date, str):
+                file_date = datetime.fromisoformat(file_date)
+            if file_date.tzinfo is None:
+                file_date = file_date.replace(tzinfo=timezone.utc)
+        except Exception as e:
+            bt.logging.error(f"Failed to parse file date {file_date}: {e}")
+            return True, None
+
+        bt.logging.debug(f"File {filename} was uploaded on: {file_date}")
+        
+        # Check if file is newer than our cutoff date (uploaded within last X minutes)
+        now = datetime.now(timezone.utc)  # Get current time in UTC
+        
+        # Calculate time difference in minutes
+        time_diff = (now - file_date).total_seconds() / 60
+        
+        if time_diff < self.config.models_query_cutoff:
+            bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
+            return True, file_date
+            
+        return False, file_date
+        
     async def get_newest_saved_model_date(self, hotkey):
         """Fetches the newest saved model's date for a given hotkey from the local database."""
         newest_saved_model = self.db_controller.get_latest_model(hotkey, self.config.models_query_cutoff)
