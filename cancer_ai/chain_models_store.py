@@ -65,6 +65,7 @@ class ChainModelMetadata:
             wallet  # Wallet is only needed to write to the chain, not to read.
         )
         self.netuid = netuid
+        self.subnet_metadata = self.subtensor.metagraph(self.netuid)
 
     async def store_model_metadata(self, model_id: ChainMinerModel):
         """Stores model metadata on this subnet for a specific wallet."""
@@ -81,9 +82,9 @@ class ChainModelMetadata:
     async def retrieve_model_metadata(self, hotkey: str) -> Optional[ChainMinerModel]:
         """Retrieves model metadata on this subnet for specific hotkey"""
 
-        subnet_metadata = self.subtensor.metagraph(self.netuid)
-        uids = subnet_metadata.uids
-        hotkeys = subnet_metadata.hotkeys
+        
+        uids = self.subnet_metadata.uids
+        hotkeys = self.subnet_metadata.hotkeys
 
         uid = next((uid for uid, hk in zip(uids, hotkeys) if hk == hotkey), None)
 
