@@ -3,7 +3,7 @@ from dataclasses import dataclass, asdict, is_dataclass
 from datetime import datetime, timezone
 
 import bittensor as bt
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, hf_hub_url, HfFileSystem
 
 from .manager import SerializableManager
 from .exceptions import ModelRunException
@@ -50,32 +50,70 @@ class ModelManager(SerializableManager):
             bt.logging.error(f"Failed to get the newest saved model's date for hotkey {hotkey} from the local DB. Model download skipped.")
             return False
 
+        if self.config.hf_token:
+            fs = HfFileSystem(token=self.config.hf_token)
+        else:
+            fs = HfFileSystem()
+        repo_path = os.path.join(model_info.hf_repo_id, model_info.hf_model_filename)
+        
+        # List files in the repository and get file date
         try:
-            commits = self.api.list_repo_commits(
+            files = fs.ls(model_info.hf_repo_id)
+        except Exception as e:
+            bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id}: {e}")
+            return False
+            
+        # Find the specific file and its upload date
+        file_date = None
+        for file in files:
+            if file['name'] == repo_path:
+                # Extract the upload date
+                file_date = file["last_commit"]["date"]
+                break
+        
+        if not file_date:
+            bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}")
+            return False
+            
+        # Ensure file_date is a datetime with timezone
+        try:
+            if isinstance(file_date, str):
+                file_date = datetime.fromisoformat(file_date)
+            if file_date.tzinfo is None:
+                file_date = file_date.replace(tzinfo=timezone.utc)
+        except Exception as e:
+            bt.logging.error(f"Failed to parse file date {file_date}: {e}")
+            return False
+            
+        bt.logging.info(f"File {model_info.hf_model_filename} was uploaded on: {file_date}")
+        
+        # Check if file is newer than our cutoff date
+        if file_date < chain_model_date:
+            bt.logging.info(f"Downloading model for hotkey {hotkey} because file date {file_date} is older than chain model date {chain_model_date}")
+        else:
+            bt.logging.info(f"Skipping model for hotkey {hotkey} because file date {file_date} is newer than or equal to chain model date {chain_model_date}")
+            return False
+        
+        # Download the file
+        try:
+            model_info.file_path = self.api.hf_hub_download(
                 repo_id=model_info.hf_repo_id,
                 repo_type=model_info.hf_repo_type,
-                token=self.config.hf_token if hasattr(self.config, "hf_token") else None
+                filename=model_info.hf_model_filename,
+                cache_dir=self.config.models.model_dir,
+                token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
             )
-            
-            model_commit = self.get_commit_with_file_change(
-                commits, model_info, chain_model_date
-            )
-
-            if model_commit:
-                try:
-                    self.download_model_at_commit(model_commit, model_info)
-                    bt.logging.info(f"Downloaded an older model version for hotkey {hotkey} (date: {model_commit.created_at}).")
-                    return True
-                except Exception as e:
-                    bt.logging.error(f"Failed to download model at commit {model_commit.commit_id}: {e}")
-                    return False
-            else:
-                bt.logging.error(f"No matching or older model found for hotkey {hotkey} based on the saved date. Download skipped.")
-                return False
-
         except Exception as e:
-            bt.logging.error(f"Failed to download model: {e}")
+            bt.logging.error(f"Failed to download model file: {e}")
             return False
+        
+        # Verify the downloaded file exists
+        if not os.path.exists(model_info.file_path):
+            bt.logging.error(f"Downloaded file does not exist at {model_info.file_path}")
+            return False
+        
+        bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
+        return True
 
     async def get_newest_saved_model_date(self, hotkey):
         """Fetches the newest saved model's date for a given hotkey from the local database."""
@@ -85,60 +123,6 @@ class ModelManager(SerializableManager):
             return None
         return self.db_controller.get_block_timestamp(newest_saved_model.block)
 
-    def get_commit_with_file_change(self, commits, model_info, chain_model_date):
-        """
-        Finds the most recent commit (relative to chain_model_date) where the specific file exists
-        and matches the date criteria. Assumes commits are sorted from newest to oldest.
-        """
-        for commit in commits:
-            commit_id = commit.commit_id
-            commit_date = commit.created_at
-            if commit_date.tzinfo is None:
-                commit_date = commit_date.replace(tzinfo=timezone.utc)
-
-            # Skip commits newer than the specified date
-            if commit_date > chain_model_date:
-                bt.logging.debug(f"Skipping commit {commit_id} because it is newer than chain_model_date")
-                continue
-
-            # Check if the file exists at this commit
-            try:
-                files = self.api.list_repo_files(
-                    repo_id=model_info.hf_repo_id,
-                    revision=commit_id,
-                    repo_type=model_info.hf_repo_type,
-                    token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
-                )
-
-                if model_info.hf_model_filename in files:
-                    bt.logging.info(f"Found model version of commit {commit_id}")
-                    return commit  # Return the first valid commit and stop searching
-
-            except Exception as e:
-                bt.logging.error(f"Failed to list files at commit {commit_id}: {e}")
-                continue
-
-        bt.logging.error("No suitable older commit with the required file was found.")
-        return None
-
-
-    def download_model_at_commit(self, commit, model_info):
-        try:
-            model_info.file_path = self.api.hf_hub_download(
-                repo_id=model_info.hf_repo_id,
-                repo_type=model_info.hf_repo_type,
-                filename=model_info.hf_model_filename,
-                cache_dir=self.config.models.model_dir,
-                revision=commit.commit_id,
-                token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
-            )
-            if not os.path.exists(model_info.file_path):
-                bt.logging.error(f"Downloaded file does not exist at {model_info.file_path}")
-                raise FileNotFoundError(f"File {model_info.file_path} was not found after download.")
-            bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
-        except Exception as e:
-            bt.logging.error(f"Failed to download model file at commit {commit.commit_id}: {e}")
-            raise
 
     def add_model(
         self,
