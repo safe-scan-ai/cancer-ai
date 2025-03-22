@@ -1,5 +1,7 @@
 import functools
 from typing import Optional, Type
+import asyncio
+from functools import wraps
 
 import bittensor as bt
 from pydantic import BaseModel, Field
@@ -65,6 +67,7 @@ class ChainModelMetadata:
             wallet  # Wallet is only needed to write to the chain, not to read.
         )
         self.netuid = netuid
+        self.subnet_metadata = self.subtensor.metagraph(self.netuid)
 
     async def store_model_metadata(self, model_id: ChainMinerModel):
         """Stores model metadata on this subnet for a specific wallet."""
@@ -80,14 +83,16 @@ class ChainModelMetadata:
 
     async def retrieve_model_metadata(self, hotkey: str) -> Optional[ChainMinerModel]:
         """Retrieves model metadata on this subnet for specific hotkey"""
+        metadata = await get_metadata_with_timeout(self.subtensor, self.netuid, hotkey)
+        if metadata is None:
+            self.subnet_metadata = self.subtensor.metagraph(self.netuid)
+            metadata = await get_metadata_with_timeout(self.subtensor, self.netuid, hotkey)
+            if metadata is None:
+                return None
 
-        subnet_metadata = self.subtensor.metagraph(self.netuid)
-        uids = subnet_metadata.uids
-        hotkeys = subnet_metadata.hotkeys
-
+        uids = self.subnet_metadata.uids
+        hotkeys = self.subnet_metadata.hotkeys
         uid = next((uid for uid, hk in zip(uids, hotkeys) if hk == hotkey), None)
-
-        metadata = get_metadata_with_retry(self.subtensor, self.netuid, hotkey)
 
         try:
             chain_str = self.subtensor.get_commitment(self.netuid, uid)
@@ -117,6 +122,22 @@ class ChainModelMetadata:
         model.block = metadata["block"]
         return model
 
+def timeout(seconds):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            try:
+                return await asyncio.wait_for(func(*args, **kwargs), timeout=seconds)
+            except asyncio.TimeoutError:
+                bt.logging.debug("Metadata retrieval timed out, refreshing subnet metadata")
+                return None
+        return wrapper
+    return decorator
+
 @retry(tries=10, delay=5)
 def get_metadata_with_retry(subtensor, netuid, hotkey):
     return bt.core.extrinsics.serving.get_metadata(subtensor, netuid, hotkey)
+
+@timeout(10)  # 10 second timeout
+async def get_metadata_with_timeout(subtensor, netuid, hotkey):
+    return get_metadata_with_retry(subtensor, netuid, hotkey)

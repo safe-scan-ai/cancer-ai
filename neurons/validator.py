@@ -31,11 +31,7 @@ import requests
 from cancer_ai.chain_models_store import ChainModelMetadata
 from cancer_ai.validator.rewarder import CompetitionWinnersStore, Rewarder, Score
 from cancer_ai.base.base_validator import BaseValidatorNeuron
-from competition_runner import (
-    get_competitions_schedule,
-    run_competitions_tick,
-    CompetitionRunStore,
-)
+
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     fetch_organization_data_references,
@@ -51,20 +47,12 @@ BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"
 BLACKLIST_FILE_PATH_TESTNET = "config/hotkey_blacklist_testnet.json"
 
 class Validator(BaseValidatorNeuron):
-    print(cancer_ai_logo)
+    
     def __init__(self, config=None):
+        print(cancer_ai_logo)
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
         self.db_controller = ModelDBController(self.subtensor, self.config.db_path)
-        self.competition_scheduler = get_competitions_schedule(
-            bt_config = self.config,
-            subtensor = self.subtensor,
-            hotkeys = self.hotkeys,
-            validator_hotkey = self.hotkey,
-            db_controller = self.db_controller,
-            test_mode = False,
-        )
-        bt.logging.info(f"Scheduler config: {self.competition_scheduler}")
 
         self.rewarder = Rewarder(self.winners_store)
         self.chain_models = ChainModelMetadata(
@@ -108,12 +96,13 @@ class Validator(BaseValidatorNeuron):
         with open(blacklist_file, "r", encoding="utf-8") as f:
             BLACKLISTED_HOTKEYS = json.load(f)
         
-        for hotkey in self.hotkeys:
+        for i, hotkey in enumerate(self.hotkeys):
             if hotkey in BLACKLISTED_HOTKEYS:
                 bt.logging.debug(f"Skipping blacklisted hotkey {hotkey}")
                 continue
 
             hotkey = str(hotkey)
+            bt.logging.debug(f"Downloading model {i+1}/{len(self.hotkeys)} from hotkey {hotkey}")
             chain_model_metadata = await self.chain_models.retrieve_model_metadata(hotkey)
             if not chain_model_metadata:
                 bt.logging.warning(
@@ -126,73 +115,9 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.error(f"An error occured while trying to persist the model info: {e}")
 
         self.db_controller.clean_old_records(self.hotkeys)
-        latest_models = self.db_controller.get_latest_models(self.hotkeys, self.config.models_query_cutoff)
-        bt.logging.info(
-            f"Amount of latest miners with models: {len(latest_models)}"
-        )
         self.last_miners_refresh = time.time()
         self.save_state()
 
-    async def competition_loop_tick(self):
-        """Main competition loop tick."""
-
-        # for testing purposes
-        # self.run_log = CompetitionRunStore(runs=[])
-
-        self.competition_scheduler = get_competitions_schedule(
-            bt_config = self.config,
-            subtensor = self.subtensor,
-            hotkeys = self.hotkeys,
-            validator_hotkey = self.hotkey,
-            db_controller=self.db_controller,
-            test_mode = self.config.test_mode,
-        )
-        winning_hotkey = None
-        winning_model_link = None
-        try:
-            winning_hotkey, competition_id, winning_model_result = (
-                await run_competitions_tick(self.competition_scheduler, self.run_log)
-            )
-        except Exception:
-            formatted_traceback = traceback.format_exc()
-            bt.logging.error(f"Error running competition: {formatted_traceback}")
-            wandb.init(
-                reinit=True, project="competition_id", group="competition_evaluation"
-            )
-            wandb.log(
-                {
-                    "log_type": "competition_result",
-                    "winning_evaluation_hotkey": "",
-                    "run_time": "",
-                    "validator_hotkey": self.wallet.hotkey.ss58_address,
-                    "model_link": winning_model_link,
-                    "errors": str(formatted_traceback),
-                }
-            )
-            wandb.finish()
-            return
-
-        if not winning_hotkey:
-            return
-
-        wandb.init(project=competition_id, group="competition_evaluation")
-        run_time_s = (
-            self.run_log.runs[-1].end_time - self.run_log.runs[-1].start_time
-        ).seconds
-        wandb.log(
-            {
-                "log_type": "competition_result",
-                "winning_hotkey": winning_hotkey,
-                "run_time_s": run_time_s,
-                "validator_hotkey": self.wallet.hotkey.ss58_address,
-                "model_link": winning_model_link,
-                "errors": "",
-            }
-        )
-        wandb.finish()
-
-        bt.logging.info(f"Competition result for {competition_id}: {winning_hotkey}")
-        self.handle_competition_winner(winning_hotkey, competition_id, winning_model_result)
 
     async def monitor_datasets(self):
         """Monitor datasets references for updates."""
@@ -304,9 +229,6 @@ class Validator(BaseValidatorNeuron):
                 competition_leader_map={}, hotkey_score_map={}
             )
             bt.logging.debug("Winner store empty, creating new one")
-        if not getattr(self, "run_log", None):
-            self.run_log = CompetitionRunStore(runs=[])
-            bt.logging.debug("Competition run store empty, creating new one")
 
         if not getattr(self, "organizations_data_references", None):
             self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
@@ -317,7 +239,6 @@ class Validator(BaseValidatorNeuron):
             scores=self.scores,
             hotkeys=self.hotkeys,
             winners_store=self.winners_store.model_dump(),
-            run_log=self.run_log.model_dump(),
             organizations_data_references=self.organizations_data_references.model_dump(),
             org_latest_updates=self.org_latest_updates,
         )
@@ -329,7 +250,6 @@ class Validator(BaseValidatorNeuron):
             scores=self.scores,
             hotkeys=self.hotkeys,
             winners_store=self.winners_store.model_dump(),
-            run_log=self.run_log.model_dump(),
             organizations_data_references=self.organizations_data_references.model_dump(),
             org_latest_updates={},
         )
@@ -353,7 +273,6 @@ class Validator(BaseValidatorNeuron):
             self.winners_store = CompetitionWinnersStore.model_validate(
                 state["winners_store"].item()
             )
-            self.run_log = CompetitionRunStore.model_validate(state["run_log"].item())
 
             factory = OrganizationDataReferenceFactory.get_instance()
             saved_data = state["organizations_data_references"].item()
