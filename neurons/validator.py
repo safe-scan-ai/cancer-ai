@@ -146,6 +146,11 @@ class Validator(BaseValidatorNeuron):
         
         for data_package in list_of_new_data_packages:
             bt.logging.info(f"New data packages found. Starting competition for {data_package.competition_id}")
+            prev_winner = self.winners_store.competition_leader_map.get(data_package.competition_id)
+            if prev_winner is not None:
+                prev_winner_hotkey = prev_winner.hotkey
+            else:
+                prev_winner_hotkey = None
             competition_manager = CompetitionManager(
                 config=self.config,
                 subtensor=self.subtensor,
@@ -156,12 +161,13 @@ class Validator(BaseValidatorNeuron):
                 dataset_hf_id=data_package.dataset_hf_filename,
                 dataset_hf_repo_type="dataset",
                 db_controller = self.db_controller,
+                prev_winner_hotkey = prev_winner_hotkey,
                 test_mode = self.config.test_mode,
             )
             winning_hotkey = None
             winning_model_link = None
             try:
-                winning_hotkey, winning_model_result = (
+                winning_hotkey, winning_model_result, prev_winner_current_score = (
                     await competition_manager.evaluate()
                 )
                 if not winning_hotkey:
@@ -200,6 +206,7 @@ class Validator(BaseValidatorNeuron):
             wandb.finish()
 
             bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
+            await self.rewarder.update_prev_competition_winner(data_package.competition_id, prev_winner_current_score)
             await self.handle_competition_winner(winning_hotkey, data_package.competition_id, winning_model_result)
 
     async def handle_competition_winner(self, winning_hotkey, competition_id, winning_model_result):

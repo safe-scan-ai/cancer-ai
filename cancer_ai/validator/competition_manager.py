@@ -54,6 +54,7 @@ class CompetitionManager(SerializableManager):
         dataset_hf_id: str,
         dataset_hf_repo_type: str,
         db_controller: ModelDBController,
+        prev_winner_hotkey: str | None,
         test_mode: bool = False,
     ) -> None:
         """
@@ -84,6 +85,7 @@ class CompetitionManager(SerializableManager):
         self.validator_hotkey = validator_hotkey
         self.db_controller = db_controller
         self.test_mode = test_mode
+        self.prev_winner_hotkey = prev_winner_hotkey
 
     def __repr__(self) -> str:
         return f"CompetitionManager<{self.competition_id}>"
@@ -229,12 +231,16 @@ class CompetitionManager(SerializableManager):
         winning_hotkey, winning_model_result = sorted(
             self.results, key=lambda x: x[1].score, reverse=True
         )[0]
+        # if previous winner model is not participating in current competition it will not be scored
+        prev_winner_current_score = 0.0
         for miner_hotkey, model_result in self.results:
             bt.logging.debug(
                 f"Model result for {miner_hotkey}:\n {model_result.model_dump_json(indent=4)} \n"
             )
+            if miner_hotkey == self.prev_winner_hotkey:
+                prev_winner_current_score = model_result.score
 
         bt.logging.info(
             f"Winning hotkey for competition {self.competition_id}: {winning_hotkey}"
         )
-        return winning_hotkey, winning_model_result
+        return winning_hotkey, winning_model_result, prev_winner_current_score

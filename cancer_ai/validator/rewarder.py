@@ -157,3 +157,6 @@ class Rewarder:
             self.scores[hotkey].score += total_reduced_share / len(
                 competitions_without_reduction
             )
+
+    async def update_prev_competition_winner(self, competition_id: str, prev_winner_current_score: float):
+        self.competition_leader_mapping[competition_id].model_result.score = prev_winner_current_score
