@@ -1,6 +1,6 @@
 # The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# Copyright © 2024 Safe-Scan
+# Copyright 2023 Yuma Rao
+# Copyright 2024 Safe-Scan
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
@@ -22,6 +22,7 @@ import asyncio
 import os
 import traceback
 import json
+import threading
 
 import bittensor as bt
 import numpy as np
@@ -48,7 +49,7 @@ BLACKLIST_FILE_PATH_TESTNET = "config/hotkey_blacklist_testnet.json"
 
 class Validator(BaseValidatorNeuron):
     
-    def __init__(self, config=None):
+    def __init__(self, config=None, exit_event=None):
         print(cancer_ai_logo)
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
@@ -64,6 +65,7 @@ class Validator(BaseValidatorNeuron):
         # Create the shared session for hugging face api
         self.hf_api = HfApi()
 
+        self.exit_event = exit_event
 
     async def concurrent_forward(self):
         coroutines = [
@@ -288,7 +290,12 @@ class Validator(BaseValidatorNeuron):
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
-    with Validator() as validator:
+    bt.logging.info("Setting up main thread interrupt handle.")
+    exit_event = threading.Event()
+    with Validator(exit_event=exit_event) as validator:
         while True:
             # bt.logging.info(f"Validator running... {time.time()}")
             time.sleep(5)
+            if exit_event.is_set():
+                bt.logging.info("Exit event received. Shutting down...")
+                break

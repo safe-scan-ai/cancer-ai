@@ -19,6 +19,7 @@
 
 from abc import abstractmethod
 
+import sys
 import copy
 import numpy as np
 import asyncio
@@ -54,7 +55,7 @@ class BaseValidatorNeuron(BaseNeuron):
         super().add_args(parser)
         add_validator_args(cls, parser)
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, exit_event: threading.Event = None):
         super().__init__(config=config)
 
         # Save a copy of the hotkeys to local memory.
@@ -93,6 +94,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: Union[threading.Thread, None] = None
         self.lock = asyncio.Lock()
+        self.exit_event = exit_event
 
     def serve_axon(self):
         """Serve axon to enable external connections."""
@@ -169,6 +171,9 @@ class BaseValidatorNeuron(BaseNeuron):
         except Exception as err:
             bt.logging.error(f"Error during validation: {str(err)}")
             bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
+            if self.exit_event:
+                self.exit_event.set()
+            sys.exit(1)
 
     def run_in_background_thread(self):
         """
