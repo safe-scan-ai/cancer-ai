@@ -20,6 +20,7 @@ class DatasetManager(SerializableManager):
         hf_filename: str,
         hf_repo_type: str,
         use_auth: bool = True,
+        local_fs_mode: bool = False,
     ) -> None:
         """
         Initializes a new instance of the DatasetManager class.
@@ -44,6 +45,7 @@ class DatasetManager(SerializableManager):
         self.local_extracted_dir = Path(self.config.models.dataset_dir, competition_id)
         self.data: Tuple[List, List] = ()
         self.handler = None
+        self.local_fs_mode = local_fs_mode
 
     def get_state(self) -> dict:
         return {}
@@ -92,7 +94,7 @@ class DatasetManager(SerializableManager):
             os.system(f"rm -R {self.local_extracted_dir}")
 
         bt.logging.debug(f"Dataset extracted to: { self.local_compressed_path}")
-        os.system(f"rm -R {self.local_extracted_dir}")
+
         # TODO add error handling
         zip_file_path = self.local_compressed_path
         extract_dir = self.local_extracted_dir
@@ -121,8 +123,11 @@ class DatasetManager(SerializableManager):
 
     async def prepare_dataset(self) -> None:
         """Download dataset, unzip and set dataset handler"""
-        bt.logging.info(f"Downloading dataset '{self.competition_id}'")
-        await self.download_dataset()
+        if self.local_fs_mode:
+            self.local_compressed_path = self.hf_filename
+        else:
+            bt.logging.info(f"Downloading dataset '{self.competition_id}'")
+            await self.download_dataset()
         bt.logging.info(f"Unzipping dataset '{self.competition_id}'")
         await self.unzip_dataset()
         bt.logging.info(f"Setting dataset handler '{self.competition_id}'")

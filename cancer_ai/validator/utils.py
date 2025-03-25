@@ -5,7 +5,7 @@ from datetime import datetime
 import asyncio
 import time
 from functools import wraps
-
+import shutil
 import yaml
 import bittensor as bt
 from retry import retry
@@ -349,6 +349,7 @@ async def check_for_new_dataset_files(
 
     return results
 
+
 @retry(tries=10, delay=5, logger=bt.logging)
 def list_repo_tree_with_retry(hf_api, repo_id, repo_type, token, recursive, expand):
     return hf_api.list_repo_tree(
@@ -358,3 +359,42 @@ def list_repo_tree_with_retry(hf_api, repo_id, repo_type, token, recursive, expa
         recursive=recursive,
         expand=expand,
     )
+
+def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
+    """Gets dataset package from local directory
+
+    Directory needs to have speficic structure:
+
+    Dir
+        - to_be_released <- datasets to test
+        - already_released <- function moves exhaused datasets to this directory
+
+    """
+
+    list_of_new_data_packages: list[NewDatasetFile] = []
+    to_be_released_dir = os.path.join(local_dataset_dir, "to_be_released")
+    already_released_dir = os.path.join(local_dataset_dir, "already_released")
+
+    if not os.path.exists(to_be_released_dir):
+        bt.logging.warning(f"Directory {to_be_released_dir} does not exist.")
+        return []
+
+    if not os.path.exists(already_released_dir):
+        os.makedirs(already_released_dir, exist_ok=True)
+
+    for filename in os.listdir(to_be_released_dir):
+        if filename.endswith(".zip"):
+            filepath = os.path.join(to_be_released_dir, filename)
+            try:
+                # Move the file to the already_released directory.
+                shutil.move(filepath, os.path.join(already_released_dir, filename))
+                bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
+                return NewDatasetFile(
+                    competition_id="local",  # You might want to change this
+                    dataset_hf_repo="local",  # You might want to change this
+                    dataset_hf_filename=os.path.join(already_released_dir, filename),
+                )
+            except Exception as e:
+                bt.logging.error(f"Error processing {filename}: {e}")
+
+    return None

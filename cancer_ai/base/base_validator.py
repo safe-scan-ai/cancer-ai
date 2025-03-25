@@ -38,7 +38,7 @@ from .utils.weight_utils import (
 from ..mock import MockDendrite
 from ..utils.config import add_validator_args
 
-from cancer_ai.validator.rewarder import CompetitionWinnersStore
+from cancer_ai.validator.rewarder import CompetitionResultsStore
 from cancer_ai.validator.models import OrganizationDataReferenceFactory
 from .. import __spec_version__ as spec_version
 
@@ -71,10 +71,8 @@ class BaseValidatorNeuron(BaseNeuron):
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
-        self.winners_store = CompetitionWinnersStore(
-            competition_leader_map={}, hotkey_score_map={}
-        )
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+        self.competition_results_store = CompetitionResultsStore()
         self.org_latest_updates = {}
         self.load_state()
         # Init sync with the network. Updates the metagraph.

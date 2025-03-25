@@ -23,6 +23,8 @@ import os
 import traceback
 import json
 import threading
+import datetime
+import csv
 
 import bittensor as bt
 import numpy as np
@@ -30,7 +32,8 @@ import wandb
 import requests
 
 from cancer_ai.chain_models_store import ChainModelMetadata
-from cancer_ai.validator.rewarder import CompetitionWinnersStore, Rewarder, Score
+from cancer_ai.validator.competition_handlers.base_handler import ModelEvaluationResult
+from cancer_ai.validator.rewarder import CompetitionResultsStore
 from cancer_ai.base.base_validator import BaseValidatorNeuron
 
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
@@ -38,6 +41,7 @@ from cancer_ai.validator.utils import (
     fetch_organization_data_references,
     sync_organizations_data_references,
     check_for_new_dataset_files,
+    get_local_dataset,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
@@ -55,7 +59,6 @@ class Validator(BaseValidatorNeuron):
         self.hotkey = self.wallet.hotkey.ss58_address
         self.db_controller = ModelDBController(self.subtensor, self.config.db_path)
 
-        self.rewarder = Rewarder(self.winners_store)
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
         )
@@ -68,11 +71,18 @@ class Validator(BaseValidatorNeuron):
         self.exit_event = exit_event
 
     async def concurrent_forward(self):
+
         coroutines = [
             self.refresh_miners(),
-            self.monitor_datasets(),
         ]
+        if self.config.filesystem_evaluation:
+            coroutines.append(self.filesystem_test_evaluation())
+        else:
+            coroutines.append(self.monitor_datasets())
+    
         await asyncio.gather(*coroutines)
+
+
 
     async def refresh_miners(self):
         """
@@ -120,6 +130,50 @@ class Validator(BaseValidatorNeuron):
         self.last_miners_refresh = time.time()
         self.save_state()
 
+    async def filesystem_test_evaluation(self):
+        time.sleep(1)
+        data_package = get_local_dataset(self.config.local_dataset_dir)
+        if not data_package:
+            bt.logging.error("NO NEW DATA PACKAGES")
+            return
+        competition_manager = CompetitionManager(
+                config=self.config,
+                subtensor=self.subtensor,
+                hotkeys=self.hotkeys,
+                validator_hotkey=self.hotkey,
+                competition_id="melanoma-testnet",
+                dataset_hf_repo="",
+                dataset_hf_filename = data_package.dataset_hf_filename,
+                dataset_hf_repo_type="dataset",
+                db_controller = self.db_controller,
+                test_mode = self.config.test_mode,
+                local_fs_mode=True,
+            )
+        try:
+            winning_hotkey, _ = await competition_manager.evaluate()
+            if not winning_hotkey:
+                bt.logging.error("NO WINNING HOTKEY")
+        except Exception as e:
+            print(f"Error evaluating {data_package.dataset_hf_filename}: {e}")
+
+        models_results = competition_manager.results
+  
+        await self.update_competition_results(data_package.competition_id, models_results)
+      
+        # Get the top hotkey for this specific competition
+        try:
+            top_hotkey = self.competition_results_store.get_top_hotkey(data_package.competition_id)
+        except ValueError:
+            bt.logging.warning(f"No top hotkey available for competition {data_package.competition_id}")
+            top_hotkey = None
+        
+        await self.log_results_to_csv(data_package, top_hotkey, models_results)
+
+        bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
+
+       
+   
+        
 
     async def monitor_datasets(self):
         """Monitor datasets references for updates."""
@@ -155,7 +209,7 @@ class Validator(BaseValidatorNeuron):
                 validator_hotkey=self.hotkey,
                 competition_id=data_package.competition_id,
                 dataset_hf_repo=data_package.dataset_hf_repo,
-                dataset_hf_id=data_package.dataset_hf_filename,
+                dataset_hf_filename=data_package.dataset_hf_filename,
                 dataset_hf_repo_type="dataset",
                 db_controller = self.db_controller,
                 test_mode = self.config.test_mode,
@@ -201,36 +255,92 @@ class Validator(BaseValidatorNeuron):
             )
             wandb.finish()
 
+            # Update competition results
+            await self.update_competition_results(data_package.competition_id, competition_manager.results)
             bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
-            await self.handle_competition_winner(winning_hotkey, data_package.competition_id, winning_model_result)
+            
 
-    async def handle_competition_winner(self, winning_hotkey, competition_id, winning_model_result):
-        await self.rewarder.update_scores(
-            winning_hotkey, competition_id, winning_model_result
-        )
-        self.winners_store = CompetitionWinnersStore(
-            competition_leader_map=self.rewarder.competition_leader_mapping,
-            hotkey_score_map=self.rewarder.scores,
-        )
+
+    async def update_competition_results(self, competition_id: str, model_results: list[tuple[str, ModelEvaluationResult]]):
+        """Update competition results for a specific competition."""
+        
+        # Get list of hotkeys
+        metagraph_hotkeys = self.metagraph.hotkeys
+        
+        # Delete hotkeys from competition result score which don't exist anymore
+        self.competition_results_store.delete_dead_hotkeys(competition_id, metagraph_hotkeys)
+
+        # TODO !!!!!!!!!!!!!!!!!!!!!!!!!
+        # TODO delete dead competitions / mechanism for resetting scores for everyone ? ? ? ? ? ? ? ? ? ?
+        # TODO !!!!!!!!!!!!!!!!!!!!!!!!!
+
+        # add all scores to the store
+        for hotkey, result in model_results:
+            self.competition_results_store.add_score(competition_id, hotkey, result.score)
+
+        # Get the winner hotkey for this competition
+        try:
+            winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
+            bt.logging.info(f"Competition result for {competition_id}: {winner_hotkey}")
+        except ValueError as e:
+            bt.logging.warning(f"Could not determine winner for competition {competition_id}: {e}")
+            winner_hotkey = None
+        
+        
+        self.update_scores()
+
+
+    def update_scores(self):
+        self.scores = np.zeros(len(self.metagraph.n), dtype=np.float32)
+        # iterate over competitions and set scores for each 
+        for competition_id in self.competition_results_store.get_competitions():
+            # Map winning hotkey to self.rewards
+            winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
+            if winner_hotkey is not None:
+                # Find the index of the winning hotkey
+                if winner_hotkey in self.metagraph.hotkeys:
+                    winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
+                    self.scores[winner_idx] = 1.0
+                else:
+                    bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
+        
         self.save_state()
 
-        self.scores = [
-            np.float32(
-                self.winners_store.hotkey_score_map.get(
-                    hotkey, Score(score=0.0, reduction=0.0)
-                ).score
-            )
-            for hotkey in self.metagraph.hotkeys
-        ]
-        self.save_state()
+
+     async def log_results_to_csv(self, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
+        """Debug method for dumping rewards for testing """
+
+        csv_file = "filesystem_test_evaluation_results.csv"
+        with open(csv_file, mode='a', newline='') as f:
+            writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            if os.stat(csv_file).st_size == 0:
+                writer.writerow(["Package name", "Date", "Hotkey", "Score", "Average","Winner"])
+            competition_id = data_package.competition_id
+            for hotkey, model_result in models_results:
+                # Get average score if available, otherwise use 0.0
+                avg_score = 0.0
+                if (competition_id in self.competition_results_store.average_scores and 
+                    hotkey in self.competition_results_store.average_scores[competition_id]):
+                    avg_score = self.competition_results_store.average_scores[competition_id][hotkey]
+                
+                if hotkey == top_hotkey:
+                    writer.writerow([os.path.basename(data_package.dataset_hf_filename), 
+                                    datetime.datetime.now(), 
+                                    hotkey, 
+                                    round(model_result.score, 6), 
+                                    round(avg_score, 6), 
+                                    "X"])
+                else:
+                    writer.writerow([os.path.basename(data_package.dataset_hf_filename), 
+                                    datetime.datetime.now(), 
+                                    hotkey, 
+                                    round(model_result.score, 6), 
+                                    round(avg_score, 6), 
+                                    " "])
+
 
     def save_state(self):
         """Saves the state of the validator to a file."""
-        if not getattr(self, "winners_store", None):
-            self.winners_store = CompetitionWinnersStore(
-                competition_leader_map={}, hotkey_score_map={}
-            )
-            bt.logging.debug("Winner store empty, creating new one")
 
         if not getattr(self, "organizations_data_references", None):
             self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
@@ -240,9 +350,9 @@ class Validator(BaseValidatorNeuron):
             self.config.neuron.full_path + "/state.npz",
             scores=self.scores,
             hotkeys=self.hotkeys,
-            winners_store=self.winners_store.model_dump(),
             organizations_data_references=self.organizations_data_references.model_dump(),
             org_latest_updates=self.org_latest_updates,
+            competition_results_store=self.competition_results_store.model_dump(),
         )
 
     def create_empty_state(self):
@@ -251,11 +361,10 @@ class Validator(BaseValidatorNeuron):
             self.config.neuron.full_path + "/state.npz",
             scores=self.scores,
             hotkeys=self.hotkeys,
-            winners_store=self.winners_store.model_dump(),
             organizations_data_references=self.organizations_data_references.model_dump(),
             org_latest_updates={},
+            competition_results_store=self.competition_results_store.model_dump(),
         )
-        return
 
     def load_state(self):
         """Loads the state of the validator from a file."""
@@ -272,17 +381,16 @@ class Validator(BaseValidatorNeuron):
             )
             self.scores = state["scores"]
             self.hotkeys = state["hotkeys"]
-            self.winners_store = CompetitionWinnersStore.model_validate(
-                state["winners_store"].item()
-            )
 
             factory = OrganizationDataReferenceFactory.get_instance()
             saved_data = state["organizations_data_references"].item()
             factory.update_from_dict(saved_data)
             self.organizations_data_references = factory
             self.org_latest_updates = state["org_latest_updates"].item()
+            self.competition_results_store = CompetitionResultsStore.model_validate(
+                state["competition_results_store"].item()
+            )
 
-    
         except Exception as e:
             bt.logging.error(f"Error loading state: {e}")
             self.create_empty_state()
