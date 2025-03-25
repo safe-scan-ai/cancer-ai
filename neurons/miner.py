@@ -19,7 +19,7 @@ from cancer_ai.validator.competition_manager import COMPETITION_HANDLER_MAPPING
 from cancer_ai.base.base_miner import BaseNeuron
 from cancer_ai.chain_models_store import ChainMinerModel, ChainModelMetadata
 from cancer_ai.utils.config import path_config, add_miner_args
-from cancer_ai.validator.utils import get_competition_config, get_newest_competition_packages
+from cancer_ai.validator.utils import get_newest_competition_packages
 
 
 class MinerManagerCLI:
@@ -32,10 +32,6 @@ class MinerManagerCLI:
         self.config.logging.debug = True
         BaseNeuron.check_config(self.config)
         bt.logging.set_config(config=self.config.logging)
-
-        self.competition_config = get_competition_config(
-            self.config.competition.config_path
-        )
 
         self.code_zip_path = None
 

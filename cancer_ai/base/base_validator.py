@@ -270,6 +270,12 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.debug("uint_weights", uint_weights)
         bt.logging.debug("uint_uids", uint_uids)
 
+        # test mode, don't commit weights
+        if self.config.filesystem_evaluation:
+            bt.logging.debug("Skipping settings weights in filesystem evaluation mode")
+            return
+        
+
         # Set the weights on chain via our subtensor connection.
         result, msg = self.subtensor.set_weights(
             wallet=self.wallet,

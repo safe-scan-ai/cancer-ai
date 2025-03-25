@@ -22,8 +22,10 @@ class CompetitionResultsStore(BaseModel):
     score_map: dict[str, dict[Hotkey, list[ModelScore]]] = {}
     # Structure: {competition_id: {hotkey: average_score}}
     average_scores: dict[str, dict[Hotkey, float]] = {}
+    # Structure: {competition_id: (hotkey, score)}
+    current_top_hotkeys: dict[str, tuple[Hotkey, float]] = {}
 
-    def add_score(self, competition_id: str, hotkey: Hotkey, score: float):
+    def add_score(self, competition_id: str, hotkey: Hotkey, score: float, date: datetime = None):
         """Add a score for a specific hotkey in a specific competition."""
 
         # Initialize competition dictionaries if they don't exist
@@ -36,9 +38,11 @@ class CompetitionResultsStore(BaseModel):
         if hotkey not in self.score_map[competition_id]:
             self.score_map[competition_id][hotkey] = []
 
+        score_date = date if date is not None else datetime.now(timezone.utc)
+        
         # Add the score
         self.score_map[competition_id][hotkey].append(
-            ModelScore(date=datetime.now(timezone.utc), score=score)
+            ModelScore(date=score_date, score=score)
         )
 
         # Sort by date and keep only the last HISTORY_LENGTH scores
@@ -100,11 +104,44 @@ class CompetitionResultsStore(BaseModel):
             raise ValueError(
                 f"No hotkeys to choose from for competition {competition_id}"
             )
-
-        return max(
+        
+        # Find the new top hotkey and score
+        new_top_hotkey = max(
             self.average_scores[competition_id],
             key=self.average_scores[competition_id].get,
         )
+        new_top_score = self.average_scores[competition_id][new_top_hotkey]
+        
+        # Check if we have a current top hotkey for this competition
+        if competition_id in self.current_top_hotkeys:
+            current_top_hotkey, current_top_score = self.current_top_hotkeys[competition_id]
+            
+            # If the current top hotkey is still active and the new top score
+            # is not significantly better (within threshold), keep the current top hotkey
+            if (
+                current_top_hotkey in self.average_scores[competition_id] and
+                abs(new_top_score - current_top_score) <= 0.0001
+            ):
+                return current_top_hotkey
+        
+        # Update the current top hotkey and score
+        self.current_top_hotkeys[competition_id] = (new_top_hotkey, new_top_score)
+        return new_top_hotkey
 
     def get_competitions(self) -> list[str]:
         return list(self.score_map.keys())
+        
+    def delete_inactive_competitions(self, active_competitions: list[str]):
+        """Delete competitions that are no longer active."""
+        competitions_to_delete = []
+        for competition_id in self.score_map.keys():
+            if competition_id not in active_competitions:
+                competitions_to_delete.append(competition_id)
+        
+        for competition_id in competitions_to_delete:
+            bt.logging.info(f"Deleting inactive competition {competition_id} from results store")
+            del self.score_map[competition_id]
+            if competition_id in self.average_scores:
+                del self.average_scores[competition_id]
+            if competition_id in self.current_top_hotkeys:
+                del self.current_top_hotkeys[competition_id]

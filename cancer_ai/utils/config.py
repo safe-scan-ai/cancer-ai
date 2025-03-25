@@ -349,6 +349,21 @@ def add_validator_args(cls, parser):
         default=8*60,
     )
 
+    parser.add_argument(
+        "--local_dataset_dir",
+        type=str,
+        help="Path to the local dataset directory",
+        default="local_datasets/",
+    )
+
+    parser.add_argument(
+        "--filesystem_evaluation",
+        type=bool,
+        help="Should use local datasets instead of HF? Use together with --local_dataset_dir",
+        default=False
+    )
+
+
 def path_config(cls=None):
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.

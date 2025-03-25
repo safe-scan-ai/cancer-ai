@@ -89,12 +89,6 @@ async def run_command(cmd):
     return stdout.decode(), stderr.decode()
 
 
-def get_competition_config(path: str) -> CompetitionsListModel:
-    with open(path, "r", encoding="utf-8") as f:
-        competitions_json = json.load(f)
-    competitions = [CompetitionModel(**item) for item in competitions_json]
-    return CompetitionsListModel(competitions=competitions)
-
 
 async def fetch_organization_data_references(
     hf_repo_id: str, hf_api: HfApi
@@ -350,6 +344,24 @@ async def check_for_new_dataset_files(
     return results
 
 
+async def get_competition_weights(config: bt.Config, hf_api: HfApi) -> dict[str, float]:
+    """Get competition weights from the competition_weights.yml file."""
+    local_file_path = hf_hub_download(
+        repo_id=config.datasets_config_hf_repo_id,
+        repo_type="space",
+        filename="competition_weights.yml"
+    )
+    
+    with open(local_file_path, 'r', encoding='utf-8') as file:
+        weights_data = yaml.safe_load(file)
+    
+    weights_dict = {}
+    if weights_data is not None:  # Handle empty file case
+        for item in weights_data:
+            weights_dict[item['competition_id']] = item['weight']
+    
+    return weights_dict
+
 @retry(tries=10, delay=5, logger=bt.logging)
 def list_repo_tree_with_retry(hf_api, repo_id, repo_type, token, recursive, expand):
     return hf_api.list_repo_tree(
@@ -364,13 +376,12 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
     """Gets dataset package from local directory
 
     Directory needs to have speficic structure:
-
     Dir
         - to_be_released <- datasets to test
         - already_released <- function moves exhaused datasets to this directory
 
     """
-
+    import random
     list_of_new_data_packages: list[NewDatasetFile] = []
     to_be_released_dir = os.path.join(local_dataset_dir, "to_be_released")
     already_released_dir = os.path.join(local_dataset_dir, "already_released")
@@ -390,8 +401,8 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
                 shutil.move(filepath, os.path.join(already_released_dir, filename))
                 bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
                 return NewDatasetFile(
-                    competition_id="local",  # You might want to change this
-                    dataset_hf_repo="local",  # You might want to change this
+                    competition_id=random.choice(["melanoma-testnet","melanoma-1"]), 
+                    dataset_hf_repo="local",
                     dataset_hf_filename=os.path.join(already_released_dir, filename),
                 )
             except Exception as e:

@@ -248,7 +248,7 @@ class CompetitionManager(SerializableManager):
             self.results, key=lambda x: x[1].score, reverse=True
         )[0]
         for miner_hotkey, model_result in self.results:
-            bt.logging.debug(
+            bt.logging.trace(
                 f"Model result for {miner_hotkey}:\n {model_result.model_dump_json(indent=4)} \n"
             )
 
