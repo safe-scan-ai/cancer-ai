@@ -26,8 +26,7 @@ class ChainMinerModelDB(Base):
     )
 
 class ModelDBController:
-    def __init__(self, subtensor: bt.subtensor, db_path: str = "models.db"):
-        self.subtensor = subtensor
+    def __init__(self, db_path: str = "models.db"):
         db_url = f"sqlite:///{os.path.abspath(db_path)}"
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
@@ -35,7 +34,6 @@ class ModelDBController:
     
     def add_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
         session = self.Session()
-        # date_submitted = self.get_block_timestamp(chain_miner_model.block)
         existing_model = self.get_model(hotkey)
         if not existing_model:
             try:
@@ -102,7 +100,6 @@ class ModelDBController:
     def update_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
         session = self.Session()
         try:
-            # date_submitted = self.get_block_timestamp(chain_miner_model.block)
             existing_model = session.query(ChainMinerModelDB).filter_by(
                 hotkey=hotkey
             ).first()
@@ -113,8 +110,6 @@ class ModelDBController:
                 existing_model.hf_model_filename = chain_miner_model.hf_model_filename
                 existing_model.hf_repo_type = chain_miner_model.hf_repo_type
                 existing_model.hf_code_filename = chain_miner_model.hf_code_filename
-                # existing_model.block = chain_miner_model.block
-                # existing_model.date_submitted = date_submitted
 
                 session.commit()
                 bt.logging.debug(f"Successfully updated model for hotkey {hotkey}.")
@@ -130,38 +125,6 @@ class ModelDBController:
         finally:
             session.close()
 
-    def get_block_timestamp(self, block_number):
-        """Gets the timestamp of a block given its number."""
-        try:
-            # Identify if the connected subtensor is testnet based on the chain endpoint
-            is_testnet = "test" in self.subtensor.chain_endpoint.lower()
-
-            # Use the correct subtensor (archive for mainnet, normal for testnet)
-            if is_testnet:
-                block_hash = self.subtensor.get_block_hash(block_number)
-            else:
-                archive_subtensor = bt.subtensor(network="archive")
-                block_hash = archive_subtensor.get_block_hash(block_number)
-
-            if block_hash is None:
-                raise ValueError(f"Block hash not found for block number {block_number}")
-
-            timestamp_info = self.subtensor.substrate.query(
-                module="Timestamp",
-                storage_function="Now",
-                block_hash=block_hash
-            )
-
-            if timestamp_info is None:
-                raise ValueError(f"Timestamp not found for block hash {block_hash}")
-
-            timestamp_ms = timestamp_info.value
-            block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0)
-
-            return block_datetime
-        except Exception as e:
-            bt.logging.error(f"Error retrieving block timestamp: {e}")
-            raise
 
     def get_latest_models(self, hotkeys: list[str], competition_id: str) -> dict[str, ChainMinerModel]:
         # cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)

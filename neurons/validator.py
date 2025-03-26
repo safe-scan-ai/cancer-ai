@@ -32,17 +32,14 @@ import wandb
 import requests
 
 from cancer_ai.chain_models_store import ChainModelMetadata
-from cancer_ai.validator.competition_handlers.base_handler import ModelEvaluationResult
 from cancer_ai.validator.rewarder import CompetitionResultsStore
 from cancer_ai.base.base_validator import BaseValidatorNeuron
-
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     fetch_organization_data_references,
     sync_organizations_data_references,
     check_for_new_dataset_files,
     get_local_dataset,
-    get_competition_weights,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
@@ -58,7 +55,7 @@ class Validator(BaseValidatorNeuron):
         print(cancer_ai_logo)
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
-        self.db_controller = ModelDBController(self.subtensor, self.config.db_path)
+        self.db_controller = ModelDBController(self.config.db_path)
 
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
@@ -160,7 +157,6 @@ class Validator(BaseValidatorNeuron):
         models_results = competition_manager.results
         bt.logging.warning("Competition results store before update")
         bt.logging.warning(self.competition_results_store.model_dump_json())
-        await self.update_competition_results(data_package.competition_id, models_results)
         bt.logging.warning("Competition results store after update")
         bt.logging.warning(self.competition_results_store.model_dump_json())
       
@@ -175,9 +171,9 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
 
-       
-   
-        
+        competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api)
+        self.update_scores(competition_weights)
+
 
     async def monitor_datasets(self):
         """Monitor datasets references for updates."""
@@ -260,83 +256,9 @@ class Validator(BaseValidatorNeuron):
             wandb.finish()
 
             # Update competition results
-            await self.update_competition_results(data_package.competition_id, competition_manager.results)
             bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
-            
-
-
-    async def update_competition_results(self, competition_id: str, model_results: list[tuple[str, ModelEvaluationResult]]):
-        """Update competition results for a specific competition."""
-        
-        # Get list of hotkeys
-        metagraph_hotkeys = self.metagraph.hotkeys
-        
-        # Delete hotkeys from competition result score which don't exist anymore
-        self.competition_results_store.delete_dead_hotkeys(competition_id, metagraph_hotkeys)
-
-        # Get competition weights from the config
-        competition_weights = await get_competition_weights(self.config, self.hf_api)
-        
-        # Delete competitions that don't exist in the weights mapping
-        self.competition_results_store.delete_inactive_competitions(list(competition_weights.keys()))
-
-        # Get all hotkeys that have models for this competition from the database
-        latest_models = self.db_controller.get_latest_models(metagraph_hotkeys, competition_id)
-        competition_miners = set(latest_models.keys())
-
-        # Track which miners had results
-        evaluated_miners = set()
-        
-        # Use a common timestamp for all scores in this evaluation run
-        # This will make it easier to compare runs by date in the future
-        evaluation_timestamp = datetime.datetime.now(datetime.timezone.utc)
-        
-        # Add scores for miners with successful evaluations
-        for hotkey, result in model_results:
-            self.competition_results_store.add_score(competition_id, hotkey, result.score, date=evaluation_timestamp)
-            evaluated_miners.add(hotkey)
-        
-        # Add score of 0 for miners who are in the competition but didn't take part in the evaluation
-        # This is necessary to decrease their average score when their model fails or has errors
-        failed_miners = competition_miners - evaluated_miners
-        for hotkey in failed_miners:
-            bt.logging.info(f"Adding score of 0 for hotkey {hotkey} in competition {competition_id} due to model failure or error")
-            self.competition_results_store.add_score(competition_id, hotkey, 0.0, date=evaluation_timestamp)
-
-        # Get the winner hotkey for this competition
-        try:
-            winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
-            bt.logging.info(f"Competition result for {competition_id}: {winner_hotkey}")
-        except ValueError as e:
-            bt.logging.warning(f"Could not determine winner for competition {competition_id}: {e}")
-            winner_hotkey = None
-        
-        self.update_scores(competition_weights)
-
-
-    def update_scores(self, competition_weights: dict[str, float]):
-        """Update scores based on competition weights."""
-        self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
-        
-        # Iterate over competitions and set scores for each according to their weights
-        for competition_id, weight in competition_weights.items():
-            try:
-                # Map winning hotkey to self.rewards
-                winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
-                if winner_hotkey is not None:
-                    # Find the index of the winning hotkey
-                    if winner_hotkey in self.metagraph.hotkeys:
-                        winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
-                        # Apply the weight from the competition_weights mapping
-                        self.scores[winner_idx] += weight
-                        bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
-                    else:
-                        bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
-            except ValueError as e:
-                bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
-        bt.logging.warning("Scores from UPDATE_SCORES: ")
-        bt.logging.warning(self.scores)
-        self.save_state()
+            competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api)
+            self.update_scores(competition_weights)
 
 
     async def log_results_to_csv(self, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
@@ -426,6 +348,30 @@ class Validator(BaseValidatorNeuron):
         except Exception as e:
             bt.logging.error(f"Error loading state: {e}")
             self.create_empty_state()
+
+    def update_scores(self, competition_weights: dict[str, float]):
+        """Update scores based on competition weights."""
+        self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+        
+        # Iterate over competitions and set scores for each according to their weights
+        for competition_id, weight in competition_weights.items():
+            try:
+                # Map winning hotkey to self.rewards
+                winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
+                if winner_hotkey is not None:
+                    # Find the index of the winning hotkey
+                    if winner_hotkey in self.metagraph.hotkeys:
+                        winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
+                        # Apply the weight from the competition_weights mapping
+                        self.scores[winner_idx] += weight
+                        bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
+                    else:
+                        bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
+            except ValueError as e:
+                bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
+        bt.logging.warning("Scores from UPDATE_SCORES: ")
+        bt.logging.warning(self.scores)
+        self.save_state()
 
 
 # The main function parses the configuration and runs the validator.

@@ -1,7 +1,10 @@
 from pydantic import BaseModel
-from datetime import datetime, timezone
 import bittensor as bt
+from datetime import datetime, timezone
 
+from cancer_ai.validator.competition_handlers.base_handler import ModelEvaluationResult
+from cancer_ai.validator.model_db import ModelDBController
+from cancer_ai.validator.utils import get_competition_weights
 
 # add type hotkey which is string
 Hotkey = str
@@ -48,9 +51,7 @@ class CompetitionResultsStore(BaseModel):
         # Sort by date and keep only the last HISTORY_LENGTH scores
         self.score_map[competition_id][hotkey].sort(key=lambda x: x.date, reverse=True)
         if len(self.score_map[competition_id][hotkey]) > HISTORY_LENGTH:
-            self.score_map[competition_id][hotkey] = self.score_map[competition_id][
-                hotkey
-            ][-HISTORY_LENGTH:]
+            self.score_map[competition_id][hotkey] = self.score_map[competition_id][hotkey][-HISTORY_LENGTH:]
 
         # Update the average score
         self.update_average_score(competition_id, hotkey)
@@ -145,3 +146,48 @@ class CompetitionResultsStore(BaseModel):
                 del self.average_scores[competition_id]
             if competition_id in self.current_top_hotkeys:
                 del self.current_top_hotkeys[competition_id]
+
+    async def update_competition_results(self, competition_id: str, model_results: list[tuple[str, ModelEvaluationResult]], config: bt.config, metagraph_hotkeys:list[Hotkey], hf_api):
+        """Update competition results for a specific competition."""
+
+        # Delete hotkeys from competition result score which don't exist anymore
+        self.delete_dead_hotkeys(competition_id, metagraph_hotkeys)
+
+        # Get competition weights from the config
+        competition_weights = await get_competition_weights(config, hf_api)
+        
+        # Delete competitions that don't exist in the weights mapping
+        self.delete_inactive_competitions(list(competition_weights.keys()))
+        
+        # Get all hotkeys that have models for this competition from the database
+        latest_models = ModelDBController(db_path=config.db_path).get_latest_models(metagraph_hotkeys, competition_id)
+        competition_miners = set(latest_models.keys())
+
+        # Track which miners had results
+        evaluated_miners = set()
+        
+        # Use a common timestamp for all scores in this evaluation run
+        # This will make it easier to compare runs by date in the future
+        evaluation_timestamp = datetime.now(timezone.utc)
+
+        # Add scores for miners with successful evaluations
+        for hotkey, result in model_results:
+            self.add_score(competition_id, hotkey, result.score, date=evaluation_timestamp)
+            evaluated_miners.add(hotkey)
+        
+        # Add score of 0 for miners who are in the competition but didn't take part in the evaluation
+        # This is necessary to decrease their average score when their model fails or has errors
+        failed_miners = competition_miners - evaluated_miners
+        for hotkey in failed_miners:
+            bt.logging.info(f"Adding score of 0 for hotkey {hotkey} in competition {competition_id} due to model failure or error")
+            self.add_score(competition_id, hotkey, 0.0, date=evaluation_timestamp)
+
+        # Get the winner hotkey for this competition
+        try:
+            winner_hotkey = self.get_top_hotkey(competition_id)
+            bt.logging.info(f"Competition result for {competition_id}: {winner_hotkey}")
+        except ValueError as e:
+            bt.logging.warning(f"Could not determine winner for competition {competition_id}: {e}")
+            winner_hotkey = None
+        
+        return competition_weights
