@@ -69,44 +69,16 @@ class Validator(BaseValidatorNeuron):
         self.exit_event = exit_event
 
     async def concurrent_forward(self):
-        try:
-            bt.logging.info("Starting concurrent_forward execution")
-            coroutines = [
-                self.refresh_miners(),
-            ]
-            
-            if self.config.filesystem_evaluation:
-                bt.logging.info("Adding filesystem_test_evaluation to coroutines")
-                coroutines.append(self.filesystem_test_evaluation())
-            else:
-                bt.logging.info("Adding monitor_datasets to coroutines")
-                coroutines.append(self.monitor_datasets())
-        
-            bt.logging.info(f"Executing {len(coroutines)} coroutines with asyncio.gather")
-            try:
-                await asyncio.gather(*coroutines)
-                bt.logging.info("Successfully completed all coroutines in concurrent_forward")
-            except Exception as e:
-                import traceback
-                stack_trace = traceback.format_exc()
-                bt.logging.error(f"Error during asyncio.gather in concurrent_forward: {e}")
-                bt.logging.error(f"Stack trace from asyncio.gather:\n{stack_trace}")
-                raise  # Re-raise to be caught by the outer try-except
-        except Exception as e:
-            import traceback
-            stack_trace = traceback.format_exc()
-            bt.logging.error(f"CRITICAL ERROR in concurrent_forward: {e}")
-            bt.logging.error(f"Error type: {type(e).__name__}")
-            bt.logging.error(f"Stack trace from concurrent_forward:\n{stack_trace}")
-            
-            # Log additional context
-            bt.logging.error(f"Validator state when error occurred:")
-            bt.logging.error(f"- Last miners refresh: {self.last_miners_refresh}")
-            bt.logging.error(f"- Last monitor datasets: {self.last_monitor_datasets}")
-            bt.logging.error(f"- Current time: {time.time()}")
-            
-            # Re-raise to be caught by the base validator's run method
-            raise
+
+        coroutines = [
+            self.refresh_miners(),
+        ]
+        if self.config.filesystem_evaluation:
+            coroutines.append(self.filesystem_test_evaluation())
+        else:
+            coroutines.append(self.monitor_datasets())
+    
+        await asyncio.gather(*coroutines)
 
 
 

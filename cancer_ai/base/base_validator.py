@@ -145,31 +145,20 @@ class BaseValidatorNeuron(BaseNeuron):
         self.sync()
 
         bt.logging.info(f"Validator starting at block: {self.block}")
-        bt.logging.info(f"Run method called with is_running={self.is_running}, should_exit={self.should_exit}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
-            iteration_count = 0
             while True:
-                iteration_count += 1
-                bt.logging.info(f"Starting iteration {iteration_count} in run loop")
-                
                 # Run multiple forwards concurrently.
-                bt.logging.info(f"About to run concurrent_forward in iteration {iteration_count}")
                 self.loop.run_until_complete(self.concurrent_forward())
-                bt.logging.info(f"Completed concurrent_forward in iteration {iteration_count}")
 
                 # Check if we should exit.
-                bt.logging.info(f"Checking should_exit flag: {self.should_exit}")
                 if self.should_exit:
-                    bt.logging.info("should_exit flag is True, breaking out of run loop")
                     break
 
                 # Sync metagraph and potentially set weights.
-                bt.logging.info(f"About to sync metagraph in iteration {iteration_count}")
                 self.sync()
                 self.step += 1
-                bt.logging.info(f"Completed iteration {iteration_count}, step={self.step}")
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
