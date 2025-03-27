@@ -289,7 +289,7 @@ class Validator(BaseValidatorNeuron):
 
             
             # Logging results
-            wandb.init(project=data_package.competition_id, group="model_evaluation")
+            
             for miner_hotkey, evaluation_result in competition_manager.results:
                 try:
                     model = self.db_controller.get_latest_model(
@@ -322,12 +322,12 @@ class Validator(BaseValidatorNeuron):
                         average_score=avg_score,
                         run_time_s=evaluation_result.run_time_s
                     )
-                    wandb.log(model_log.model_dump(), commit=False)
+                    wandb.init(project=data_package.competition_id, group="model_evaluation")
+                    wandb.log(model_log.model_dump())
                 
                 except Exception as e:
                     bt.logging.error(f"Error logging model results for hotkey {miner_hotkey}: {e}")
                     continue
-                wandb.log({}, commit=True)
                 wandb.finish()
 
     async def log_results_to_csv(self, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
@@ -397,6 +397,13 @@ class Validator(BaseValidatorNeuron):
                     json.dumps(value, cls=self.DateTimeEncoder)
                 except TypeError as e:
                     bt.logging.error(f"Problem serializing field '{key}': {e}")
+        except Exception as e:
+            bt.logging.error(f"Error saving validator state: {e}", exc_info=True)
+        finally:
+            if 'f' in locals() and f:
+                f.flush()
+                f.close()
+                bt.logging.info("Validator state file closed.")
 
     def create_empty_state(self):
         """Creates an empty state file."""
