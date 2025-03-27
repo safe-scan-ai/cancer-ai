@@ -387,19 +387,55 @@ class Validator(BaseValidatorNeuron):
 
     def save_state(self):
         """Saves the state of the validator to a file."""
+        try:
+            if not getattr(self, "organizations_data_references", None):
+                self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+                bt.logging.debug("Organizations data references empty, creating new one")
 
-        if not getattr(self, "organizations_data_references", None):
-            self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-            bt.logging.debug("Organizations data references empty, creating new one")
+            # Create a backup of the existing state file if it exists
+            state_file_path = self.config.neuron.full_path + "/state.npz"
+            if os.path.exists(state_file_path):
+                backup_path = state_file_path + ".backup"
+                try:
+                    import shutil
+                    shutil.copy2(state_file_path, backup_path)
+                    bt.logging.debug(f"Created backup of state file at {backup_path}")
+                except Exception as e:
+                    bt.logging.warning(f"Failed to create backup of state file: {e}")
 
-        np.savez(
-            self.config.neuron.full_path + "/state.npz",
-            scores=self.scores,
-            hotkeys=self.hotkeys,
-            organizations_data_references=self.organizations_data_references.model_dump(),
-            org_latest_updates=self.org_latest_updates,
-            competition_results_store=self.competition_results_store.model_dump(),
-        )
+            # Save to a temporary file first
+            temp_file_path = state_file_path + ".temp"
+            bt.logging.debug(f"Saving state to temporary file {temp_file_path}")
+            np.savez(
+                temp_file_path,
+                scores=self.scores,
+                hotkeys=self.hotkeys,
+                organizations_data_references=self.organizations_data_references.model_dump(),
+                org_latest_updates=self.org_latest_updates,
+                competition_results_store=self.competition_results_store.model_dump(),
+            )
+            
+            # Verify the temporary file can be loaded
+            try:
+                np.load(temp_file_path, allow_pickle=True)
+                bt.logging.debug("Verified temporary state file is loadable")
+                
+                # If verification succeeds, rename the temp file to the actual state file
+                if os.path.exists(state_file_path):
+                    os.remove(state_file_path)
+                os.rename(temp_file_path, state_file_path)
+                bt.logging.info("State saved successfully")
+            except Exception as e:
+                bt.logging.error(f"Verification of temporary state file failed: {e}")
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+                raise
+                
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error saving state: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
 
     def create_empty_state(self):
         bt.logging.info("Creating empty state file.")
@@ -415,15 +451,64 @@ class Validator(BaseValidatorNeuron):
     def load_state(self):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
-
-        if not os.path.exists(self.config.neuron.full_path + "/state.npz"):
-            bt.logging.info("No state file found.")
+        
+        state_file_path = self.config.neuron.full_path + "/state.npz"
+        backup_path = state_file_path + ".backup"
+        temp_path = state_file_path + ".temp"
+        
+        # Check if any state files exist
+        if not os.path.exists(state_file_path) and not os.path.exists(backup_path):
+            bt.logging.info("No state file or backup found.")
             self.create_empty_state()
+            return
+        
+        # Clean up any temporary files that might have been left from a previous failed save
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+                bt.logging.info(f"Removed stale temporary state file {temp_path}")
+            except Exception as e:
+                bt.logging.warning(f"Failed to remove temporary state file: {e}")
+        
+        # Try loading the main state file first
+        if os.path.exists(state_file_path):
+            try:
+                bt.logging.info(f"Attempting to load state from {state_file_path}")
+                state = np.load(state_file_path, allow_pickle=True)
+                self._apply_loaded_state(state)
+                bt.logging.info("Successfully loaded state from main file")
+                return
+            except Exception as e:
+                bt.logging.error(f"Error loading state from main file: {e}")
+                bt.logging.info("Will try backup file if available")
+        
+        # If main file failed or doesn't exist, try the backup
+        if os.path.exists(backup_path):
+            try:
+                bt.logging.info(f"Attempting to load state from backup {backup_path}")
+                state = np.load(backup_path, allow_pickle=True)
+                self._apply_loaded_state(state)
+                bt.logging.info("Successfully loaded state from backup file")
+                
+                # Restore the backup as the main file
+                try:
+                    import shutil
+                    shutil.copy2(backup_path, state_file_path)
+                    bt.logging.info("Restored backup file as main state file")
+                except Exception as e:
+                    bt.logging.warning(f"Failed to restore backup as main file: {e}")
+                
+                return
+            except Exception as e:
+                bt.logging.error(f"Error loading state from backup file: {e}")
+        
+        # If we get here, both main and backup files failed or don't exist
+        bt.logging.warning("Could not load state from any available files. Creating new state.")
+        self.create_empty_state()
 
+    def _apply_loaded_state(self, state):
+        """Apply the loaded state to the validator."""
         try:
-            state = np.load(
-                self.config.neuron.full_path + "/state.npz", allow_pickle=True
-            )
             self.scores = state["scores"]
             self.hotkeys = state["hotkeys"]
 
@@ -435,10 +520,13 @@ class Validator(BaseValidatorNeuron):
             self.competition_results_store = CompetitionResultsStore.model_validate(
                 state["competition_results_store"].item()
             )
-
+            bt.logging.debug("Successfully applied loaded state")
         except Exception as e:
-            bt.logging.error(f"Error loading state: {e}")
-            self.create_empty_state()
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error applying loaded state: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
+            raise
 
     def update_scores(self, competition_weights: dict[str, float]):
         """Update scores based on competition weights."""
