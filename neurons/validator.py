@@ -388,255 +388,123 @@ class Validator(BaseValidatorNeuron):
 
     def save_state(self):
         """Saves the state of the validator to a file."""
-        try:
-            if not getattr(self, "organizations_data_references", None):
-                self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-                bt.logging.debug("Organizations data references empty, creating new one")
-
-            # Log the state data for debugging
-            bt.logging.debug(f"Scores shape: {self.scores.shape if hasattr(self.scores, 'shape') else 'None'}")
-            bt.logging.debug(f"Hotkeys length: {len(self.hotkeys) if self.hotkeys is not None else 'None'}")
-            bt.logging.debug(f"org_latest_updates keys: {list(self.org_latest_updates.keys()) if self.org_latest_updates else 'Empty'}")
-            
-            # Check if directory exists
-            state_dir = os.path.dirname(self.config.neuron.full_path + "/state.npz")
-            if not os.path.exists(state_dir):
-                bt.logging.info(f"Creating directory {state_dir}")
-                os.makedirs(state_dir, exist_ok=True)
-            
-            # Directly save the state
-            state_file_path = self.config.neuron.full_path + "/state.npz"
-            bt.logging.info(f"Saving state to {state_file_path}")
-            
-            # Prepare data to save
-            try:
-                org_data = self.organizations_data_references.model_dump()
-                bt.logging.debug(f"Organization data references size: {len(str(org_data))} bytes")
-            except Exception as e:
-                bt.logging.error(f"Error dumping organization data: {e}")
-                org_data = {}
-                
-            try:
-                competition_data = self.competition_results_store.model_dump()
-                bt.logging.debug(f"Competition results store size: {len(str(competition_data))} bytes")
-            except Exception as e:
-                bt.logging.error(f"Error dumping competition results: {e}")
-                competition_data = {}
-            
-            # First, remove any existing file that might be corrupted
-            if os.path.exists(state_file_path):
-                try:
-                    os.remove(state_file_path)
-                    bt.logging.info(f"Removed existing state file {state_file_path}")
-                except Exception as e:
-                    bt.logging.warning(f"Failed to remove existing state file: {e}")
-            
-            # Save the state with a clear file extension to ensure proper format
-            bt.logging.info(f"Creating new state file")
-            np.savez(
-                state_file_path,
-                scores=self.scores,
-                hotkeys=self.hotkeys,
-                organizations_data_references=org_data,
-                org_latest_updates=self.org_latest_updates,
-                competition_results_store=competition_data,
-            )
-            
-            # Verify the file was created properly
-            if os.path.exists(state_file_path):
-                file_size = os.path.getsize(state_file_path)
-                bt.logging.info(f"Verified state file was created: {file_size} bytes")
-                
-                # Check if the file is a valid numpy zip file
-                try:
-                    with open(state_file_path, 'rb') as f:
-                        header = f.read(8).hex()
-                    bt.logging.debug(f"Saved file header (hex): {header}")
-                    # PK\003\004 header for zip files (which npz uses)
-                    if not header.startswith('504b0304'):
-                        bt.logging.warning(f"File header doesn't match expected numpy zip format")
-                except Exception as e:
-                    bt.logging.warning(f"Could not verify file header: {e}")
-            else:
-                bt.logging.error("Failed to create state file - file doesn't exist after saving")
-                
-            bt.logging.info("State saved successfully")
-                
-        except Exception as e:
-            import traceback
-            stack_trace = traceback.format_exc()
-            bt.logging.error(f"Error saving state: {e}")
-            bt.logging.error(f"Stack trace: {stack_trace}")
+        if not getattr(self, "organizations_data_references", None):
+            self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+        
+        # Convert numpy arrays to lists for JSON serialization
+        scores_list = self.scores.tolist() if hasattr(self.scores, 'tolist') else []
+        hotkeys_list = self.hotkeys.tolist() if hasattr(self.hotkeys, 'tolist') else self.hotkeys
+        
+        # Create a complete state dictionary
+        state_dict = {
+            'scores': scores_list,
+            'hotkeys': hotkeys_list,
+            'organizations_data_references': self.organizations_data_references.model_dump(),
+            'org_latest_updates': self.org_latest_updates,
+            'competition_results_store': self.competition_results_store.model_dump()
+        }
+        
+        # Ensure directory exists
+        state_path = self.config.neuron.full_path + "/state.json"
+        os.makedirs(os.path.dirname(state_path), exist_ok=True)
+        
+        # Save as JSON file
+        with open(state_path, 'w') as f:
+            json.dump(state_dict, f, indent=2)
 
     def create_empty_state(self):
-        bt.logging.info("Creating empty state file.")
-        try:
-            # Check if directory exists and create if needed
-            state_file_path = self.config.neuron.full_path + "/state.npz"
-            state_dir = os.path.dirname(state_file_path)
-            if not os.path.exists(state_dir):
-                bt.logging.info(f"Creating directory {state_dir}")
-                os.makedirs(state_dir, exist_ok=True)
-            
-            # Log what we're about to save
-            bt.logging.debug(f"Scores shape for empty state: {self.scores.shape if hasattr(self.scores, 'shape') else 'None'}")
-            bt.logging.debug(f"Hotkeys length for empty state: {len(self.hotkeys) if self.hotkeys is not None else 'None'}")
-            
-            # Prepare data to save
-            try:
-                org_data = self.organizations_data_references.model_dump()
-                bt.logging.debug(f"Organization data references size: {len(str(org_data))} bytes")
-            except Exception as e:
-                bt.logging.error(f"Error dumping organization data for empty state: {e}")
-                org_data = {}
-                
-            try:
-                competition_data = self.competition_results_store.model_dump()
-                bt.logging.debug(f"Competition results store size: {len(str(competition_data))} bytes")
-            except Exception as e:
-                bt.logging.error(f"Error dumping competition results for empty state: {e}")
-                competition_data = {}
-            
-            # First, remove any existing file that might be corrupted
-            if os.path.exists(state_file_path):
-                try:
-                    os.remove(state_file_path)
-                    bt.logging.info(f"Removed existing state file {state_file_path}")
-                except Exception as e:
-                    bt.logging.warning(f"Failed to remove existing state file: {e}")
-            
-            # Save the empty state
-            bt.logging.info(f"Saving empty state to {state_file_path}")
-            np.savez(
-                state_file_path,
-                scores=self.scores,
-                hotkeys=self.hotkeys,
-                organizations_data_references=org_data,
-                org_latest_updates={},
-                competition_results_store=competition_data,
-            )
-            
-            # Verify the file was created properly
-            if os.path.exists(state_file_path):
-                file_size = os.path.getsize(state_file_path)
-                bt.logging.info(f"Verified empty state file was created: {file_size} bytes")
-                
-                # Check if the file is a valid numpy zip file
-                try:
-                    with open(state_file_path, 'rb') as f:
-                        header = f.read(8).hex()
-                    bt.logging.debug(f"Saved file header (hex): {header}")
-                    # PK\003\004 header for zip files (which npz uses)
-                    if not header.startswith('504b0304'):
-                        bt.logging.warning(f"File header doesn't match expected numpy zip format")
-                except Exception as e:
-                    bt.logging.warning(f"Could not verify file header: {e}")
-            else:
-                bt.logging.error("Failed to create empty state file - file doesn't exist after saving")
-                
-            bt.logging.info("Empty state created successfully")
-            
-        except Exception as e:
-            import traceback
-            stack_trace = traceback.format_exc()
-            bt.logging.error(f"Failed to create empty state: {e}")
-            bt.logging.error(f"Stack trace: {stack_trace}")
+        """Creates an empty state file."""
+        # Create an empty state dictionary
+        empty_state = {
+            'scores': [],
+            'hotkeys': [],
+            'organizations_data_references': self.organizations_data_references.model_dump(),
+            'org_latest_updates': {},
+            'competition_results_store': self.competition_results_store.model_dump()
+        }
+        
+        # Ensure directory exists
+        state_path = self.config.neuron.full_path + "/state.json"
+        os.makedirs(os.path.dirname(state_path), exist_ok=True)
+        
+        # Save as JSON file
+        with open(state_path, 'w') as f:
+            json.dump(empty_state, f, indent=2)
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
+        json_path = self.config.neuron.full_path + "/state.json"
+        npz_path = self.config.neuron.full_path + "/state.npz"
         
-        state_file_path = self.config.neuron.full_path + "/state.npz"
-        
-        # Check if state file exists
-        if not os.path.exists(state_file_path):
-            bt.logging.info(f"No state file found at {state_file_path}")
-            self.create_empty_state()
-            return
-        
-        # Try loading the state file with detailed diagnostics
-        try:
-            bt.logging.info(f"Attempting to load state from {state_file_path}")
-            
-            # Check file size and permissions
-            file_size = os.path.getsize(state_file_path)
-            bt.logging.info(f"State file size: {file_size} bytes")
-            
-            # Try to open the file first to check basic access
-            with open(state_file_path, 'rb') as f:
-                bt.logging.info(f"Successfully opened state file")
-                # Read first few bytes to check file integrity
-                try:
-                    header = f.read(8)  # Read first 8 bytes
-                    header_hex = header.hex()
-                    bt.logging.debug(f"File header (hex): {header_hex}")
-                    
-                    # Validate the file format - npz files should start with PK\003\004
-                    if not header_hex.startswith('504b0304'):
-                        bt.logging.error(f"Invalid file format: not a valid numpy zip file")
-                        bt.logging.info(f"Removing corrupted state file and creating a new one")
-                        f.close()  # Close the file before removing
-                        try:
-                            os.remove(state_file_path)
-                            bt.logging.info(f"Removed corrupted state file")
-                        except Exception as rm_err:
-                            bt.logging.error(f"Failed to remove corrupted file: {rm_err}")
-                        self.create_empty_state()
-                        return
-                except Exception as e:
-                    bt.logging.error(f"Error reading file header: {e}")
-            
-            # Now try to load with numpy
+        # Check if JSON state file exists
+        if os.path.exists(json_path):
             try:
-                state = np.load(state_file_path, allow_pickle=True)
-            except zipfile.BadZipFile:
-                bt.logging.error("Bad zip file detected - file is corrupted")
-                try:
-                    os.remove(state_file_path)
-                    bt.logging.info(f"Removed corrupted state file")
-                except Exception as rm_err:
-                    bt.logging.error(f"Failed to remove corrupted file: {rm_err}")
-                self.create_empty_state()
-                return
-            
-            # Log available keys
-            bt.logging.info(f"State file contains keys: {list(state.keys())}")
-            
-            # Apply the state
-            try:
-                self.scores = state["scores"]
-                bt.logging.debug(f"Loaded scores with shape {self.scores.shape}")
+                # Load the state from JSON file
+                with open(json_path, 'r') as f:
+                    state = json.load(f)
                 
-                self.hotkeys = state["hotkeys"]
-                bt.logging.debug(f"Loaded {len(self.hotkeys)} hotkeys")
+                # Convert lists back to numpy arrays
+                self.scores = np.array(state['scores'], dtype=np.float32)
+                self.hotkeys = np.array(state['hotkeys'])
                 
+                # Load organization data references
                 factory = OrganizationDataReferenceFactory.get_instance()
-                saved_data = state["organizations_data_references"].item()
-                bt.logging.debug(f"Loaded organization data of size {len(str(saved_data))} bytes")
-                factory.update_from_dict(saved_data)
+                factory.update_from_dict(state['organizations_data_references'])
                 self.organizations_data_references = factory
                 
-                self.org_latest_updates = state["org_latest_updates"].item()
-                bt.logging.debug(f"Loaded {len(self.org_latest_updates)} org_latest_updates entries")
+                # Load org latest updates
+                self.org_latest_updates = state['org_latest_updates']
                 
-                competition_data = state["competition_results_store"].item()
-                bt.logging.debug(f"Loaded competition results of size {len(str(competition_data))} bytes")
-                self.competition_results_store = CompetitionResultsStore.model_validate(competition_data)
+                # Load competition results
+                self.competition_results_store = CompetitionResultsStore.model_validate(
+                    state['competition_results_store']
+                )
+                return
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                bt.logging.error(f"Error loading JSON state: {e}")
+        
+        # Fall back to npz if it exists (for backward compatibility)
+        if os.path.exists(npz_path):
+            try:
+                # Load the state from npz file
+                state = np.load(npz_path, allow_pickle=True)
+                self.scores = state["scores"]
+                self.hotkeys = state["hotkeys"]
                 
-                bt.logging.info("Successfully loaded and applied state")
+                try:
+                    # Try to load JSON-serialized data from npz
+                    org_data_str = state["organizations_data_references"].item()
+                    org_data = json.loads(org_data_str)
+                    factory = OrganizationDataReferenceFactory.get_instance()
+                    factory.update_from_dict(org_data)
+                    self.organizations_data_references = factory
+                    
+                    org_updates_str = state["org_latest_updates"].item()
+                    self.org_latest_updates = json.loads(org_updates_str)
+                    
+                    comp_data_str = state["competition_results_store"].item()
+                    competition_data = json.loads(comp_data_str)
+                    self.competition_results_store = CompetitionResultsStore.model_validate(competition_data)
+                except (json.JSONDecodeError, TypeError, KeyError):
+                    # Fall back to standard approach for backward compatibility
+                    factory = OrganizationDataReferenceFactory.get_instance()
+                    saved_data = state["organizations_data_references"].item()
+                    factory.update_from_dict(saved_data)
+                    self.organizations_data_references = factory
+                    
+                    self.org_latest_updates = state["org_latest_updates"].item()
+                    
+                    competition_data = state["competition_results_store"].item()
+                    self.competition_results_store = CompetitionResultsStore.model_validate(competition_data)
+                
+                # Save in the new JSON format for future use
+                self.save_state()
+                return
             except Exception as e:
-                import traceback
-                stack_trace = traceback.format_exc()
-                bt.logging.error(f"Error applying loaded state: {e}")
-                bt.logging.error(f"Stack trace: {stack_trace}")
-                raise
-                
-        except Exception as e:
-            import traceback
-            stack_trace = traceback.format_exc()
-            bt.logging.error(f"Error loading state file: {e}")
-            bt.logging.error(f"Stack trace: {stack_trace}")
-            self.create_empty_state()
+                bt.logging.error(f"Error loading npz state: {e}")
+        
+        # If we get here, create an empty state
+        self.create_empty_state()
 
 
 
