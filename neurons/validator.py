@@ -392,44 +392,46 @@ class Validator(BaseValidatorNeuron):
                 self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
                 bt.logging.debug("Organizations data references empty, creating new one")
 
-            # Create a backup of the existing state file if it exists
+            # Log the state data for debugging
+            bt.logging.debug(f"Scores shape: {self.scores.shape if hasattr(self.scores, 'shape') else 'None'}")
+            bt.logging.debug(f"Hotkeys length: {len(self.hotkeys) if self.hotkeys is not None else 'None'}")
+            bt.logging.debug(f"org_latest_updates keys: {list(self.org_latest_updates.keys()) if self.org_latest_updates else 'Empty'}")
+            
+            # Check if directory exists
+            state_dir = os.path.dirname(self.config.neuron.full_path + "/state.npz")
+            if not os.path.exists(state_dir):
+                bt.logging.info(f"Creating directory {state_dir}")
+                os.makedirs(state_dir, exist_ok=True)
+            
+            # Directly save the state
             state_file_path = self.config.neuron.full_path + "/state.npz"
-            if os.path.exists(state_file_path):
-                backup_path = state_file_path + ".backup"
-                try:
-                    import shutil
-                    shutil.copy2(state_file_path, backup_path)
-                    bt.logging.debug(f"Created backup of state file at {backup_path}")
-                except Exception as e:
-                    bt.logging.warning(f"Failed to create backup of state file: {e}")
-
-            # Save to a temporary file first
-            temp_file_path = state_file_path + ".temp"
-            bt.logging.debug(f"Saving state to temporary file {temp_file_path}")
+            bt.logging.info(f"Saving state to {state_file_path}")
+            
+            # Prepare data to save
+            try:
+                org_data = self.organizations_data_references.model_dump()
+                bt.logging.debug(f"Organization data references size: {len(str(org_data))} bytes")
+            except Exception as e:
+                bt.logging.error(f"Error dumping organization data: {e}")
+                org_data = {}
+                
+            try:
+                competition_data = self.competition_results_store.model_dump()
+                bt.logging.debug(f"Competition results store size: {len(str(competition_data))} bytes")
+            except Exception as e:
+                bt.logging.error(f"Error dumping competition results: {e}")
+                competition_data = {}
+            
+            # Save the state
             np.savez(
-                temp_file_path,
+                state_file_path,
                 scores=self.scores,
                 hotkeys=self.hotkeys,
-                organizations_data_references=self.organizations_data_references.model_dump(),
+                organizations_data_references=org_data,
                 org_latest_updates=self.org_latest_updates,
-                competition_results_store=self.competition_results_store.model_dump(),
+                competition_results_store=competition_data,
             )
-            
-            # Verify the temporary file can be loaded
-            try:
-                np.load(temp_file_path, allow_pickle=True)
-                bt.logging.debug("Verified temporary state file is loadable")
-                
-                # If verification succeeds, rename the temp file to the actual state file
-                if os.path.exists(state_file_path):
-                    os.remove(state_file_path)
-                os.rename(temp_file_path, state_file_path)
-                bt.logging.info("State saved successfully")
-            except Exception as e:
-                bt.logging.error(f"Verification of temporary state file failed: {e}")
-                if os.path.exists(temp_file_path):
-                    os.remove(temp_file_path)
-                raise
+            bt.logging.info("State saved successfully")
                 
         except Exception as e:
             import traceback
@@ -439,94 +441,124 @@ class Validator(BaseValidatorNeuron):
 
     def create_empty_state(self):
         bt.logging.info("Creating empty state file.")
-        np.savez(
-            self.config.neuron.full_path + "/state.npz",
-            scores=self.scores,
-            hotkeys=self.hotkeys,
-            organizations_data_references=self.organizations_data_references.model_dump(),
-            org_latest_updates={},
-            competition_results_store=self.competition_results_store.model_dump(),
-        )
+        try:
+            # Check if directory exists and create if needed
+            state_file_path = self.config.neuron.full_path + "/state.npz"
+            state_dir = os.path.dirname(state_file_path)
+            if not os.path.exists(state_dir):
+                bt.logging.info(f"Creating directory {state_dir}")
+                os.makedirs(state_dir, exist_ok=True)
+            
+            # Log what we're about to save
+            bt.logging.debug(f"Scores shape for empty state: {self.scores.shape if hasattr(self.scores, 'shape') else 'None'}")
+            bt.logging.debug(f"Hotkeys length for empty state: {len(self.hotkeys) if self.hotkeys is not None else 'None'}")
+            
+            # Prepare data to save
+            try:
+                org_data = self.organizations_data_references.model_dump()
+                bt.logging.debug(f"Organization data references size: {len(str(org_data))} bytes")
+            except Exception as e:
+                bt.logging.error(f"Error dumping organization data for empty state: {e}")
+                org_data = {}
+                
+            try:
+                competition_data = self.competition_results_store.model_dump()
+                bt.logging.debug(f"Competition results store size: {len(str(competition_data))} bytes")
+            except Exception as e:
+                bt.logging.error(f"Error dumping competition results for empty state: {e}")
+                competition_data = {}
+            
+            # Save the empty state
+            bt.logging.info(f"Saving empty state to {state_file_path}")
+            np.savez(
+                state_file_path,
+                scores=self.scores,
+                hotkeys=self.hotkeys,
+                organizations_data_references=org_data,
+                org_latest_updates={},
+                competition_results_store=competition_data,
+            )
+            bt.logging.info("Empty state created successfully")
+            
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Failed to create empty state: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
 
     def load_state(self):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
         
         state_file_path = self.config.neuron.full_path + "/state.npz"
-        backup_path = state_file_path + ".backup"
-        temp_path = state_file_path + ".temp"
         
-        # Check if any state files exist
-        if not os.path.exists(state_file_path) and not os.path.exists(backup_path):
-            bt.logging.info("No state file or backup found.")
+        # Check if state file exists
+        if not os.path.exists(state_file_path):
+            bt.logging.info(f"No state file found at {state_file_path}")
             self.create_empty_state()
             return
         
-        # Clean up any temporary files that might have been left from a previous failed save
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-                bt.logging.info(f"Removed stale temporary state file {temp_path}")
-            except Exception as e:
-                bt.logging.warning(f"Failed to remove temporary state file: {e}")
-        
-        # Try loading the main state file first
-        if os.path.exists(state_file_path):
-            try:
-                bt.logging.info(f"Attempting to load state from {state_file_path}")
-                state = np.load(state_file_path, allow_pickle=True)
-                self._apply_loaded_state(state)
-                bt.logging.info("Successfully loaded state from main file")
-                return
-            except Exception as e:
-                bt.logging.error(f"Error loading state from main file: {e}")
-                bt.logging.info("Will try backup file if available")
-        
-        # If main file failed or doesn't exist, try the backup
-        if os.path.exists(backup_path):
-            try:
-                bt.logging.info(f"Attempting to load state from backup {backup_path}")
-                state = np.load(backup_path, allow_pickle=True)
-                self._apply_loaded_state(state)
-                bt.logging.info("Successfully loaded state from backup file")
-                
-                # Restore the backup as the main file
-                try:
-                    import shutil
-                    shutil.copy2(backup_path, state_file_path)
-                    bt.logging.info("Restored backup file as main state file")
-                except Exception as e:
-                    bt.logging.warning(f"Failed to restore backup as main file: {e}")
-                
-                return
-            except Exception as e:
-                bt.logging.error(f"Error loading state from backup file: {e}")
-        
-        # If we get here, both main and backup files failed or don't exist
-        bt.logging.warning("Could not load state from any available files. Creating new state.")
-        self.create_empty_state()
-
-    def _apply_loaded_state(self, state):
-        """Apply the loaded state to the validator."""
+        # Try loading the state file with detailed diagnostics
         try:
-            self.scores = state["scores"]
-            self.hotkeys = state["hotkeys"]
-
-            factory = OrganizationDataReferenceFactory.get_instance()
-            saved_data = state["organizations_data_references"].item()
-            factory.update_from_dict(saved_data)
-            self.organizations_data_references = factory
-            self.org_latest_updates = state["org_latest_updates"].item()
-            self.competition_results_store = CompetitionResultsStore.model_validate(
-                state["competition_results_store"].item()
-            )
-            bt.logging.debug("Successfully applied loaded state")
+            bt.logging.info(f"Attempting to load state from {state_file_path}")
+            
+            # Check file size and permissions
+            file_size = os.path.getsize(state_file_path)
+            bt.logging.info(f"State file size: {file_size} bytes")
+            
+            # Try to open the file first to check basic access
+            with open(state_file_path, 'rb') as f:
+                bt.logging.info(f"Successfully opened state file")
+                # Read first few bytes to check file integrity
+                try:
+                    header = f.read(8)  # Read first 8 bytes
+                    bt.logging.debug(f"File header (hex): {header.hex()}")
+                except Exception as e:
+                    bt.logging.error(f"Error reading file header: {e}")
+            
+            # Now try to load with numpy
+            state = np.load(state_file_path, allow_pickle=True)
+            
+            # Log available keys
+            bt.logging.info(f"State file contains keys: {list(state.keys())}")
+            
+            # Apply the state
+            try:
+                self.scores = state["scores"]
+                bt.logging.debug(f"Loaded scores with shape {self.scores.shape}")
+                
+                self.hotkeys = state["hotkeys"]
+                bt.logging.debug(f"Loaded {len(self.hotkeys)} hotkeys")
+                
+                factory = OrganizationDataReferenceFactory.get_instance()
+                saved_data = state["organizations_data_references"].item()
+                bt.logging.debug(f"Loaded organization data of size {len(str(saved_data))} bytes")
+                factory.update_from_dict(saved_data)
+                self.organizations_data_references = factory
+                
+                self.org_latest_updates = state["org_latest_updates"].item()
+                bt.logging.debug(f"Loaded {len(self.org_latest_updates)} org_latest_updates entries")
+                
+                competition_data = state["competition_results_store"].item()
+                bt.logging.debug(f"Loaded competition results of size {len(str(competition_data))} bytes")
+                self.competition_results_store = CompetitionResultsStore.model_validate(competition_data)
+                
+                bt.logging.info("Successfully loaded and applied state")
+            except Exception as e:
+                import traceback
+                stack_trace = traceback.format_exc()
+                bt.logging.error(f"Error applying loaded state: {e}")
+                bt.logging.error(f"Stack trace: {stack_trace}")
+                raise
+                
         except Exception as e:
             import traceback
             stack_trace = traceback.format_exc()
-            bt.logging.error(f"Error applying loaded state: {e}")
+            bt.logging.error(f"Error loading state file: {e}")
             bt.logging.error(f"Stack trace: {stack_trace}")
-            raise
+            self.create_empty_state()
+
+
 
     def update_scores(self, competition_weights: dict[str, float]):
         """Update scores based on competition weights."""
