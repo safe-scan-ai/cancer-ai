@@ -44,13 +44,13 @@ class ModelRunManager(SerializableManager):
         
         self.handler = model_handler(self.config, self.model.file_path)
 
-    async def run(self, pred_x: List) -> List:
+    async def run(self, pred_x: List, preprocessed_images=None) -> List:
         """
         Run the model with the given input.
-
+        
         Returns:
             List: model predictions
         """
 
-        model_predictions = await self.handler.run(pred_x)
+        model_predictions = await self.handler.run(pred_x, preprocessed_images=preprocessed_images)
         return model_predictions

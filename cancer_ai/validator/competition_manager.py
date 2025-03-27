@@ -175,6 +175,12 @@ class CompetitionManager(SerializableManager):
             bt.logging.debug("Preparing y_test data")
             y_test = competition_handler.prepare_y_pred(y_test)
             bt.logging.debug("y_test data prepared successfully")
+            
+            # Preprocess images once for the entire competition
+            bt.logging.debug("Preprocessing images for caching")
+            from .model_runners.onnx_runner import OnnxRunnerHandler
+            self.preprocessed_images = await OnnxRunnerHandler.preprocess_images(X_test)
+            bt.logging.debug(f"Cached {len(self.preprocessed_images) if self.preprocessed_images else 0} preprocessed images")
 
             # Define a helper function to evaluate a single model
             async def evaluate_model(miner_hotkey):
@@ -204,7 +210,8 @@ class CompetitionManager(SerializableManager):
                     bt.logging.debug(f"Running model for hotkey: {miner_hotkey}")
                     start_time = time.time()
                     try:
-                        y_pred = await model_manager.run(X_test)
+                        # Pass the preprocessed images to the model runner
+                        y_pred = await model_manager.run(X_test, preprocessed_images=self.preprocessed_images)
                         bt.logging.debug(f"Model ran successfully for hotkey: {miner_hotkey}")
                     except ModelRunException as e:
                         bt.logging.error(
