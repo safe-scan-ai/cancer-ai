@@ -329,6 +329,28 @@ class Validator(BaseValidatorNeuron):
                     bt.logging.error(f"Error logging model results for hotkey {miner_hotkey}: {e}")
                     continue
                 wandb.finish()
+    
+    def update_scores(self, competition_weights: dict[str, float]):
+        """Update scores based on competition weights."""
+        self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+        
+        for competition_id, weight in competition_weights.items():
+            try:
+                winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
+                if winner_hotkey is not None:
+                    if winner_hotkey in self.metagraph.hotkeys:
+                        winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
+                        self.scores[winner_idx] += weight
+                        bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
+                    else:
+                        bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
+            except ValueError as e:
+                bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
+                continue
+        
+        bt.logging.debug("Scores from UPDATE_SCORES:")
+        bt.logging.debug(f"{self.scores}")
+        self.save_state()
 
     async def log_results_to_csv(self, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
         """Debug method for dumping rewards for testing """
@@ -390,8 +412,12 @@ class Validator(BaseValidatorNeuron):
         try:
             with open(state_path, 'w') as f:
                 json.dump(state_dict, f, indent=2, cls=self.DateTimeEncoder)
+                bt.logging.info("Validator state written to file.")
+                f.flush()
+                f.close()
+                bt.logging.info("Validator state file closed.")
         except TypeError as e:
-            bt.logging.error(f"Error serializing state to JSON: {e}")
+            bt.logging.error(f"Error serializing state to JSON: {e}", exc_info=True)
             for key, value in state_dict.items():
                 try:
                     json.dumps(value, cls=self.DateTimeEncoder)
@@ -399,12 +425,11 @@ class Validator(BaseValidatorNeuron):
                     bt.logging.error(f"Problem serializing field '{key}': {e}")
         except Exception as e:
             bt.logging.error(f"Error saving validator state: {e}", exc_info=True)
-        finally:
             if 'f' in locals() and f:
                 f.flush()
                 f.close()
                 bt.logging.info("Validator state file closed.")
-
+    
     def create_empty_state(self):
         """Creates an empty state file."""
         empty_state = {
@@ -420,11 +445,10 @@ class Validator(BaseValidatorNeuron):
         
         with open(state_path, 'w') as f:
             json.dump(empty_state, f, indent=2, cls=self.DateTimeEncoder)
-
+    
     def load_state(self):
         """Loads the state of the validator from a file."""
         json_path = self.config.neuron.full_path + "/state.json"
-        npz_path = self.config.neuron.full_path + "/state.npz"
         
         if os.path.exists(json_path):
             try:
@@ -440,13 +464,20 @@ class Validator(BaseValidatorNeuron):
                 self.competition_results_store = CompetitionResultsStore.model_validate(
                     state['competition_results_store']
                 )
-                return
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 bt.logging.error(f"Error loading JSON state: {e}")
-        
-        
-        self.create_empty_state()
-        
+                if 'f' in locals() and f:
+                    f.close()
+                    bt.logging.info("Validator state file closed after loading.")
+        else:
+            bt.logging.warning("No state file found. Creating an empty one.")
+            self.create_empty_state()
+            return
+
+        if 'f' in locals() and f:
+            f.close()
+            bt.logging.info("Validator state file closed after loading.")
+
     def _convert_datetime_strings(self, state_dict):
         """Helper method to convert ISO format datetime strings back to datetime objects."""
         if 'org_latest_updates' in state_dict and state_dict['org_latest_updates']:
@@ -456,27 +487,7 @@ class Validator(BaseValidatorNeuron):
 
 
 
-    def update_scores(self, competition_weights: dict[str, float]):
-        """Update scores based on competition weights."""
-        self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
-        
-        for competition_id, weight in competition_weights.items():
-            try:
-                winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
-                if winner_hotkey is not None:
-                    if winner_hotkey in self.metagraph.hotkeys:
-                        winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
-                        self.scores[winner_idx] += weight
-                        bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
-                    else:
-                        bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
-            except ValueError as e:
-                bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
-                continue
-        
-        bt.logging.debug("Scores from UPDATE_SCORES:")
-        bt.logging.debug(f"{self.scores}")
-        self.save_state()
+    
 
 
 if __name__ == "__main__":
