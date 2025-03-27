@@ -348,12 +348,13 @@ class Validator(BaseValidatorNeuron):
                         score=evaluation_result.score,
                         average_score=avg_score
                     )
-                    wandb.log(model_log.model_dump())
-                    wandb.finish()
+                    wandb.log(model_log.model_dump(), commit=False)
+                
                 except Exception as e:
                     bt.logging.error(f"Error logging model results for hotkey {miner_hotkey}: {e}")
                     continue
-
+                wandb.log({}, commit=True)
+                wandb.finish()
 
     async def log_results_to_csv(self, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
         """Debug method for dumping rewards for testing """
@@ -483,47 +484,7 @@ class Validator(BaseValidatorNeuron):
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 bt.logging.error(f"Error loading JSON state: {e}")
         
-        # Fall back to npz if it exists (for backward compatibility)
-        if os.path.exists(npz_path):
-            try:
-                # Load the state from npz file
-                state = np.load(npz_path, allow_pickle=True)
-                self.scores = state["scores"]
-                self.hotkeys = state["hotkeys"]
-                
-                try:
-                    # Try to load JSON-serialized data from npz
-                    org_data_str = state["organizations_data_references"].item()
-                    org_data = json.loads(org_data_str)
-                    factory = OrganizationDataReferenceFactory.get_instance()
-                    factory.update_from_dict(org_data)
-                    self.organizations_data_references = factory
-                    
-                    org_updates_str = state["org_latest_updates"].item()
-                    self.org_latest_updates = json.loads(org_updates_str)
-                    
-                    comp_data_str = state["competition_results_store"].item()
-                    competition_data = json.loads(comp_data_str)
-                    self.competition_results_store = CompetitionResultsStore.model_validate(competition_data)
-                except (json.JSONDecodeError, TypeError, KeyError):
-                    # Fall back to standard approach for backward compatibility
-                    factory = OrganizationDataReferenceFactory.get_instance()
-                    saved_data = state["organizations_data_references"].item()
-                    factory.update_from_dict(saved_data)
-                    self.organizations_data_references = factory
-                    
-                    self.org_latest_updates = state["org_latest_updates"].item()
-                    
-                    competition_data = state["competition_results_store"].item()
-                    self.competition_results_store = CompetitionResultsStore.model_validate(competition_data)
-                
-                # Save in the new JSON format for future use
-                self.save_state()
-                return
-            except Exception as e:
-                bt.logging.error(f"Error loading npz state: {e}")
         
-        # If we get here, create an empty state
         self.create_empty_state()
         
     def _convert_datetime_strings(self, state_dict):
