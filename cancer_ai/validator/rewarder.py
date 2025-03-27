@@ -31,19 +31,16 @@ class CompetitionResultsStore(BaseModel):
     def add_score(self, competition_id: str, hotkey: Hotkey, score: float, date: datetime = None):
         """Add a score for a specific hotkey in a specific competition."""
 
-        # Initialize competition dictionaries if they don't exist
         if competition_id not in self.score_map:
             self.score_map[competition_id] = {}
         if competition_id not in self.average_scores:
             self.average_scores[competition_id] = {}
 
-        # Initialize hotkey list if it doesn't exist
         if hotkey not in self.score_map[competition_id]:
             self.score_map[competition_id][hotkey] = []
 
         score_date = date if date is not None else datetime.now(timezone.utc)
         
-        # Add the score
         self.score_map[competition_id][hotkey].append(
             ModelScore(date=score_date, score=score)
         )
@@ -53,11 +50,10 @@ class CompetitionResultsStore(BaseModel):
         if len(self.score_map[competition_id][hotkey]) > HISTORY_LENGTH:
             self.score_map[competition_id][hotkey] = self.score_map[competition_id][hotkey][-HISTORY_LENGTH:]
 
-        # Update the average score
         self.update_average_score(competition_id, hotkey)
 
     def update_average_score(self, competition_id: str, hotkey: Hotkey):
-        """Update the average score for a specific hotkey in a specific competition."""
+        """Update the average score for a specific hotkey in a specific competition"""
         if (
             competition_id not in self.score_map
             or hotkey not in self.score_map[competition_id]
@@ -163,14 +159,10 @@ class CompetitionResultsStore(BaseModel):
         latest_models = ModelDBController(db_path=config.db_path).get_latest_models(metagraph_hotkeys, competition_id)
         competition_miners = set(latest_models.keys())
 
-        # Track which miners had results
         evaluated_miners = set()
         
-        # Use a common timestamp for all scores in this evaluation run
-        # This will make it easier to compare runs by date in the future
         evaluation_timestamp = datetime.now(timezone.utc)
 
-        # Add scores for miners with successful evaluations
         for hotkey, result in model_results:
             self.add_score(competition_id, hotkey, result.score, date=evaluation_timestamp)
             evaluated_miners.add(hotkey)

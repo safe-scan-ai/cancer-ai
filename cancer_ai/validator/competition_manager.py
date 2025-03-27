@@ -126,7 +126,7 @@ class CompetitionManager(SerializableManager):
         """Get registered mineres from testnet subnet 163"""
         self.model_manager.hotkey_store = get_mock_hotkeys_with_models()
 
-    async def get_miner_models(self):
+    async def update_miner_models(self):
         """
         Updates hotkeys and downloads information of models from the chain
         """
@@ -155,13 +155,12 @@ class CompetitionManager(SerializableManager):
 
         # TODO add mock models functionality
 
-        # get models
-        await self.get_miner_models()
+        await self.update_miner_models()
         if len(self.model_manager.hotkey_store) == 0:
             bt.logging.error("No models to evaluate")
             return None, None
 
-        # prepare data 
+        
         await self.dataset_manager.prepare_dataset()
         X_test, y_test = await self.dataset_manager.get_data()
 
@@ -184,9 +183,9 @@ class CompetitionManager(SerializableManager):
                 model_manager = ModelRunManager(
                     self.config, self.model_manager.hotkey_store[miner_hotkey]
                 )
-            except ModelRunException:
+            except ModelRunException as e:
                 bt.logging.error(
-                    f"Model hotkey: {miner_hotkey} failed to initialize. Skipping"
+                    f"Model hotkey: {miner_hotkey} failed to initialize. Skipping. Error: {e}"
                 )
                 continue
             start_time = time.time()
