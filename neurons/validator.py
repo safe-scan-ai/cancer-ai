@@ -371,11 +371,9 @@ class Validator(BaseValidatorNeuron):
         if not getattr(self, "organizations_data_references", None):
             self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
         
-        # Convert numpy arrays to lists for JSON serialization
         scores_list = self.scores.tolist() if hasattr(self.scores, 'tolist') else []
         hotkeys_list = self.hotkeys.tolist() if hasattr(self.hotkeys, 'tolist') else self.hotkeys
         
-        # Create a complete state dictionary
         state_dict = {
             'scores': scores_list,
             'hotkeys': hotkeys_list,
@@ -384,18 +382,14 @@ class Validator(BaseValidatorNeuron):
             'competition_results_store': self.competition_results_store.model_dump()
         }
         
-        # Ensure directory exists
         state_path = self.config.neuron.full_path + "/state.json"
         os.makedirs(os.path.dirname(state_path), exist_ok=True)
         
-        # Save as JSON file with custom encoder for datetime objects
         try:
             with open(state_path, 'w') as f:
                 json.dump(state_dict, f, indent=2, cls=self.DateTimeEncoder)
-            bt.logging.info(f"Successfully saved state to {state_path}")
         except TypeError as e:
             bt.logging.error(f"Error serializing state to JSON: {e}")
-            # Attempt to identify problematic fields
             for key, value in state_dict.items():
                 try:
                     json.dumps(value, cls=self.DateTimeEncoder)
@@ -404,7 +398,6 @@ class Validator(BaseValidatorNeuron):
 
     def create_empty_state(self):
         """Creates an empty state file."""
-        # Create an empty state dictionary
         empty_state = {
             'scores': [],
             'hotkeys': [],
@@ -413,11 +406,9 @@ class Validator(BaseValidatorNeuron):
             'competition_results_store': self.competition_results_store.model_dump()
         }
         
-        # Ensure directory exists
         state_path = self.config.neuron.full_path + "/state.json"
         os.makedirs(os.path.dirname(state_path), exist_ok=True)
         
-        # Save as JSON file with custom encoder for datetime objects
         with open(state_path, 'w') as f:
             json.dump(empty_state, f, indent=2, cls=self.DateTimeEncoder)
 
@@ -426,29 +417,17 @@ class Validator(BaseValidatorNeuron):
         json_path = self.config.neuron.full_path + "/state.json"
         npz_path = self.config.neuron.full_path + "/state.npz"
         
-        # Check if JSON state file exists
         if os.path.exists(json_path):
             try:
-                # Load the state from JSON file
                 with open(json_path, 'r') as f:
                     state = json.load(f)
-                    
-                # Convert ISO format datetime strings back to datetime objects if needed
                 self._convert_datetime_strings(state)
-                
-                # Convert lists back to numpy arrays
                 self.scores = np.array(state['scores'], dtype=np.float32)
                 self.hotkeys = np.array(state['hotkeys'])
-                
-                # Load organization data references
                 factory = OrganizationDataReferenceFactory.get_instance()
                 factory.update_from_dict(state['organizations_data_references'])
                 self.organizations_data_references = factory
-                
-                # Load org latest updates
                 self.org_latest_updates = state['org_latest_updates']
-                
-                # Load competition results
                 self.competition_results_store = CompetitionResultsStore.model_validate(
                     state['competition_results_store']
                 )
@@ -461,10 +440,10 @@ class Validator(BaseValidatorNeuron):
         
     def _convert_datetime_strings(self, state_dict):
         """Helper method to convert ISO format datetime strings back to datetime objects."""
-        # This is a placeholder for datetime string conversion if needed
-        # We can implement specific conversion logic if we need to access datetime objects
-        # For now, we can keep the datetime values as strings since they're mainly used for comparison
-        pass
+        if 'org_latest_updates' in state_dict and state_dict['org_latest_updates']:
+            for org_id, timestamp in state_dict['org_latest_updates'].items():
+                if isinstance(timestamp, str):
+                    state_dict['org_latest_updates'][org_id] = datetime.datetime.fromisoformat(timestamp)
 
 
 
