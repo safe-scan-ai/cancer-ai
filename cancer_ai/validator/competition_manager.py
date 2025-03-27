@@ -199,10 +199,18 @@ class CompetitionManager(SerializableManager):
                 continue
             run_time_s = time.time() - start_time
 
-            model_result = competition_handler.get_model_result(
-                y_test, y_pred, run_time_s
-            )
-            self.results.append((miner_hotkey, model_result))
+            try:
+                model_result = competition_handler.get_model_result(
+                    y_test, y_pred, run_time_s
+                )
+                self.results.append((miner_hotkey, model_result))
+            except Exception as e:
+                bt.logging.error(
+                    f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}"
+                )
+                import traceback
+                bt.logging.error(f"Stacktrace: {traceback.format_exc()}")
+                bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error")
         if len(self.results) == 0:
             bt.logging.error("No models were able to run")
             return None, None
