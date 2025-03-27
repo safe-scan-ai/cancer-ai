@@ -286,8 +286,10 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
             competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api)
             self.update_scores(competition_weights)
+
             
             # Logging results
+            wandb.init(project=data_package.competition_id, group="model_evaluation")
             for miner_hotkey, evaluation_result in competition_manager.results:
                 try:
                     model = self.db_controller.get_latest_model(
@@ -300,7 +302,6 @@ class Validator(BaseValidatorNeuron):
                         miner_hotkey in self.competition_results_store.average_scores[data_package.competition_id]):
                         avg_score = self.competition_results_store.average_scores[data_package.competition_id][miner_hotkey]
                     
-                    wandb.init(project=data_package.competition_id, group="model_evaluation", reinit=True)
                     model_log = WandBLogModelEntry(
                         competition_id=data_package.competition_id,
                         miner_hotkey=miner_hotkey,
@@ -318,7 +319,8 @@ class Validator(BaseValidatorNeuron):
                         model_link=model_link,
                         roc_auc=evaluation_result.roc_auc,
                         score=evaluation_result.score,
-                        average_score=avg_score
+                        average_score=avg_score,
+                        run_time_s=evaluation_result.run_time_s
                     )
                     wandb.log(model_log.model_dump(), commit=False)
                 
