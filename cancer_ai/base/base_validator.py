@@ -145,20 +145,31 @@ class BaseValidatorNeuron(BaseNeuron):
         self.sync()
 
         bt.logging.info(f"Validator starting at block: {self.block}")
+        bt.logging.info(f"Run method called with is_running={self.is_running}, should_exit={self.should_exit}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
+            iteration_count = 0
             while True:
+                iteration_count += 1
+                bt.logging.info(f"Starting iteration {iteration_count} in run loop")
+                
                 # Run multiple forwards concurrently.
+                bt.logging.info(f"About to run concurrent_forward in iteration {iteration_count}")
                 self.loop.run_until_complete(self.concurrent_forward())
+                bt.logging.info(f"Completed concurrent_forward in iteration {iteration_count}")
 
                 # Check if we should exit.
+                bt.logging.info(f"Checking should_exit flag: {self.should_exit}")
                 if self.should_exit:
+                    bt.logging.info("should_exit flag is True, breaking out of run loop")
                     break
 
                 # Sync metagraph and potentially set weights.
+                bt.logging.info(f"About to sync metagraph in iteration {iteration_count}")
                 self.sync()
                 self.step += 1
+                bt.logging.info(f"Completed iteration {iteration_count}, step={self.step}")
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
@@ -191,30 +202,49 @@ class BaseValidatorNeuron(BaseNeuron):
         Starts the validator's operations in a background thread upon entering the context.
         This method facilitates the use of the validator in a 'with' statement.
         """
+        bt.logging.info(f"run_in_background_thread called with is_running={self.is_running}")
+        
+        # Get the current call stack to see what's calling run_in_background_thread
+        import traceback
+        stack_trace = traceback.format_stack()
+        bt.logging.info(f"Call stack for run_in_background_thread:\n{''.join(stack_trace)}")
+        
         if not self.is_running:
-            bt.logging.debug("Starting validator in background thread.")
+            bt.logging.info("Starting validator in background thread.")
             self.should_exit = False
+            bt.logging.info(f"Set should_exit to {self.should_exit}, creating thread")
             self.thread = threading.Thread(target=self.run, daemon=True)
+            bt.logging.info(f"Starting thread with daemon={self.thread.daemon}")
             self.thread.start()
             self.is_running = True
-            bt.logging.debug("Started")
+            bt.logging.info(f"Thread started, set is_running to {self.is_running}")
+            bt.logging.info("Validator started successfully in background thread")
+        else:
+            bt.logging.warning("Attempted to start validator that is already running")
 
     def stop_run_thread(self):
         """
         Stops the validator's operations that are running in the background thread.
         """
+        bt.logging.info(f"stop_run_thread called with is_running={self.is_running}")
+        import traceback
+        stack_trace = traceback.format_stack()
+        bt.logging.info(f"Call stack for stop_run_thread:\n{''.join(stack_trace)}")
+        
         if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
+            bt.logging.info("Stopping validator in background thread.")
             self.should_exit = True
+            bt.logging.info(f"Set should_exit to {self.should_exit}, joining thread")
             self.thread.join(5)
             self.is_running = False
-            bt.logging.debug("Stopped")
+            bt.logging.info(f"Thread joined, set is_running to {self.is_running}")
+            bt.logging.info("Validator stopped successfully")
 
     def __enter__(self):
         self.run_in_background_thread()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback_obj):
         """
         Stops the validator's background operations upon exiting the context.
         This method facilitates the use of the validator in a 'with' statement.
@@ -224,15 +254,30 @@ class BaseValidatorNeuron(BaseNeuron):
                       None if the context was exited without an exception.
             exc_value: The instance of the exception that caused the context to be exited.
                        None if the context was exited without an exception.
-            traceback: A traceback object encoding the stack trace.
+            traceback_obj: A traceback object encoding the stack trace.
                        None if the context was exited without an exception.
         """
+        bt.logging.info(f"__exit__ called with exc_type={exc_type}, exc_value={exc_value}")
+        
+        # Get the current call stack to see what's calling __exit__
+        import traceback
+        stack_trace = traceback.format_stack()
+        bt.logging.info(f"Call stack for __exit__:\n{''.join(stack_trace)}")
+        
+        # If there's an exception, log it
+        if exc_type is not None:
+            bt.logging.error(f"Exception in context: {exc_type.__name__}: {exc_value}")
+            if traceback_obj:
+                bt.logging.error(f"Exception traceback: {''.join(traceback.format_tb(traceback_obj))}")
+        
         if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
+            bt.logging.info("Stopping validator in background thread from __exit__ method.")
             self.should_exit = True
+            bt.logging.info(f"Set should_exit to {self.should_exit}, joining thread")
             self.thread.join(5)
             self.is_running = False
-            bt.logging.debug("Stopped")
+            bt.logging.info(f"Thread joined, set is_running to {self.is_running}")
+            bt.logging.info("Validator stopped successfully from __exit__ method")
 
     def set_weights(self):
         """

@@ -25,6 +25,7 @@ import json
 import threading
 import datetime
 import csv
+import zipfile
 
 import bittensor as bt
 import numpy as np
@@ -422,7 +423,16 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.error(f"Error dumping competition results: {e}")
                 competition_data = {}
             
-            # Save the state
+            # First, remove any existing file that might be corrupted
+            if os.path.exists(state_file_path):
+                try:
+                    os.remove(state_file_path)
+                    bt.logging.info(f"Removed existing state file {state_file_path}")
+                except Exception as e:
+                    bt.logging.warning(f"Failed to remove existing state file: {e}")
+            
+            # Save the state with a clear file extension to ensure proper format
+            bt.logging.info(f"Creating new state file")
             np.savez(
                 state_file_path,
                 scores=self.scores,
@@ -431,6 +441,25 @@ class Validator(BaseValidatorNeuron):
                 org_latest_updates=self.org_latest_updates,
                 competition_results_store=competition_data,
             )
+            
+            # Verify the file was created properly
+            if os.path.exists(state_file_path):
+                file_size = os.path.getsize(state_file_path)
+                bt.logging.info(f"Verified state file was created: {file_size} bytes")
+                
+                # Check if the file is a valid numpy zip file
+                try:
+                    with open(state_file_path, 'rb') as f:
+                        header = f.read(8).hex()
+                    bt.logging.debug(f"Saved file header (hex): {header}")
+                    # PK\003\004 header for zip files (which npz uses)
+                    if not header.startswith('504b0304'):
+                        bt.logging.warning(f"File header doesn't match expected numpy zip format")
+                except Exception as e:
+                    bt.logging.warning(f"Could not verify file header: {e}")
+            else:
+                bt.logging.error("Failed to create state file - file doesn't exist after saving")
+                
             bt.logging.info("State saved successfully")
                 
         except Exception as e:
@@ -468,6 +497,14 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.error(f"Error dumping competition results for empty state: {e}")
                 competition_data = {}
             
+            # First, remove any existing file that might be corrupted
+            if os.path.exists(state_file_path):
+                try:
+                    os.remove(state_file_path)
+                    bt.logging.info(f"Removed existing state file {state_file_path}")
+                except Exception as e:
+                    bt.logging.warning(f"Failed to remove existing state file: {e}")
+            
             # Save the empty state
             bt.logging.info(f"Saving empty state to {state_file_path}")
             np.savez(
@@ -478,6 +515,25 @@ class Validator(BaseValidatorNeuron):
                 org_latest_updates={},
                 competition_results_store=competition_data,
             )
+            
+            # Verify the file was created properly
+            if os.path.exists(state_file_path):
+                file_size = os.path.getsize(state_file_path)
+                bt.logging.info(f"Verified empty state file was created: {file_size} bytes")
+                
+                # Check if the file is a valid numpy zip file
+                try:
+                    with open(state_file_path, 'rb') as f:
+                        header = f.read(8).hex()
+                    bt.logging.debug(f"Saved file header (hex): {header}")
+                    # PK\003\004 header for zip files (which npz uses)
+                    if not header.startswith('504b0304'):
+                        bt.logging.warning(f"File header doesn't match expected numpy zip format")
+                except Exception as e:
+                    bt.logging.warning(f"Could not verify file header: {e}")
+            else:
+                bt.logging.error("Failed to create empty state file - file doesn't exist after saving")
+                
             bt.logging.info("Empty state created successfully")
             
         except Exception as e:
@@ -512,12 +568,36 @@ class Validator(BaseValidatorNeuron):
                 # Read first few bytes to check file integrity
                 try:
                     header = f.read(8)  # Read first 8 bytes
-                    bt.logging.debug(f"File header (hex): {header.hex()}")
+                    header_hex = header.hex()
+                    bt.logging.debug(f"File header (hex): {header_hex}")
+                    
+                    # Validate the file format - npz files should start with PK\003\004
+                    if not header_hex.startswith('504b0304'):
+                        bt.logging.error(f"Invalid file format: not a valid numpy zip file")
+                        bt.logging.info(f"Removing corrupted state file and creating a new one")
+                        f.close()  # Close the file before removing
+                        try:
+                            os.remove(state_file_path)
+                            bt.logging.info(f"Removed corrupted state file")
+                        except Exception as rm_err:
+                            bt.logging.error(f"Failed to remove corrupted file: {rm_err}")
+                        self.create_empty_state()
+                        return
                 except Exception as e:
                     bt.logging.error(f"Error reading file header: {e}")
             
             # Now try to load with numpy
-            state = np.load(state_file_path, allow_pickle=True)
+            try:
+                state = np.load(state_file_path, allow_pickle=True)
+            except zipfile.BadZipFile:
+                bt.logging.error("Bad zip file detected - file is corrupted")
+                try:
+                    os.remove(state_file_path)
+                    bt.logging.info(f"Removed corrupted state file")
+                except Exception as rm_err:
+                    bt.logging.error(f"Failed to remove corrupted file: {rm_err}")
+                self.create_empty_state()
+                return
             
             # Log available keys
             bt.logging.info(f"State file contains keys: {list(state.keys())}")
