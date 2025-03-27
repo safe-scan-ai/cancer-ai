@@ -263,40 +263,42 @@ class Validator(BaseValidatorNeuron):
             
             # Logging results
             for miner_hotkey, evaluation_result in competition_manager.results:
-                # Get the model link
-                model = self.db_controller.get_latest_model(
-                    hotkey=miner_hotkey
-                )
-                model_link = model.hf_link if model is not None else None
-                
-                avg_score = 0.0
-                if (data_package.competition_id in self.competition_results_store.average_scores and 
-                    miner_hotkey in self.competition_results_store.average_scores[data_package.competition_id]):
-                    avg_score = self.competition_results_store.average_scores[data_package.competition_id][miner_hotkey]
-                
-                # Initialize WandB for this model evaluation
-                wandb.init(project=data_package.competition_id, group="model_evaluation", reinit=True)
-                model_log = WandBLogModelEntry(
-                    competition_id=data_package.competition_id,
-                    miner_hotkey=miner_hotkey,
-                    validator_hotkey=self.wallet.hotkey.ss58_address,
-                    tested_entries=evaluation_result.tested_entries,
-                    accuracy=evaluation_result.accuracy,
-                    precision=evaluation_result.precision,
-                    fbeta=evaluation_result.fbeta,
-                    recall=evaluation_result.recall,
-                    confusion_matrix=evaluation_result.confusion_matrix,
-                    roc_curve={
-                        "fpr": evaluation_result.fpr,
-                        "tpr": evaluation_result.tpr,
-                    },
-                    model_link=model_link,
-                    roc_auc=evaluation_result.roc_auc,
-                    score=evaluation_result.score,
-                    average_score=avg_score
-                )
-                wandb.log(model_log.model_dump())
-                wandb.finish()
+                try:
+                    model = self.db_controller.get_latest_model(
+                        hotkey=miner_hotkey
+                    )
+                    model_link = model.hf_link if model is not None else None
+                    
+                    avg_score = 0.0
+                    if (data_package.competition_id in self.competition_results_store.average_scores and 
+                        miner_hotkey in self.competition_results_store.average_scores[data_package.competition_id]):
+                        avg_score = self.competition_results_store.average_scores[data_package.competition_id][miner_hotkey]
+                    
+                    wandb.init(project=data_package.competition_id, group="model_evaluation", reinit=True)
+                    model_log = WandBLogModelEntry(
+                        competition_id=data_package.competition_id,
+                        miner_hotkey=miner_hotkey,
+                        validator_hotkey=self.wallet.hotkey.ss58_address,
+                        tested_entries=evaluation_result.tested_entries,
+                        accuracy=evaluation_result.accuracy,
+                        precision=evaluation_result.precision,
+                        fbeta=evaluation_result.fbeta,
+                        recall=evaluation_result.recall,
+                        confusion_matrix=evaluation_result.confusion_matrix,
+                        roc_curve={
+                            "fpr": evaluation_result.fpr,
+                            "tpr": evaluation_result.tpr,
+                        },
+                        model_link=model_link,
+                        roc_auc=evaluation_result.roc_auc,
+                        score=evaluation_result.score,
+                        average_score=avg_score
+                    )
+                    wandb.log(model_log.model_dump())
+                    wandb.finish()
+                except Exception as e:
+                    bt.logging.error(f"Error logging model results for hotkey {miner_hotkey}: {e}")
+                    continue
 
 
     async def log_results_to_csv(self, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
