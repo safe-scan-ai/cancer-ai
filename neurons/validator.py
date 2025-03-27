@@ -386,6 +386,13 @@ class Validator(BaseValidatorNeuron):
                                     " "])
 
 
+    # Custom JSON encoder to handle datetime objects
+    class DateTimeEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, datetime.datetime):
+                return obj.isoformat()
+            return super().default(obj)
+    
     def save_state(self):
         """Saves the state of the validator to a file."""
         if not getattr(self, "organizations_data_references", None):
@@ -408,9 +415,19 @@ class Validator(BaseValidatorNeuron):
         state_path = self.config.neuron.full_path + "/state.json"
         os.makedirs(os.path.dirname(state_path), exist_ok=True)
         
-        # Save as JSON file
-        with open(state_path, 'w') as f:
-            json.dump(state_dict, f, indent=2)
+        # Save as JSON file with custom encoder for datetime objects
+        try:
+            with open(state_path, 'w') as f:
+                json.dump(state_dict, f, indent=2, cls=self.DateTimeEncoder)
+            bt.logging.info(f"Successfully saved state to {state_path}")
+        except TypeError as e:
+            bt.logging.error(f"Error serializing state to JSON: {e}")
+            # Attempt to identify problematic fields
+            for key, value in state_dict.items():
+                try:
+                    json.dumps(value, cls=self.DateTimeEncoder)
+                except TypeError as e:
+                    bt.logging.error(f"Problem serializing field '{key}': {e}")
 
     def create_empty_state(self):
         """Creates an empty state file."""
@@ -427,9 +444,9 @@ class Validator(BaseValidatorNeuron):
         state_path = self.config.neuron.full_path + "/state.json"
         os.makedirs(os.path.dirname(state_path), exist_ok=True)
         
-        # Save as JSON file
+        # Save as JSON file with custom encoder for datetime objects
         with open(state_path, 'w') as f:
-            json.dump(empty_state, f, indent=2)
+            json.dump(empty_state, f, indent=2, cls=self.DateTimeEncoder)
 
     def load_state(self):
         """Loads the state of the validator from a file."""
@@ -442,6 +459,9 @@ class Validator(BaseValidatorNeuron):
                 # Load the state from JSON file
                 with open(json_path, 'r') as f:
                     state = json.load(f)
+                    
+                # Convert ISO format datetime strings back to datetime objects if needed
+                self._convert_datetime_strings(state)
                 
                 # Convert lists back to numpy arrays
                 self.scores = np.array(state['scores'], dtype=np.float32)
@@ -505,6 +525,13 @@ class Validator(BaseValidatorNeuron):
         
         # If we get here, create an empty state
         self.create_empty_state()
+        
+    def _convert_datetime_strings(self, state_dict):
+        """Helper method to convert ISO format datetime strings back to datetime objects."""
+        # This is a placeholder for datetime string conversion if needed
+        # We can implement specific conversion logic if we need to access datetime objects
+        # For now, we can keep the datetime values as strings since they're mainly used for comparison
+        pass
 
 
 
