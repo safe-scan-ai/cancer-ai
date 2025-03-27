@@ -56,6 +56,8 @@ class Validator(BaseValidatorNeuron):
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
         self.db_controller = ModelDBController(self.config.db_path)
+        
+
 
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
@@ -70,7 +72,7 @@ class Validator(BaseValidatorNeuron):
     async def concurrent_forward(self):
 
         coroutines = [
-            self.refresh_miners(),
+            # self.refresh_miners(),
         ]
         if self.config.filesystem_evaluation:
             coroutines.append(self.filesystem_test_evaluation())
@@ -128,30 +130,48 @@ class Validator(BaseValidatorNeuron):
         self.save_state()
 
     async def filesystem_test_evaluation(self):
+        bt.logging.debug("Starting filesystem_test_evaluation")
         time.sleep(1)
-        data_package = get_local_dataset(self.config.local_dataset_dir)
-        if not data_package:
-            bt.logging.error("NO NEW DATA PACKAGES")
-            return
-        competition_manager = CompetitionManager(
-                config=self.config,
-                subtensor=self.subtensor,
-                hotkeys=self.hotkeys,
-                validator_hotkey=self.hotkey,
-                competition_id=data_package.competition_id,
-                dataset_hf_repo="",
-                dataset_hf_filename = data_package.dataset_hf_filename,
-                dataset_hf_repo_type="dataset",
-                db_controller = self.db_controller,
-                test_mode = self.config.test_mode,
-                local_fs_mode=True,
-            )
         try:
-            winning_hotkey, _ = await competition_manager.evaluate()
-            if not winning_hotkey:
-                bt.logging.error("NO WINNING HOTKEY")
+            bt.logging.debug("Getting local dataset")
+            data_package = get_local_dataset(self.config.local_dataset_dir)
+            if not data_package:
+                bt.logging.error("NO NEW DATA PACKAGES")
+                return
+            
+            bt.logging.debug(f"Found data package: {data_package.dataset_hf_filename} for competition: {data_package.competition_id}")
+            
+            bt.logging.debug("Initializing CompetitionManager")
+            competition_manager = CompetitionManager(
+                    config=self.config,
+                    subtensor=self.subtensor,
+                    hotkeys=self.hotkeys,
+                    validator_hotkey=self.hotkey,
+                    competition_id=data_package.competition_id,
+                    dataset_hf_repo="",
+                    dataset_hf_filename = data_package.dataset_hf_filename,
+                    dataset_hf_repo_type="dataset",
+                    db_controller = self.db_controller,
+                    test_mode = self.config.test_mode,
+                    local_fs_mode=True,
+                )
+            bt.logging.debug("CompetitionManager initialized successfully")
+            
+            winning_hotkey = None
+            try:
+                bt.logging.debug("Starting competition evaluation")
+                winning_hotkey, evaluation_result = await competition_manager.evaluate()
+                bt.logging.debug(f"Evaluation completed, winning_hotkey: {winning_hotkey}")
+                if not winning_hotkey:
+                    bt.logging.error("NO WINNING HOTKEY")
+            except Exception as e:
+                bt.logging.error(f"Error evaluating {data_package.dataset_hf_filename}: {e}")
+                import traceback
+                bt.logging.error(f"Evaluation error traceback: {traceback.format_exc()}")
         except Exception as e:
-            bt.logging.error(f"Error evaluating {data_package.dataset_hf_filename}: {e}")
+            bt.logging.error(f"Unexpected error in filesystem_test_evaluation: {e}")
+            import traceback
+            bt.logging.error(f"Unexpected error traceback: {traceback.format_exc()}")
 
         models_results = competition_manager.results
         
@@ -408,6 +428,8 @@ class Validator(BaseValidatorNeuron):
         bt.logging.debug("Scores from UPDATE_SCORES:")
         bt.logging.debug(f"{self.scores}")
         self.save_state()
+
+
 
 
 if __name__ == "__main__":

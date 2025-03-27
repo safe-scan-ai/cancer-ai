@@ -1,4 +1,5 @@
 import time
+import asyncio
 from typing import List, Tuple
 
 import bittensor as bt
@@ -152,78 +153,135 @@ class CompetitionManager(SerializableManager):
     async def evaluate(self) -> Tuple[str | None, ModelEvaluationResult | None]:
         """Returns hotkey and competition id of winning model miner"""
         bt.logging.info(f"Start of evaluation of {self.competition_id}")
+        try:
+            # TODO add mock models functionality
+            bt.logging.debug("Updating miner models")
+            await self.update_miner_models()
+            bt.logging.debug(f"Found {len(self.model_manager.hotkey_store)} models to evaluate")
+            if len(self.model_manager.hotkey_store) == 0:
+                bt.logging.error("No models to evaluate")
+                return None, None
 
-        # TODO add mock models functionality
+            bt.logging.debug("Preparing dataset")
+            await self.dataset_manager.prepare_dataset()
+            bt.logging.debug("Getting test data")
+            X_test, y_test = await self.dataset_manager.get_data()
+            bt.logging.debug(f"Got test data with {len(X_test) if X_test is not None else 0} samples")
 
-        await self.update_miner_models()
-        if len(self.model_manager.hotkey_store) == 0:
-            bt.logging.error("No models to evaluate")
-            return None, None
-
-        
-        await self.dataset_manager.prepare_dataset()
-        X_test, y_test = await self.dataset_manager.get_data()
-
-        competition_handler = COMPETITION_HANDLER_MAPPING[self.competition_id](
-            X_test=X_test, y_test=y_test
-        )
-        y_test = competition_handler.prepare_y_pred(y_test)
-
-        # evaluate models
-        for miner_hotkey in self.model_manager.hotkey_store:
-            bt.logging.info(f"Evaluating hotkey: {miner_hotkey}")
-            model_or_none = await self.model_manager.download_miner_model(miner_hotkey)
-            if not model_or_none:
-                bt.logging.error(
-                    f"Failed to download model for hotkey {miner_hotkey}  Skipping."
-                )
-                continue
-
-            try:
-                model_manager = ModelRunManager(
-                    self.config, self.model_manager.hotkey_store[miner_hotkey]
-                )
-            except ModelRunException as e:
-                bt.logging.error(
-                    f"Model hotkey: {miner_hotkey} failed to initialize. Skipping. Error: {e}"
-                )
-                continue
-            start_time = time.time()
-
-            try:
-                y_pred = await model_manager.run(X_test)
-            except ModelRunException:
-                bt.logging.error(
-                    f"Model hotkey: {miner_hotkey} failed to run. Skipping"
-                )
-                continue
-            run_time_s = time.time() - start_time
-
-            try:
-                model_result = competition_handler.get_model_result(
-                    y_test, y_pred, run_time_s
-                )
-                self.results.append((miner_hotkey, model_result))
-            except Exception as e:
-                bt.logging.error(
-                    f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}"
-                )
-                import traceback
-                bt.logging.error(f"Stacktrace: {traceback.format_exc()}")
-                bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error")
-        if len(self.results) == 0:
-            bt.logging.error("No models were able to run")
-            return None, None
-        winning_hotkey, winning_model_result = sorted(
-            self.results, key=lambda x: x[1].score, reverse=True
-        )[0]
-        for miner_hotkey, model_result in self.results:
-            bt.logging.info(f"Model from {miner_hotkey} successfully evaluated")
-            bt.logging.trace(
-                f"Model result for {miner_hotkey}:\n {model_result.model_dump_json(indent=4)} \n"
+            bt.logging.debug(f"Initializing competition handler for {self.competition_id}")
+            competition_handler = COMPETITION_HANDLER_MAPPING[self.competition_id](
+                X_test=X_test, y_test=y_test
             )
+            bt.logging.debug("Preparing y_test data")
+            y_test = competition_handler.prepare_y_pred(y_test)
+            bt.logging.debug("y_test data prepared successfully")
 
-        bt.logging.info(
-            f"Winning hotkey for competition {self.competition_id}: {winning_hotkey}"
-        )
-        return winning_hotkey, winning_model_result
+            # Define a helper function to evaluate a single model
+            async def evaluate_model(miner_hotkey):
+                bt.logging.info(f"Evaluating hotkey: {miner_hotkey}")
+                try:
+                    bt.logging.debug(f"Downloading model for hotkey: {miner_hotkey}")
+                    model_or_none = await self.model_manager.download_miner_model(miner_hotkey)
+                    if not model_or_none:
+                        bt.logging.error(
+                            f"Failed to download model for hotkey {miner_hotkey}. Skipping."
+                        )
+                        return None
+                    bt.logging.debug(f"Successfully downloaded model for hotkey: {miner_hotkey}")
+
+                    bt.logging.debug(f"Initializing ModelRunManager for hotkey: {miner_hotkey}")
+                    try:
+                        model_manager = ModelRunManager(
+                            self.config, self.model_manager.hotkey_store[miner_hotkey]
+                        )
+                        bt.logging.debug(f"ModelRunManager initialized successfully for hotkey: {miner_hotkey}")
+                    except ModelRunException as e:
+                        bt.logging.error(
+                            f"Model hotkey: {miner_hotkey} failed to initialize. Skipping. Error: {e}"
+                        )
+                        return None
+                    
+                    bt.logging.debug(f"Running model for hotkey: {miner_hotkey}")
+                    start_time = time.time()
+                    try:
+                        y_pred = await model_manager.run(X_test)
+                        bt.logging.debug(f"Model ran successfully for hotkey: {miner_hotkey}")
+                    except ModelRunException as e:
+                        bt.logging.error(
+                            f"Model hotkey: {miner_hotkey} failed to run. Skipping. Error: {e}"
+                        )
+                        return None
+                
+                    run_time_s = time.time() - start_time
+                    bt.logging.debug(f"Model for hotkey: {miner_hotkey} ran in {run_time_s:.2f} seconds")
+                    return miner_hotkey, y_pred, run_time_s
+                except Exception as e:
+                    bt.logging.error(f"Unexpected error evaluating model for hotkey {miner_hotkey}: {e}")
+                    import traceback
+                    bt.logging.error(f"Traceback for hotkey {miner_hotkey}: {traceback.format_exc()}")
+                    return None
+
+            # Evaluate models in parallel with a concurrency limit
+            bt.logging.debug("Setting up parallel model evaluation")
+            concurrency_limit = 5  # Number of models to evaluate concurrently
+            tasks = []
+            
+            # Create tasks for all models
+            bt.logging.debug(f"Creating evaluation tasks for {len(self.model_manager.hotkey_store)} models")
+            for miner_hotkey in self.model_manager.hotkey_store:
+                tasks.append(evaluate_model(miner_hotkey))
+            
+            # Run tasks with the concurrency limit
+            results = []
+            bt.logging.debug(f"Running evaluation tasks in batches of {concurrency_limit}")
+            for i in range(0, len(tasks), concurrency_limit):
+                batch = tasks[i:i+concurrency_limit]
+                bt.logging.debug(f"Running batch {i//concurrency_limit + 1} with {len(batch)} tasks")
+                batch_results = await asyncio.gather(*batch)
+                valid_results = [r for r in batch_results if r is not None]
+                bt.logging.debug(f"Batch {i//concurrency_limit + 1} completed with {len(valid_results)} valid results")
+                results.extend(valid_results)
+        
+            # Process the results
+            bt.logging.debug(f"Processing {len(results)} valid model results")
+            for result in results:
+                miner_hotkey, y_pred, run_time_s = result
+
+                try:
+                    bt.logging.debug(f"Getting model result for hotkey: {miner_hotkey}")
+                    model_result = competition_handler.get_model_result(
+                        y_test, y_pred, run_time_s
+                    )
+                    self.results.append((miner_hotkey, model_result))
+                    bt.logging.info(f"Model from {miner_hotkey} successfully evaluated")
+                    bt.logging.debug(
+                        f"Model result for {miner_hotkey}:\n {model_result.model_dump_json(indent=4)} \n"
+                    )
+                except Exception as e:
+                    bt.logging.error(
+                        f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}"
+                    )
+                    import traceback
+                    bt.logging.error(f"Stacktrace: {traceback.format_exc()}")
+                    bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error")
+            
+            bt.logging.debug(f"Completed processing {len(self.results)} valid model results")
+            if len(self.results) == 0:
+                bt.logging.error("No models were able to run")
+                return None, None
+                
+            bt.logging.debug("Determining winning model")
+            winning_hotkey, winning_model_result = sorted(
+                self.results, key=lambda x: x[1].score, reverse=True
+            )[0]
+            for miner_hotkey, model_result in self.results:
+                bt.logging.info(f"Model from {miner_hotkey} successfully evaluated")
+                bt.logging.info(f"Model score: {model_result.score}")
+
+            bt.logging.info(f"Winning model: {winning_hotkey}")
+            return winning_hotkey, winning_model_result
+        except Exception as e:
+            bt.logging.error(f"Unexpected error in evaluate method: {e}")
+            import traceback
+            bt.logging.error(f"Evaluation error traceback: {traceback.format_exc()}")
+            return None, None

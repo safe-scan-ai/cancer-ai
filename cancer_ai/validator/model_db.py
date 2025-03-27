@@ -73,7 +73,13 @@ class ModelDBController:
                 .first()
             )
             if model_record:
-                return self.convert_db_model_to_chain_model(model_record)
+                chain_model = self.convert_db_model_to_chain_model(model_record)
+
+                return chain_model
+            bt.logging.debug(f"No model found for hotkey {hotkey}")
+            return None
+        except Exception as e:
+            bt.logging.error(f"Error getting latest model for hotkey {hotkey}: {e}")
             return None
         finally:
             session.close()
