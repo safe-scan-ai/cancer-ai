@@ -25,6 +25,7 @@ import json
 import threading
 import datetime
 import csv
+import zipfile
 
 import bittensor as bt
 import numpy as np
@@ -177,43 +178,68 @@ class Validator(BaseValidatorNeuron):
 
     async def monitor_datasets(self):
         """Main validation logic, triggered by new datastes on huggingface"""
-        if self.last_monitor_datasets is not None and (
-            time.time() - self.last_monitor_datasets
-            < self.config.monitor_datasets_interval
-        ):
+        try:
+            if self.last_monitor_datasets is not None and (
+                time.time() - self.last_monitor_datasets
+                < self.config.monitor_datasets_interval
+            ):
+                return
+            self.last_monitor_datasets = time.time()
+
+            bt.logging.info("Starting monitor_datasets")
+            yaml_data = await fetch_organization_data_references(
+                self.config.datasets_config_hf_repo_id,
+                self.hf_api,
+                )        
+                
+            await sync_organizations_data_references(yaml_data)
+            self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+            self.save_state()
+            bt.logging.info("Fetched and synced organization data references")
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error in monitor_datasets initial setup: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
             return
-        self.last_monitor_datasets = time.time()
 
-        yaml_data = await fetch_organization_data_references(
-            self.config.datasets_config_hf_repo_id,
-            self.hf_api,
-            )        
+        try:
+            list_of_new_data_packages: list[NewDatasetFile] = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+            self.save_state()
+
+            if not list_of_new_data_packages:
+                bt.logging.info("No new data packages found.")
+                return
             
-        await sync_organizations_data_references(yaml_data)
-        self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-        self.save_state()
-
-        list_of_new_data_packages: list[NewDatasetFile] = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
-        self.save_state()
-
-        if not list_of_new_data_packages:
-            bt.logging.info("No new data packages found.")
+            bt.logging.info(f"Found {len(list_of_new_data_packages)} new data packages")
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error checking for new dataset files: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
             return
         
         for data_package in list_of_new_data_packages:
-            bt.logging.info(f"New data packages found. Starting competition for {data_package.competition_id}")
-            competition_manager = CompetitionManager(
-                config=self.config,
-                subtensor=self.subtensor,
-                hotkeys=self.hotkeys,
-                validator_hotkey=self.hotkey,
-                competition_id=data_package.competition_id,
-                dataset_hf_repo=data_package.dataset_hf_repo,
-                dataset_hf_filename=data_package.dataset_hf_filename,
-                dataset_hf_repo_type="dataset",
-                db_controller = self.db_controller,
-                test_mode = self.config.test_mode,
-            )
+            try:
+                bt.logging.info(f"Starting competition for {data_package.competition_id}")
+                competition_manager = CompetitionManager(
+                    config=self.config,
+                    subtensor=self.subtensor,
+                    hotkeys=self.hotkeys,
+                    validator_hotkey=self.hotkey,
+                    competition_id=data_package.competition_id,
+                    dataset_hf_repo=data_package.dataset_hf_repo,
+                    dataset_hf_filename=data_package.dataset_hf_filename,
+                    dataset_hf_repo_type="dataset",
+                    db_controller = self.db_controller,
+                    test_mode = self.config.test_mode,
+                )
+            except Exception as e:
+                import traceback
+                stack_trace = traceback.format_exc()
+                bt.logging.error(f"Error creating competition manager for {data_package.competition_id}: {e}")
+                bt.logging.error(f"Stack trace: {stack_trace}")
+                continue
             winning_hotkey = None
             winning_model_link = None
             try:
@@ -260,8 +286,10 @@ class Validator(BaseValidatorNeuron):
             bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
             competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api)
             self.update_scores(competition_weights)
+
             
             # Logging results
+            
             for miner_hotkey, evaluation_result in competition_manager.results:
                 try:
                     model = self.db_controller.get_latest_model(
@@ -274,7 +302,6 @@ class Validator(BaseValidatorNeuron):
                         miner_hotkey in self.competition_results_store.average_scores[data_package.competition_id]):
                         avg_score = self.competition_results_store.average_scores[data_package.competition_id][miner_hotkey]
                     
-                    wandb.init(project=data_package.competition_id, group="model_evaluation", reinit=True)
                     model_log = WandBLogModelEntry(
                         competition_id=data_package.competition_id,
                         miner_hotkey=miner_hotkey,
@@ -292,14 +319,38 @@ class Validator(BaseValidatorNeuron):
                         model_link=model_link,
                         roc_auc=evaluation_result.roc_auc,
                         score=evaluation_result.score,
-                        average_score=avg_score
+                        average_score=avg_score,
+                        run_time_s=evaluation_result.run_time_s
                     )
+                    wandb.init(project=data_package.competition_id, group="model_evaluation")
                     wandb.log(model_log.model_dump())
-                    wandb.finish()
+                
                 except Exception as e:
                     bt.logging.error(f"Error logging model results for hotkey {miner_hotkey}: {e}")
                     continue
-
+                wandb.finish()
+    
+    def update_scores(self, competition_weights: dict[str, float]):
+        """Update scores based on competition weights."""
+        self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+        
+        for competition_id, weight in competition_weights.items():
+            try:
+                winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
+                if winner_hotkey is not None:
+                    if winner_hotkey in self.metagraph.hotkeys:
+                        winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
+                        self.scores[winner_idx] += weight
+                        bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
+                    else:
+                        bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
+            except ValueError as e:
+                bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
+                continue
+        
+        bt.logging.debug("Scores from UPDATE_SCORES:")
+        bt.logging.debug(f"{self.scores}")
+        self.save_state()
 
     async def log_results_to_csv(self, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
         """Debug method for dumping rewards for testing """
@@ -332,82 +383,107 @@ class Validator(BaseValidatorNeuron):
                                     " "])
 
 
+    # Custom JSON encoder to handle datetime objects
+    class DateTimeEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, datetime.datetime):
+                return obj.isoformat()
+            return super().default(obj)
+    
     def save_state(self):
         """Saves the state of the validator to a file."""
-
         if not getattr(self, "organizations_data_references", None):
             self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-            bt.logging.debug("Organizations data references empty, creating new one")
-
-        np.savez(
-            self.config.neuron.full_path + "/state.npz",
-            scores=self.scores,
-            hotkeys=self.hotkeys,
-            organizations_data_references=self.organizations_data_references.model_dump(),
-            org_latest_updates=self.org_latest_updates,
-            competition_results_store=self.competition_results_store.model_dump(),
-        )
-
+        
+        scores_list = self.scores.tolist() if hasattr(self.scores, 'tolist') else []
+        hotkeys_list = self.hotkeys.tolist() if hasattr(self.hotkeys, 'tolist') else self.hotkeys
+        
+        state_dict = {
+            'scores': scores_list,
+            'hotkeys': hotkeys_list,
+            'organizations_data_references': self.organizations_data_references.model_dump(),
+            'org_latest_updates': self.org_latest_updates,
+            'competition_results_store': self.competition_results_store.model_dump()
+        }
+        
+        state_path = self.config.neuron.full_path + "/state.json"
+        os.makedirs(os.path.dirname(state_path), exist_ok=True)
+        
+        try:
+            with open(state_path, 'w') as f:
+                json.dump(state_dict, f, indent=2, cls=self.DateTimeEncoder)
+                f.flush()
+                f.close()
+        except TypeError as e:
+            bt.logging.error(f"Error serializing state to JSON: {e}", exc_info=True)
+            for key, value in state_dict.items():
+                try:
+                    json.dumps(value, cls=self.DateTimeEncoder)
+                except TypeError as e:
+                    bt.logging.error(f"Problem serializing field '{key}': {e}")
+        except Exception as e:
+            bt.logging.error(f"Error saving validator state: {e}", exc_info=True)
+            if 'f' in locals() and f:
+                f.flush()
+                f.close()
+    
     def create_empty_state(self):
-        bt.logging.info("Creating empty state file.")
-        np.savez(
-            self.config.neuron.full_path + "/state.npz",
-            scores=self.scores,
-            hotkeys=self.hotkeys,
-            organizations_data_references=self.organizations_data_references.model_dump(),
-            org_latest_updates={},
-            competition_results_store=self.competition_results_store.model_dump(),
-        )
-
+        """Creates an empty state file."""
+        empty_state = {
+            'scores': [],
+            'hotkeys': [],
+            'organizations_data_references': self.organizations_data_references.model_dump(),
+            'org_latest_updates': {},
+            'competition_results_store': self.competition_results_store.model_dump()
+        }
+        
+        state_path = self.config.neuron.full_path + "/state.json"
+        os.makedirs(os.path.dirname(state_path), exist_ok=True)
+        
+        with open(state_path, 'w') as f:
+            json.dump(empty_state, f, indent=2, cls=self.DateTimeEncoder)
+    
     def load_state(self):
         """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
-
-        if not os.path.exists(self.config.neuron.full_path + "/state.npz"):
-            bt.logging.info("No state file found.")
-            self.create_empty_state()
-
-        try:
-            state = np.load(
-                self.config.neuron.full_path + "/state.npz", allow_pickle=True
-            )
-            self.scores = state["scores"]
-            self.hotkeys = state["hotkeys"]
-
-            factory = OrganizationDataReferenceFactory.get_instance()
-            saved_data = state["organizations_data_references"].item()
-            factory.update_from_dict(saved_data)
-            self.organizations_data_references = factory
-            self.org_latest_updates = state["org_latest_updates"].item()
-            self.competition_results_store = CompetitionResultsStore.model_validate(
-                state["competition_results_store"].item()
-            )
-
-        except Exception as e:
-            bt.logging.error(f"Error loading state: {e}")
-            self.create_empty_state()
-
-    def update_scores(self, competition_weights: dict[str, float]):
-        """Update scores based on competition weights."""
-        self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+        json_path = self.config.neuron.full_path + "/state.json"
         
-        for competition_id, weight in competition_weights.items():
+        if os.path.exists(json_path):
             try:
-                winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
-                if winner_hotkey is not None:
-                    if winner_hotkey in self.metagraph.hotkeys:
-                        winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
-                        self.scores[winner_idx] += weight
-                        bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
-                    else:
-                        bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
-            except ValueError as e:
-                bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
-                continue
-        
-        bt.logging.debug("Scores from UPDATE_SCORES:")
-        bt.logging.debug(f"{self.scores}")
-        self.save_state()
+                with open(json_path, 'r') as f:
+                    state = json.load(f)
+                self._convert_datetime_strings(state)
+                self.scores = np.array(state['scores'], dtype=np.float32)
+                self.hotkeys = np.array(state['hotkeys'])
+                factory = OrganizationDataReferenceFactory.get_instance()
+                factory.update_from_dict(state['organizations_data_references'])
+                self.organizations_data_references = factory
+                self.org_latest_updates = state['org_latest_updates']
+                self.competition_results_store = CompetitionResultsStore.model_validate(
+                    state['competition_results_store']
+                )
+            except (json.JSONDecodeError, KeyError, TypeError) as e:
+                bt.logging.error(f"Error loading JSON state: {e}")
+                if 'f' in locals() and f:
+                    f.close()
+                    bt.logging.info("Validator state file closed after loading.")
+        else:
+            bt.logging.warning("No state file found. Creating an empty one.")
+            self.create_empty_state()
+            return
+
+        if 'f' in locals() and f:
+            f.close()
+
+    def _convert_datetime_strings(self, state_dict):
+        """Helper method to convert ISO format datetime strings back to datetime objects."""
+        if 'org_latest_updates' in state_dict and state_dict['org_latest_updates']:
+            for org_id, timestamp in state_dict['org_latest_updates'].items():
+                if isinstance(timestamp, str):
+                    state_dict['org_latest_updates'][org_id] = datetime.datetime.fromisoformat(timestamp)
+
+
+
+    
 
 
 if __name__ == "__main__":

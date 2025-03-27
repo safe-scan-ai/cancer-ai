@@ -63,6 +63,7 @@ class WanDBLogBase(BaseModel):
     model_link: str
     competition_id: str
     errors: str = ""
+    run_time: str = ""
 
 class WandBLogModelEntry(WanDBLogBase):
     """Model for logging model evaluation results to WandB.
@@ -87,4 +88,3 @@ class WanDBLogCompetitionWinner(WanDBLogBase):
     log_type: str = "competition_result"
     winning_hotkey: str = ""
     winning_evaluation_hotkey: str = ""  # Used in error case
-    run_time: str = ""  # Used in error case

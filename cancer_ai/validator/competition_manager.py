@@ -107,7 +107,6 @@ class CompetitionManager(SerializableManager):
     async def chain_miner_to_model_info(
         self, chain_miner_model: ChainMinerModel
     ) -> ModelInfo:
-        bt.logging.warning(f"Chain miner model: {chain_miner_model.model_dump()}")
         if chain_miner_model.competition_id != self.competition_id:
             bt.logging.debug(
                 f"Chain miner model {chain_miner_model.to_compressed_str()} does not belong to this competition"

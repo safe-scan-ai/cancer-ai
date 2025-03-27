@@ -75,6 +75,13 @@ class ModelDBController:
             if model_record:
                 return self.convert_db_model_to_chain_model(model_record)
             return None
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error in get_latest_model for hotkey {hotkey}: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
+            # Re-raise the exception to be caught by higher-level error handlers
+            raise
         finally:
             session.close()
 
