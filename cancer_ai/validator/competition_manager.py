@@ -12,6 +12,7 @@ from .model_run_manager import ModelRunManager
 from .exceptions import ModelRunException
 from .model_db import ModelDBController
 
+from cancer_ai.validator.models import WandBLogModelEntry
 from .competition_handlers.melanoma_handler import MelanomaCompetitionHandler
 from .competition_handlers.base_handler import ModelEvaluationResult
 from .tests.mock_data import get_mock_hotkeys_with_models
@@ -91,41 +92,7 @@ class CompetitionManager(SerializableManager):
     def __repr__(self) -> str:
         return f"CompetitionManager<{self.competition_id}>"
 
-    def log_results_to_wandb(
-        self,
-        miner_hotkey: str,
-        validator_hotkey: str,
-        evaluation_result: ModelEvaluationResult,
-    ) -> None:
-        winning_model_link = self.db_controller.get_latest_model(
-            hotkey=miner_hotkey, cutoff_time=self.config.models_query_cutoff
-        ).hf_link
-        wandb.init(project=self.competition_id, group="model_evaluation")
-        # TODO make a data structure
-        wandb.log(
-            {
-                "log_type": "model_results",
-                "competition_id": self.competition_id,
-                "miner_hotkey": miner_hotkey,
-                "validator_hotkey": validator_hotkey,
-                "tested_entries": evaluation_result.tested_entries,
-                "accuracy": evaluation_result.accuracy,
-                "precision": evaluation_result.precision,
-                "fbeta": evaluation_result.fbeta,
-                "recall": evaluation_result.recall,
-                "confusion_matrix": evaluation_result.confusion_matrix,
-                "roc_curve": {
-                    "fpr": evaluation_result.fpr,
-                    "tpr": evaluation_result.tpr,
-                },
-                "model_link": winning_model_link,
-                "roc_auc": evaluation_result.roc_auc,
-                "score": evaluation_result.score,
-            }
-        )
-
-        wandb.finish()
-        bt.logging.info(f"Results: {evaluation_result}")
+    
 
     def get_state(self):
         return {
@@ -237,10 +204,6 @@ class CompetitionManager(SerializableManager):
                 y_test, y_pred, run_time_s
             )
             self.results.append((miner_hotkey, model_result))
-            if not self.test_mode:
-                self.log_results_to_wandb(
-                    miner_hotkey, self.validator_hotkey, model_result
-                )
         if len(self.results) == 0:
             bt.logging.error("No models were able to run")
             return None, None

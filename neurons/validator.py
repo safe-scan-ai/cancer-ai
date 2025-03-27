@@ -29,7 +29,6 @@ import csv
 import bittensor as bt
 import numpy as np
 import wandb
-import requests
 
 from cancer_ai.chain_models_store import ChainModelMetadata
 from cancer_ai.validator.rewarder import CompetitionResultsStore
@@ -44,6 +43,7 @@ from cancer_ai.validator.utils import (
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
+from cancer_ai.validator.models import WandBLogModelEntry, WanDBLogCompetitionWinner
 from huggingface_hub import HfApi
 
 BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"
@@ -63,7 +63,6 @@ class Validator(BaseValidatorNeuron):
         self.last_miners_refresh: float = None
         self.last_monitor_datasets: float = None
 
-        # Create the shared session for hugging face api
         self.hf_api = HfApi()
 
         self.exit_event = exit_event
@@ -155,28 +154,29 @@ class Validator(BaseValidatorNeuron):
             bt.logging.error(f"Error evaluating {data_package.dataset_hf_filename}: {e}")
 
         models_results = competition_manager.results
-        bt.logging.warning("Competition results store before update")
-        bt.logging.warning(self.competition_results_store.model_dump_json())
-        bt.logging.warning("Competition results store after update")
-        bt.logging.warning(self.competition_results_store.model_dump_json())
+        
       
-        # Get the top hotkey for this specific competition
         try:
             top_hotkey = self.competition_results_store.get_top_hotkey(data_package.competition_id)
         except ValueError:
             bt.logging.warning(f"No top hotkey available for competition {data_package.competition_id}")
             top_hotkey = None
         
-        await self.log_results_to_csv(data_package, top_hotkey, models_results)
+        # Enable if you want to have results in CSV for debugging purposes
+        # await self.log_results_to_csv(data_package, top_hotkey, models_results)
 
         bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
 
+        bt.logging.warning("Competition results store before update")
+        bt.logging.warning(self.competition_results_store.model_dump_json())
         competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api)
+        bt.logging.warning("Competition results store after update")
+        bt.logging.warning(self.competition_results_store.model_dump_json())
         self.update_scores(competition_weights)
 
 
     async def monitor_datasets(self):
-        """Monitor datasets references for updates."""
+        """Main validation logic, triggered by new datastes on huggingface"""
         if self.last_monitor_datasets is not None and (
             time.time() - self.last_monitor_datasets
             < self.config.monitor_datasets_interval
@@ -230,35 +230,72 @@ class Validator(BaseValidatorNeuron):
                 wandb.init(
                     reinit=True, project="competition_id", group="competition_evaluation"
                 )
-                wandb.log(
-                    {
-                        "log_type": "competition_result",
-                        "winning_evaluation_hotkey": "",
-                        "run_time": "",
-                        "validator_hotkey": self.wallet.hotkey.ss58_address,
-                        "model_link": winning_model_link,
-                        "errors": str(formatted_traceback),
-                    }
+                
+                error_log = WanDBLogCompetitionWinner(
+                    competition_id=data_package.competition_id,
+                    winning_evaluation_hotkey="",
+                    run_time="",
+                    validator_hotkey=self.wallet.hotkey.ss58_address,
+                    model_link=winning_model_link,
+                    errors=str(formatted_traceback)
                 )
+                wandb.log(error_log.model_dump())
                 wandb.finish()
                 continue
 
             wandb.init(project=data_package.competition_id, group="competition_evaluation")
-            wandb.log(
-                {
-                    "log_type": "competition_result",
-                    "winning_hotkey": winning_hotkey,
-                    "validator_hotkey": self.wallet.hotkey.ss58_address,
-                    "model_link": winning_model_link,
-                    "errors": "",
-                }
+            
+            
+            winner_log = WanDBLogCompetitionWinner(
+                competition_id=data_package.competition_id,
+                winning_hotkey=winning_hotkey,
+                validator_hotkey=self.wallet.hotkey.ss58_address,
+                model_link=winning_model_link,
+                errors=""
             )
+            wandb.log(winner_log.model_dump())
             wandb.finish()
 
             # Update competition results
             bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
             competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api)
             self.update_scores(competition_weights)
+            
+            # Logging results
+            for miner_hotkey, evaluation_result in competition_manager.results:
+                # Get the model link
+                model_link = self.db_controller.get_latest_model(
+                    hotkey=miner_hotkey, cutoff_time=self.config.models_query_cutoff
+                ).hf_link
+                
+                avg_score = 0.0
+                if (data_package.competition_id in self.competition_results_store.average_scores and 
+                    miner_hotkey in self.competition_results_store.average_scores[data_package.competition_id]):
+                    avg_score = self.competition_results_store.average_scores[data_package.competition_id][miner_hotkey]
+                
+                # Initialize WandB for this model evaluation
+                wandb.init(project=data_package.competition_id, group="model_evaluation", reinit=True)
+                model_log = WandBLogModelEntry(
+                    competition_id=data_package.competition_id,
+                    miner_hotkey=miner_hotkey,
+                    validator_hotkey=self.wallet.hotkey.ss58_address,
+                    tested_entries=evaluation_result.tested_entries,
+                    accuracy=evaluation_result.accuracy,
+                    precision=evaluation_result.precision,
+                    fbeta=evaluation_result.fbeta,
+                    recall=evaluation_result.recall,
+                    confusion_matrix=evaluation_result.confusion_matrix,
+                    roc_curve={
+                        "fpr": evaluation_result.fpr,
+                        "tpr": evaluation_result.tpr,
+                    },
+                    model_link=model_link,
+                    roc_auc=evaluation_result.roc_auc,
+                    score=evaluation_result.score,
+                    average_score=avg_score
+                )
+                wandb.log(model_log.model_dump())
+                wandb.finish()
 
 
     async def log_results_to_csv(self, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
@@ -271,7 +308,6 @@ class Validator(BaseValidatorNeuron):
                 writer.writerow(["Package name", "Date", "Hotkey", "Score", "Average","Winner"])
             competition_id = data_package.competition_id
             for hotkey, model_result in models_results:
-                # Get average score if available, otherwise use 0.0
                 avg_score = 0.0
                 if (competition_id in self.competition_results_store.average_scores and 
                     hotkey in self.competition_results_store.average_scores[competition_id]):
@@ -329,7 +365,6 @@ class Validator(BaseValidatorNeuron):
             self.create_empty_state()
 
         try:
-            # Load the state of the validator from file.
             state = np.load(
                 self.config.neuron.full_path + "/state.npz", allow_pickle=True
             )
@@ -353,16 +388,12 @@ class Validator(BaseValidatorNeuron):
         """Update scores based on competition weights."""
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
         
-        # Iterate over competitions and set scores for each according to their weights
         for competition_id, weight in competition_weights.items():
             try:
-                # Map winning hotkey to self.rewards
                 winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
                 if winner_hotkey is not None:
-                    # Find the index of the winning hotkey
                     if winner_hotkey in self.metagraph.hotkeys:
                         winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
-                        # Apply the weight from the competition_weights mapping
                         self.scores[winner_idx] += weight
                         bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
                     else:
@@ -374,13 +405,11 @@ class Validator(BaseValidatorNeuron):
         self.save_state()
 
 
-# The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
     bt.logging.info("Setting up main thread interrupt handle.")
     exit_event = threading.Event()
     with Validator(exit_event=exit_event) as validator:
         while True:
-            # bt.logging.info(f"Validator running... {time.time()}")
             time.sleep(5)
             if exit_event.is_set():
                 bt.logging.info("Exit event received. Shutting down...")

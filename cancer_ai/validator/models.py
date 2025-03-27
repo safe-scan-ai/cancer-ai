@@ -56,12 +56,35 @@ class NewDatasetFile(BaseModel):
 
 
 
-# TODO
 class WanDBLogBase(BaseModel):
-    pass
+    """Base class for WandB log entries."""
+    log_type: str
+    validator_hotkey: str
+    model_link: str
+    competition_id: str
+    errors: str = ""
 
 class WandBLogModelEntry(WanDBLogBase):
-    pass
+    """Model for logging model evaluation results to WandB.
+    """
+    log_type: str = "model_results"
+    miner_hotkey: str
+    tested_entries: int
+    accuracy: float
+    precision: float
+    fbeta: float
+    recall: float
+    confusion_matrix: list
+    roc_curve: dict
+    roc_auc: float
+    score: float
+    average_score: float = 0.0
 
 class WanDBLogCompetitionWinner(WanDBLogBase):
-    pass
+    """Model for logging competition winners to WandB.
+    Used in validator.py for logging competition evaluation results.
+    """
+    log_type: str = "competition_result"
+    winning_hotkey: str = ""
+    winning_evaluation_hotkey: str = ""  # Used in error case
+    run_time: str = ""  # Used in error case
