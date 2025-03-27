@@ -66,23 +66,22 @@ class ModelDBController:
         bt.logging.debug(f"Getting latest DB model for hotkey {hotkey}")
         session = self.Session()
         try:
-            try:
-                model_record = (
-                    session.query(ChainMinerModelDB)
-                    .filter(ChainMinerModelDB.hotkey == hotkey)
-                    .order_by(ChainMinerModelDB.date_submitted.desc())
-                    .first()
-                )
-                if model_record:
-                    return self.convert_db_model_to_chain_model(model_record)
-                return None
-            except Exception as e:
-                import traceback
-                stack_trace = traceback.format_exc()
-                bt.logging.error(f"Error in get_latest_model for hotkey {hotkey}: {e}")
-                bt.logging.error(f"Stack trace: {stack_trace}")
-                # Re-raise the exception to be caught by higher-level error handlers
-                raise
+            model_record = (
+                session.query(ChainMinerModelDB)
+                .filter(ChainMinerModelDB.hotkey == hotkey)
+                .order_by(ChainMinerModelDB.date_submitted.desc())
+                .first()
+            )
+            if model_record:
+                return self.convert_db_model_to_chain_model(model_record)
+            return None
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error in get_latest_model for hotkey {hotkey}: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
+            # Re-raise the exception to be caught by higher-level error handlers
+            raise
         finally:
             session.close()
 
