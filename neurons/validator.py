@@ -68,16 +68,44 @@ class Validator(BaseValidatorNeuron):
         self.exit_event = exit_event
 
     async def concurrent_forward(self):
-
-        coroutines = [
-            self.refresh_miners(),
-        ]
-        if self.config.filesystem_evaluation:
-            coroutines.append(self.filesystem_test_evaluation())
-        else:
-            coroutines.append(self.monitor_datasets())
-    
-        await asyncio.gather(*coroutines)
+        try:
+            bt.logging.info("Starting concurrent_forward execution")
+            coroutines = [
+                self.refresh_miners(),
+            ]
+            
+            if self.config.filesystem_evaluation:
+                bt.logging.info("Adding filesystem_test_evaluation to coroutines")
+                coroutines.append(self.filesystem_test_evaluation())
+            else:
+                bt.logging.info("Adding monitor_datasets to coroutines")
+                coroutines.append(self.monitor_datasets())
+        
+            bt.logging.info(f"Executing {len(coroutines)} coroutines with asyncio.gather")
+            try:
+                await asyncio.gather(*coroutines)
+                bt.logging.info("Successfully completed all coroutines in concurrent_forward")
+            except Exception as e:
+                import traceback
+                stack_trace = traceback.format_exc()
+                bt.logging.error(f"Error during asyncio.gather in concurrent_forward: {e}")
+                bt.logging.error(f"Stack trace from asyncio.gather:\n{stack_trace}")
+                raise  # Re-raise to be caught by the outer try-except
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"CRITICAL ERROR in concurrent_forward: {e}")
+            bt.logging.error(f"Error type: {type(e).__name__}")
+            bt.logging.error(f"Stack trace from concurrent_forward:\n{stack_trace}")
+            
+            # Log additional context
+            bt.logging.error(f"Validator state when error occurred:")
+            bt.logging.error(f"- Last miners refresh: {self.last_miners_refresh}")
+            bt.logging.error(f"- Last monitor datasets: {self.last_monitor_datasets}")
+            bt.logging.error(f"- Current time: {time.time()}")
+            
+            # Re-raise to be caught by the base validator's run method
+            raise
 
 
 
@@ -177,43 +205,68 @@ class Validator(BaseValidatorNeuron):
 
     async def monitor_datasets(self):
         """Main validation logic, triggered by new datastes on huggingface"""
-        if self.last_monitor_datasets is not None and (
-            time.time() - self.last_monitor_datasets
-            < self.config.monitor_datasets_interval
-        ):
+        try:
+            if self.last_monitor_datasets is not None and (
+                time.time() - self.last_monitor_datasets
+                < self.config.monitor_datasets_interval
+            ):
+                return
+            self.last_monitor_datasets = time.time()
+
+            bt.logging.info("Starting monitor_datasets")
+            yaml_data = await fetch_organization_data_references(
+                self.config.datasets_config_hf_repo_id,
+                self.hf_api,
+                )        
+                
+            await sync_organizations_data_references(yaml_data)
+            self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+            self.save_state()
+            bt.logging.info("Fetched and synced organization data references")
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error in monitor_datasets initial setup: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
             return
-        self.last_monitor_datasets = time.time()
 
-        yaml_data = await fetch_organization_data_references(
-            self.config.datasets_config_hf_repo_id,
-            self.hf_api,
-            )        
+        try:
+            list_of_new_data_packages: list[NewDatasetFile] = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+            self.save_state()
+
+            if not list_of_new_data_packages:
+                bt.logging.info("No new data packages found.")
+                return
             
-        await sync_organizations_data_references(yaml_data)
-        self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-        self.save_state()
-
-        list_of_new_data_packages: list[NewDatasetFile] = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
-        self.save_state()
-
-        if not list_of_new_data_packages:
-            bt.logging.info("No new data packages found.")
+            bt.logging.info(f"Found {len(list_of_new_data_packages)} new data packages")
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error checking for new dataset files: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
             return
         
         for data_package in list_of_new_data_packages:
-            bt.logging.info(f"New data packages found. Starting competition for {data_package.competition_id}")
-            competition_manager = CompetitionManager(
-                config=self.config,
-                subtensor=self.subtensor,
-                hotkeys=self.hotkeys,
-                validator_hotkey=self.hotkey,
-                competition_id=data_package.competition_id,
-                dataset_hf_repo=data_package.dataset_hf_repo,
-                dataset_hf_filename=data_package.dataset_hf_filename,
-                dataset_hf_repo_type="dataset",
-                db_controller = self.db_controller,
-                test_mode = self.config.test_mode,
-            )
+            try:
+                bt.logging.info(f"Starting competition for {data_package.competition_id}")
+                competition_manager = CompetitionManager(
+                    config=self.config,
+                    subtensor=self.subtensor,
+                    hotkeys=self.hotkeys,
+                    validator_hotkey=self.hotkey,
+                    competition_id=data_package.competition_id,
+                    dataset_hf_repo=data_package.dataset_hf_repo,
+                    dataset_hf_filename=data_package.dataset_hf_filename,
+                    dataset_hf_repo_type="dataset",
+                    db_controller = self.db_controller,
+                    test_mode = self.config.test_mode,
+                )
+            except Exception as e:
+                import traceback
+                stack_trace = traceback.format_exc()
+                bt.logging.error(f"Error creating competition manager for {data_package.competition_id}: {e}")
+                bt.logging.error(f"Stack trace: {stack_trace}")
+                continue
             winning_hotkey = None
             winning_model_link = None
             try:

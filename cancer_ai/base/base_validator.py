@@ -167,9 +167,22 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # In case of unforeseen errors, the validator will log the error and continue operations.
         except Exception as err:
-            bt.logging.error(f"Error during validation: {str(err)}")
-            bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
+            bt.logging.error(f"VALIDATOR FAILURE: Error during validation: {str(err)}")
+            bt.logging.error(f"Error type: {type(err).__name__}")
+            bt.logging.error(f"Error occurred in method: {self.concurrent_forward.__name__}")
+            bt.logging.error(f"Current step: {self.step}")
+            
+            # Log the full stack trace
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Full stack trace:\n{stack_trace}")
+            bt.logging.error(str(print_exception(type(err), err, err.__traceback__)))
+            
+            # Log additional context information
+            bt.logging.error(f"Validator state: running={self.is_running}, should_exit={self.should_exit}")
+            
             if self.exit_event:
+                bt.logging.error("Setting exit event and terminating validator")
                 self.exit_event.set()
             sys.exit(1)
 
