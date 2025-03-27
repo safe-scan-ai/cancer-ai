@@ -412,10 +412,8 @@ class Validator(BaseValidatorNeuron):
         try:
             with open(state_path, 'w') as f:
                 json.dump(state_dict, f, indent=2, cls=self.DateTimeEncoder)
-                bt.logging.info("Validator state written to file.")
                 f.flush()
                 f.close()
-                bt.logging.info("Validator state file closed.")
         except TypeError as e:
             bt.logging.error(f"Error serializing state to JSON: {e}", exc_info=True)
             for key, value in state_dict.items():
@@ -428,7 +426,6 @@ class Validator(BaseValidatorNeuron):
             if 'f' in locals() and f:
                 f.flush()
                 f.close()
-                bt.logging.info("Validator state file closed.")
     
     def create_empty_state(self):
         """Creates an empty state file."""
@@ -476,7 +473,6 @@ class Validator(BaseValidatorNeuron):
 
         if 'f' in locals() and f:
             f.close()
-            bt.logging.info("Validator state file closed after loading.")
 
     def _convert_datetime_strings(self, state_dict):
         """Helper method to convert ISO format datetime strings back to datetime objects."""
