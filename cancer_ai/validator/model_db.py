@@ -40,14 +40,14 @@ class ModelDBController:
                 model_record = self.convert_chain_model_to_db_model(chain_miner_model, hotkey)
                 session.add(model_record)
                 session.commit()
-                bt.logging.debug(f"Successfully added model info for hotkey {hotkey} into the DB.")
+                bt.logging.debug(f"Successfully added DB model info for hotkey {hotkey} into the DB.")
             except Exception as e:
                 session.rollback()
                 raise e
             finally:
                 session.close()
         else:
-            bt.logging.debug(f"Model for hotkey {hotkey} already exists, proceeding with updating the model info.")
+            bt.logging.debug(f"DB model for hotkey {hotkey} already exists, proceeding with updating the model info.")
             self.update_model(chain_miner_model, hotkey)
 
     def get_model(self, hotkey: str) -> ChainMinerModel | None:
@@ -63,14 +63,12 @@ class ModelDBController:
             session.close()
 
     def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel | None:
-        bt.logging.debug(f"Getting latest model for hotkey {hotkey} with cutoff time {cutoff_time}")
-        # cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
+        bt.logging.debug(f"Getting latest DB model for hotkey {hotkey}")
         session = self.Session()
         try:
             model_record = (
                 session.query(ChainMinerModelDB)
                 .filter(ChainMinerModelDB.hotkey == hotkey)
-                # .filter(ChainMinerModelDB.date_submitted < cutoff_time)
                 .order_by(ChainMinerModelDB.date_submitted.desc())
                 .first()
             )
@@ -112,15 +110,15 @@ class ModelDBController:
                 existing_model.hf_code_filename = chain_miner_model.hf_code_filename
 
                 session.commit()
-                bt.logging.debug(f"Successfully updated model for hotkey {hotkey}.")
+                bt.logging.debug(f"Successfully updated DB model for hotkey {hotkey}.")
                 return True
             else:
-                bt.logging.debug(f"No existing model found for hotkey {hotkey}. Update skipped.")
+                bt.logging.debug(f"No existing DB model found for hotkey {hotkey}. Update skipped.")
                 return False
 
         except Exception as e:
             session.rollback()
-            bt.logging.error(f"Error updating model for hotkey {hotkey} and date {date_submitted}: {e}")
+            bt.logging.error(f"Error updating DB model for hotkey {hotkey}: {e}")
             raise e
         finally:
             session.close()
@@ -178,7 +176,7 @@ class ModelDBController:
             session.commit()
         except Exception as e:
             session.rollback()
-            bt.logging.error(f"Error deleting records for hotkeys not in list: {e}")
+            bt.logging.error(f"Error deleting DB records for hotkeys not in list: {e}")
 
         finally:
             session.close()

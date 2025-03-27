@@ -223,7 +223,7 @@ class Validator(BaseValidatorNeuron):
                 if not winning_hotkey:
                     continue
 
-                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=self.config.models_query_cutoff).hf_link
+                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey).hf_link
             except Exception:
                 formatted_traceback = traceback.format_exc()
                 bt.logging.error(f"Error running competition: {formatted_traceback}")
@@ -264,9 +264,10 @@ class Validator(BaseValidatorNeuron):
             # Logging results
             for miner_hotkey, evaluation_result in competition_manager.results:
                 # Get the model link
-                model_link = self.db_controller.get_latest_model(
-                    hotkey=miner_hotkey, cutoff_time=self.config.models_query_cutoff
-                ).hf_link
+                model = self.db_controller.get_latest_model(
+                    hotkey=miner_hotkey
+                )
+                model_link = model.hf_link if model is not None else None
                 
                 avg_score = 0.0
                 if (data_package.competition_id in self.competition_results_store.average_scores and 
@@ -400,8 +401,10 @@ class Validator(BaseValidatorNeuron):
                         bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
             except ValueError as e:
                 bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
-        bt.logging.warning("Scores from UPDATE_SCORES: ")
-        bt.logging.warning(self.scores)
+                continue
+        
+        bt.logging.debug("Scores from UPDATE_SCORES:")
+        bt.logging.debug(f"{self.scores}")
         self.save_state()
 
 
