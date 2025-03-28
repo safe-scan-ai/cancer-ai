@@ -133,14 +133,6 @@ class ModelManager(SerializableManager):
             
         return False, file_date
         
-    async def get_newest_saved_model_date(self, hotkey):
-        """Fetches the newest saved model's date for a given hotkey from the local database."""
-        newest_saved_model = self.db_controller.get_latest_model(hotkey, self.config.models_query_cutoff)
-        if not newest_saved_model:
-            bt.logging.error(f"Failed to get latest model from local DB for hotkey {hotkey}")
-            return None
-        return self.db_controller.get_block_timestamp(newest_saved_model.block)
-
 
     def add_model(
         self,

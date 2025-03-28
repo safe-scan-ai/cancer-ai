@@ -19,6 +19,7 @@
 
 from abc import abstractmethod
 
+import sys
 import copy
 import numpy as np
 import asyncio
@@ -37,7 +38,7 @@ from .utils.weight_utils import (
 from ..mock import MockDendrite
 from ..utils.config import add_validator_args
 
-from cancer_ai.validator.rewarder import CompetitionWinnersStore
+from cancer_ai.validator.rewarder import CompetitionResultsStore
 from cancer_ai.validator.models import OrganizationDataReferenceFactory
 from .. import __spec_version__ as spec_version
 
@@ -54,7 +55,7 @@ class BaseValidatorNeuron(BaseNeuron):
         super().add_args(parser)
         add_validator_args(cls, parser)
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, exit_event: threading.Event = None):
         super().__init__(config=config)
 
         # Save a copy of the hotkeys to local memory.
@@ -70,10 +71,8 @@ class BaseValidatorNeuron(BaseNeuron):
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
-        self.winners_store = CompetitionWinnersStore(
-            competition_leader_map={}, hotkey_score_map={}
-        )
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+        self.competition_results_store = CompetitionResultsStore()
         self.org_latest_updates = {}
         self.load_state()
         # Init sync with the network. Updates the metagraph.
@@ -93,6 +92,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: Union[threading.Thread, None] = None
         self.lock = asyncio.Lock()
+        self.exit_event = exit_event
 
     def serve_axon(self):
         """Serve axon to enable external connections."""
@@ -167,38 +167,73 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # In case of unforeseen errors, the validator will log the error and continue operations.
         except Exception as err:
-            bt.logging.error(f"Error during validation: {str(err)}")
-            bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
+            bt.logging.error(f"VALIDATOR FAILURE: Error during validation: {str(err)}")
+            bt.logging.error(f"Error type: {type(err).__name__}")
+            bt.logging.error(f"Error occurred in method: {self.concurrent_forward.__name__}")
+            bt.logging.error(f"Current step: {self.step}")
+            
+            # Log the full stack trace
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Full stack trace:\n{stack_trace}")
+            bt.logging.error(str(print_exception(type(err), err, err.__traceback__)))
+            
+            # Log additional context information
+            bt.logging.error(f"Validator state: running={self.is_running}, should_exit={self.should_exit}")
+            
+            if self.exit_event:
+                bt.logging.error("Setting exit event and terminating validator")
+                self.exit_event.set()
+            sys.exit(1)
 
     def run_in_background_thread(self):
         """
         Starts the validator's operations in a background thread upon entering the context.
         This method facilitates the use of the validator in a 'with' statement.
         """
+        bt.logging.info(f"run_in_background_thread called with is_running={self.is_running}")
+        
+        # Get the current call stack to see what's calling run_in_background_thread
+        import traceback
+        stack_trace = traceback.format_stack()
+        bt.logging.info(f"Call stack for run_in_background_thread:\n{''.join(stack_trace)}")
+        
         if not self.is_running:
-            bt.logging.debug("Starting validator in background thread.")
+            bt.logging.info("Starting validator in background thread.")
             self.should_exit = False
+            bt.logging.info(f"Set should_exit to {self.should_exit}, creating thread")
             self.thread = threading.Thread(target=self.run, daemon=True)
+            bt.logging.info(f"Starting thread with daemon={self.thread.daemon}")
             self.thread.start()
             self.is_running = True
-            bt.logging.debug("Started")
+            bt.logging.info(f"Thread started, set is_running to {self.is_running}")
+            bt.logging.info("Validator started successfully in background thread")
+        else:
+            bt.logging.warning("Attempted to start validator that is already running")
 
     def stop_run_thread(self):
         """
         Stops the validator's operations that are running in the background thread.
         """
+        bt.logging.info(f"stop_run_thread called with is_running={self.is_running}")
+        import traceback
+        stack_trace = traceback.format_stack()
+        bt.logging.info(f"Call stack for stop_run_thread:\n{''.join(stack_trace)}")
+        
         if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
+            bt.logging.info("Stopping validator in background thread.")
             self.should_exit = True
+            bt.logging.info(f"Set should_exit to {self.should_exit}, joining thread")
             self.thread.join(5)
             self.is_running = False
-            bt.logging.debug("Stopped")
+            bt.logging.info(f"Thread joined, set is_running to {self.is_running}")
+            bt.logging.info("Validator stopped successfully")
 
     def __enter__(self):
         self.run_in_background_thread()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback_obj):
         """
         Stops the validator's background operations upon exiting the context.
         This method facilitates the use of the validator in a 'with' statement.
@@ -208,15 +243,30 @@ class BaseValidatorNeuron(BaseNeuron):
                       None if the context was exited without an exception.
             exc_value: The instance of the exception that caused the context to be exited.
                        None if the context was exited without an exception.
-            traceback: A traceback object encoding the stack trace.
+            traceback_obj: A traceback object encoding the stack trace.
                        None if the context was exited without an exception.
         """
+        bt.logging.info(f"__exit__ called with exc_type={exc_type}, exc_value={exc_value}")
+        
+        # Get the current call stack to see what's calling __exit__
+        import traceback
+        stack_trace = traceback.format_stack()
+        bt.logging.info(f"Call stack for __exit__:\n{''.join(stack_trace)}")
+        
+        # If there's an exception, log it
+        if exc_type is not None:
+            bt.logging.error(f"Exception in context: {exc_type.__name__}: {exc_value}")
+            if traceback_obj:
+                bt.logging.error(f"Exception traceback: {''.join(traceback.format_tb(traceback_obj))}")
+        
         if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
+            bt.logging.info("Stopping validator in background thread from __exit__ method.")
             self.should_exit = True
+            bt.logging.info(f"Set should_exit to {self.should_exit}, joining thread")
             self.thread.join(5)
             self.is_running = False
-            bt.logging.debug("Stopped")
+            bt.logging.info(f"Thread joined, set is_running to {self.is_running}")
+            bt.logging.info("Validator stopped successfully from __exit__ method")
 
     def set_weights(self):
         """
@@ -266,6 +316,12 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         bt.logging.debug("uint_weights", uint_weights)
         bt.logging.debug("uint_uids", uint_uids)
+
+        # test mode, don't commit weights
+        if self.config.filesystem_evaluation:
+            bt.logging.debug("Skipping settings weights in filesystem evaluation mode")
+            return
+        
 
         # Set the weights on chain via our subtensor connection.
         result, msg = self.subtensor.set_weights(

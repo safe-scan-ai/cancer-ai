@@ -114,9 +114,6 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                 input_data = {input_name: input_batch}
                 chunk_results = session.run(None, input_data)[0]
                 results.extend(chunk_results)
-            except onnxruntime.OnnxRuntimeException:
-                error_counter['InferenceError'] += 1
-                continue  # Skip this batch
             except Exception:
                 error_counter['UnexpectedInferenceError'] += 1
                 continue  # Skip this batch

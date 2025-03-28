@@ -53,3 +53,38 @@ class NewDatasetFile(BaseModel):
     competition_id: str = Field(..., min_length=1, description="Competition identifier")
     dataset_hf_repo: str = Field(..., min_length=1, description="Hugging Face repository path for the dataset")
     dataset_hf_filename: str = Field(..., min_length=1, description="Filename for the dataset in the repository")
+
+
+
+class WanDBLogBase(BaseModel):
+    """Base class for WandB log entries."""
+    log_type: str
+    validator_hotkey: str
+    model_link: str
+    competition_id: str
+    errors: str = ""
+    run_time: str = ""
+
+class WandBLogModelEntry(WanDBLogBase):
+    """Model for logging model evaluation results to WandB.
+    """
+    log_type: str = "model_results"
+    miner_hotkey: str
+    tested_entries: int
+    accuracy: float
+    precision: float
+    fbeta: float
+    recall: float
+    confusion_matrix: list
+    roc_curve: dict
+    roc_auc: float
+    score: float
+    average_score: float = 0.0
+
+class WanDBLogCompetitionWinner(WanDBLogBase):
+    """Model for logging competition winners to WandB.
+    Used in validator.py for logging competition evaluation results.
+    """
+    log_type: str = "competition_result"
+    winning_hotkey: str = ""
+    winning_evaluation_hotkey: str = ""  # Used in error case

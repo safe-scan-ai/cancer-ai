@@ -121,12 +121,11 @@ class BaseNeuron(ABC):
                 if self.should_sync_metagraph() or force_sync:
                     bt.logging.info("Resyncing metagraph in progress.")
                     self.resync_metagraph(force_sync=True)
+                    self.save_state()
 
                 if self.should_set_weights():
                     self.set_weights()
-
-                # Always save state.
-                self.save_state()
+                    self.save_state()
 
                 break
 

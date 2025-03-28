@@ -26,8 +26,7 @@ class ChainMinerModelDB(Base):
     )
 
 class ModelDBController:
-    def __init__(self, subtensor: bt.subtensor, db_path: str = "models.db"):
-        self.subtensor = subtensor
+    def __init__(self, db_path: str = "models.db"):
         db_url = f"sqlite:///{os.path.abspath(db_path)}"
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
@@ -35,21 +34,20 @@ class ModelDBController:
     
     def add_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
         session = self.Session()
-        # date_submitted = self.get_block_timestamp(chain_miner_model.block)
         existing_model = self.get_model(hotkey)
         if not existing_model:
             try:
                 model_record = self.convert_chain_model_to_db_model(chain_miner_model, hotkey)
                 session.add(model_record)
                 session.commit()
-                bt.logging.debug(f"Successfully added model info for hotkey {hotkey} into the DB.")
+                bt.logging.debug(f"Successfully added DB model info for hotkey {hotkey} into the DB.")
             except Exception as e:
                 session.rollback()
                 raise e
             finally:
                 session.close()
         else:
-            bt.logging.debug(f"Model for hotkey {hotkey} already exists, proceeding with updating the model info.")
+            bt.logging.debug(f"DB model for hotkey {hotkey} already exists, proceeding with updating the model info.")
             self.update_model(chain_miner_model, hotkey)
 
     def get_model(self, hotkey: str) -> ChainMinerModel | None:
@@ -65,20 +63,25 @@ class ModelDBController:
             session.close()
 
     def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel | None:
-        bt.logging.debug(f"Getting latest model for hotkey {hotkey} with cutoff time {cutoff_time}")
-        # cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
+        bt.logging.debug(f"Getting latest DB model for hotkey {hotkey}")
         session = self.Session()
         try:
             model_record = (
                 session.query(ChainMinerModelDB)
                 .filter(ChainMinerModelDB.hotkey == hotkey)
-                # .filter(ChainMinerModelDB.date_submitted < cutoff_time)
                 .order_by(ChainMinerModelDB.date_submitted.desc())
                 .first()
             )
             if model_record:
                 return self.convert_db_model_to_chain_model(model_record)
             return None
+        except Exception as e:
+            import traceback
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Error in get_latest_model for hotkey {hotkey}: {e}")
+            bt.logging.error(f"Stack trace: {stack_trace}")
+            # Re-raise the exception to be caught by higher-level error handlers
+            raise
         finally:
             session.close()
 
@@ -102,7 +105,6 @@ class ModelDBController:
     def update_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
         session = self.Session()
         try:
-            # date_submitted = self.get_block_timestamp(chain_miner_model.block)
             existing_model = session.query(ChainMinerModelDB).filter_by(
                 hotkey=hotkey
             ).first()
@@ -113,55 +115,21 @@ class ModelDBController:
                 existing_model.hf_model_filename = chain_miner_model.hf_model_filename
                 existing_model.hf_repo_type = chain_miner_model.hf_repo_type
                 existing_model.hf_code_filename = chain_miner_model.hf_code_filename
-                # existing_model.block = chain_miner_model.block
-                # existing_model.date_submitted = date_submitted
 
                 session.commit()
-                bt.logging.debug(f"Successfully updated model for hotkey {hotkey}.")
+                bt.logging.debug(f"Successfully updated DB model for hotkey {hotkey}.")
                 return True
             else:
-                bt.logging.debug(f"No existing model found for hotkey {hotkey}. Update skipped.")
+                bt.logging.debug(f"No existing DB model found for hotkey {hotkey}. Update skipped.")
                 return False
 
         except Exception as e:
             session.rollback()
-            bt.logging.error(f"Error updating model for hotkey {hotkey} and date {date_submitted}: {e}")
+            bt.logging.error(f"Error updating DB model for hotkey {hotkey}: {e}")
             raise e
         finally:
             session.close()
 
-    def get_block_timestamp(self, block_number):
-        """Gets the timestamp of a block given its number."""
-        try:
-            # Identify if the connected subtensor is testnet based on the chain endpoint
-            is_testnet = "test" in self.subtensor.chain_endpoint.lower()
-
-            # Use the correct subtensor (archive for mainnet, normal for testnet)
-            if is_testnet:
-                block_hash = self.subtensor.get_block_hash(block_number)
-            else:
-                archive_subtensor = bt.subtensor(network="archive")
-                block_hash = archive_subtensor.get_block_hash(block_number)
-
-            if block_hash is None:
-                raise ValueError(f"Block hash not found for block number {block_number}")
-
-            timestamp_info = self.subtensor.substrate.query(
-                module="Timestamp",
-                storage_function="Now",
-                block_hash=block_hash
-            )
-
-            if timestamp_info is None:
-                raise ValueError(f"Timestamp not found for block hash {block_hash}")
-
-            timestamp_ms = timestamp_info.value
-            block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0)
-
-            return block_datetime
-        except Exception as e:
-            bt.logging.error(f"Error retrieving block timestamp: {e}")
-            raise
 
     def get_latest_models(self, hotkeys: list[str], competition_id: str) -> dict[str, ChainMinerModel]:
         # cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
@@ -215,7 +183,7 @@ class ModelDBController:
             session.commit()
         except Exception as e:
             session.rollback()
-            bt.logging.error(f"Error deleting records for hotkeys not in list: {e}")
+            bt.logging.error(f"Error deleting DB records for hotkeys not in list: {e}")
 
         finally:
             session.close()

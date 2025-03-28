@@ -14,8 +14,10 @@ filename = "test_filename"
 
 @pytest.fixture
 def model_manager() -> ModelManager:
-    config_obj = SimpleNamespace(**{"model_dir": "/tmp/models"})
-    return ModelManager(config=config_obj)
+    config_obj = SimpleNamespace(**{"model_dir": "/tmp/models", "models": SimpleNamespace(**{"model_dir": "/tmp/models"})})
+    # Create a mock db_controller
+    db_controller = MagicMock()
+    return ModelManager(config=config_obj, db_controller=db_controller)
 
 
 def test_add_model(model_manager: ModelManager) -> None:
@@ -29,13 +31,6 @@ def test_add_model(model_manager: ModelManager) -> None:
 def test_delete_model(model_manager: ModelManager) -> None:
     model_manager.add_model(hotkey, repo_id, filename)
     model_manager.delete_model(hotkey)
-
-    assert hotkey not in model_manager.get_state()
-
-
-def test_sync_hotkeys(model_manager: ModelManager):
-    model_manager.add_model(hotkey, repo_id, filename)
-    model_manager.sync_hotkeys([])
 
     assert hotkey not in model_manager.get_state()
 
