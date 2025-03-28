@@ -10,9 +10,19 @@ from . import BaseRunnerHandler
 
 class OnnxRunnerHandler(BaseRunnerHandler):
     async def get_chunk_of_data(
-        self, X_test: List, chunk_size: int, error_counter: defaultdict
+        self, X_test: List, chunk_size: int, error_counter: defaultdict, preprocessed_images=None
     ) -> AsyncGenerator[List, None]:
         """Opens images using PIL and yields a chunk of them while aggregating errors."""
+        # If preprocessed images are provided, use them directly
+        if preprocessed_images is not None:
+            bt.logging.debug(f"Using {len(preprocessed_images)} pre-processed images")
+            for i in range(0, len(preprocessed_images), chunk_size):
+                chunk = preprocessed_images[i:i + chunk_size]
+                if chunk:
+                    yield chunk
+            return
+            
+        # Otherwise, load and process images from disk
         import PIL.Image as Image
 
         for i in range(0, len(X_test), chunk_size):
@@ -50,6 +60,57 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                 continue  # Skip this chunk if preprocessing fails
 
             yield chunk
+            
+    @staticmethod
+    async def preprocess_images(X_test: List, chunk_size: int = 200) -> List:
+        """Static method to preprocess all images at once for caching.
+        
+        This method can be called once per competition to preprocess all images,
+        and the results can be reused for multiple model evaluations.
+        """
+        import PIL.Image as Image
+        processed_images = []
+        error_counter = defaultdict(int)
+        
+        bt.logging.info(f"Pre-processing {len(X_test)} images for caching")
+        
+        for img_path in X_test:
+            try:
+                if not os.path.isfile(img_path):
+                    error_counter['FileNotFoundError'] += 1
+                    continue
+
+                with Image.open(img_path) as img:
+                    img = img.convert('RGB')  # Ensure image is in RGB
+                    img_copy = img.copy()  # Copy to avoid issues after closing
+                    
+                # Preprocess the image
+                target_size = (224, 224)  # Standard size
+                img_copy = img_copy.resize(target_size)
+                img_array = np.array(img_copy, dtype=np.float32) / 255.0
+                if img_array.ndim == 2:  # Grayscale image
+                    img_array = np.stack((img_array,) * 3, axis=-1)
+                elif img_array.shape[-1] != 3:
+                    error_counter['InvalidChannels'] += 1
+                    continue
+
+                img_array = np.transpose(img_array, (2, 0, 1))  # Transpose to (C, H, W)
+                processed_images.append(img_array)
+                
+            except Exception as e:
+                error_counter['ProcessingError'] += 1
+                bt.logging.debug(f"Error processing image {img_path}: {e}")
+                continue
+        
+        if error_counter:
+            error_summary = []
+            for error_type, count in error_counter.items():
+                error_summary.append(f"{count} {error_type.replace('_', ' ')}(s)")
+            summary_message = "; ".join(error_summary)
+            bt.logging.info(f"Image preprocessing completed with issues: {summary_message}")
+            
+        bt.logging.info(f"Successfully pre-processed {len(processed_images)} images")
+        return processed_images
 
     def preprocess_data(self, X_test: List) -> List:
         new_X_test = []
@@ -85,7 +146,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
 
         return new_X_test
 
-    async def run(self, X_test: List) -> List:
+    async def run(self, X_test: List, preprocessed_images=None) -> List:
         import onnxruntime
 
         error_counter = defaultdict(int)  # Initialize error counters
@@ -99,7 +160,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
 
         results = []
 
-        async for chunk in self.get_chunk_of_data(X_test, chunk_size=200, error_counter=error_counter):
+        async for chunk in self.get_chunk_of_data(X_test, chunk_size=200, error_counter=error_counter, preprocessed_images=preprocessed_images):
             try:
                 input_batch = np.stack(chunk, axis=0)
             except ValueError:
