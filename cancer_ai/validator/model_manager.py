@@ -60,7 +60,7 @@ class ModelManager(SerializableManager):
         # Find the specific file and its upload date
         file_date = None
         for file in files:
-            if file['name'] == repo_path:
+            if file["name"].endswith(model_info.hf_model_filename):
                 # Extract the upload date
                 file_date = file["last_commit"]["date"]
                 break
