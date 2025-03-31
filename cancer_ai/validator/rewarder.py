@@ -46,13 +46,14 @@ class CompetitionResultsStore(BaseModel):
         )
 
         # Sort by date and keep only the last HISTORY_LENGTH scores
-        self.score_map[competition_id][hotkey].sort(key=lambda x: x.date, reverse=True)
+        self.score_map[competition_id][hotkey].sort(key=lambda x: x.date)
         if len(self.score_map[competition_id][hotkey]) > HISTORY_LENGTH:
-            self.score_map[competition_id][hotkey] = self.score_map[competition_id][hotkey][-HISTORY_LENGTH:]
+            # remove the oldest one
+            self.score_map[competition_id][hotkey] = self.score_map[competition_id][hotkey][1:]
 
         self.update_average_score(competition_id, hotkey)
 
-    def update_average_score(self, competition_id: str, hotkey: Hotkey):
+    def update_average_score(self, competition_id: str, hotkey: Hotkey) -> None:
         """Update the average score for a specific hotkey in a specific competition"""
         if (
             competition_id not in self.score_map
@@ -60,20 +61,20 @@ class CompetitionResultsStore(BaseModel):
         ):
             return 0.0
 
+        scores = self.score_map[competition_id][hotkey][-MOVING_AVERAGE_LENGTH:]
+        scores = [score.score for score in scores]
+        bt.logging.debug(f"Scores used to calculate average for hotkey {hotkey}: {scores}")
         try:
             result = sum(
-                score.score
-                for score in self.score_map[competition_id][hotkey][
-                    -MOVING_AVERAGE_LENGTH:
-                ]
-            ) / len(self.score_map[competition_id][hotkey][-MOVING_AVERAGE_LENGTH:])
+                score
+                for score in scores
+            ) / len(scores)
         except ZeroDivisionError:
             result = 0.0
 
         if competition_id not in self.average_scores:
             self.average_scores[competition_id] = {}
         self.average_scores[competition_id][hotkey] = result
-        return result
 
     def delete_dead_hotkeys(self, competition_id: str, active_hotkeys: list[Hotkey]):
         """Delete hotkeys that are no longer active in a specific competition."""
@@ -84,7 +85,6 @@ class CompetitionResultsStore(BaseModel):
         for hotkey in self.score_map[competition_id].keys():
             if hotkey not in active_hotkeys:
                 hotkeys_to_delete.append(hotkey)
-
         for hotkey in hotkeys_to_delete:
             del self.score_map[competition_id][hotkey]
             if (
