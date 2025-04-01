@@ -216,6 +216,7 @@ class CompetitionManager(SerializableManager):
         
         # see if there are any duplicate scores, slash the copied models owners
         grouped_duplicated_hotkeys = self.group_duplicate_scores()
+        bt.logging.info(f"duplicated models: {grouped_duplicated_hotkeys}")
         if len(grouped_duplicated_hotkeys) > 0:
             pioneer_models_hotkeys = self.model_manager.get_pioneer_models_from_duplicated_models(grouped_duplicated_hotkeys)
             hotkeys_to_slash = [hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys]
@@ -243,7 +244,7 @@ class CompetitionManager(SerializableManager):
         """
         score_to_hotkeys = {}
         for hotkey, result in self.results:
-            score = result.score
+            score = round(result.score, 6)
             if score in score_to_hotkeys and score > 0.0:
                 score_to_hotkeys[score].append(hotkey)
             else:

@@ -195,25 +195,45 @@ class ModelManager(SerializableManager):
 
                 if not file_date_str:
                     bt.logging.error(
-                        f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id} for hotkey {hotkey}"
+                        f"File {model_info.hf_model_filename} not found in "
+                        f"repository {model_info.hf_repo_id} for hotkey {hotkey}"
                     )
                     continue
 
                 try:
-                    file_date = datetime.fromisoformat(file_date_str)
+                    if isinstance(file_date_str, datetime):
+                        file_date = file_date_str
+                    else:
+                        file_date = datetime.fromisoformat(str(file_date_str))
+
                     if file_date.tzinfo is None:
                         file_date = file_date.replace(tzinfo=timezone.utc)
+
                 except Exception as e:
                     bt.logging.error(
                         f"Failed to parse file date {file_date_str} for hotkey {hotkey}: {e}"
                     )
                     continue
 
-                # Select the pioneer (oldest model) in the group
                 if pioneer_date is None or file_date < pioneer_date:
                     pioneer_date = file_date
                     pioneer_hotkey = hotkey
                     pioneer_model_info = model_info
+
+                # If they have the same commit date, we use DB records to see who truly submitted earlier
+                elif file_date == pioneer_date:
+                    try:
+                        early_hotkey, early_date = self.db_controller.compare_hotkeys(pioneer_hotkey, hotkey)
+                        if early_hotkey is not None:
+                            pioneer_hotkey = early_hotkey
+                            pioneer_date = early_date
+                        else:
+                            bt.warning.info(
+                                f"No records exist for either hotkey in the DB. "
+                                f"Unable to break tie between {pioneer_hotkey} and {hotkey}."
+                            )
+                    except Exception as e:
+                        bt.logging.error(f"Unable to compare hotkeys: {e}")
 
             if pioneer_hotkey is not None:
                 pioneers.append(pioneer_hotkey)
