@@ -154,3 +154,88 @@ class ModelManager(SerializableManager):
         if hotkey in self.hotkey_store and self.hotkey_store[hotkey].file_path:
             os.remove(self.hotkey_store[hotkey].file_path)
         self.hotkey_store[hotkey] = None
+
+    def get_pioneer_models_from_duplicated_models(
+        self, grouped_hotkeys: list[list[str]]
+    ) -> list[str]:
+        """
+        For each group of duplicate hotkeys, determines the 'pioneer' model (the one
+        with the oldest upload date) and returns a list of (hotkey, ModelInfo) tuples.
+        """
+        pioneers = []
+        if self.config.hf_token:
+            fs = HfFileSystem(token=self.config.hf_token)
+        else:
+            fs = HfFileSystem()
+
+        for group in grouped_hotkeys:
+            pioneer_hotkey = None
+            pioneer_date = None
+            pioneer_model_info = None
+
+            for hotkey in group:
+                model_info = self.hotkey_store.get(hotkey)
+                if not model_info:
+                    bt.logging.error(f"Model info for hotkey {hotkey} not found.")
+                    continue
+
+                try:
+                    files = fs.ls(model_info.hf_repo_id)
+                except Exception as e:
+                    bt.logging.error(
+                        f"Failed to list files in repository {model_info.hf_repo_id} for hotkey {hotkey}: {e}"
+                    )
+                    continue
+
+                file_date_str = None
+                for file in files:
+                    if file["name"].endswith(model_info.hf_model_filename):
+                        file_date_str = file["last_commit"]["date"]
+                        break
+
+                if not file_date_str:
+                    bt.logging.error(
+                        f"File {model_info.hf_model_filename} not found in "
+                        f"repository {model_info.hf_repo_id} for hotkey {hotkey}"
+                    )
+                    continue
+
+                try:
+                    if isinstance(file_date_str, datetime):
+                        file_date = file_date_str
+                    else:
+                        file_date = datetime.fromisoformat(str(file_date_str))
+
+                    if file_date.tzinfo is None:
+                        file_date = file_date.replace(tzinfo=timezone.utc)
+
+                except Exception as e:
+                    bt.logging.error(
+                        f"Failed to parse file date {file_date_str} for hotkey {hotkey}: {e}"
+                    )
+                    continue
+
+                if pioneer_date is None or file_date < pioneer_date:
+                    pioneer_date = file_date
+                    pioneer_hotkey = hotkey
+                    pioneer_model_info = model_info
+
+                # If they have the same commit date, we use DB records to see who truly submitted earlier
+                elif file_date == pioneer_date:
+                    try:
+                        early_hotkey, early_date = self.db_controller.compare_hotkeys(pioneer_hotkey, hotkey)
+                        if early_hotkey is not None:
+                            pioneer_hotkey = early_hotkey
+                            pioneer_date = early_date
+                        else:
+                            bt.warning.info(
+                                f"No records exist for either hotkey in the DB. "
+                                f"Unable to break tie between {pioneer_hotkey} and {hotkey}."
+                            )
+                    except Exception as e:
+                        bt.logging.error(f"Unable to compare hotkeys: {e}")
+
+            if pioneer_hotkey is not None:
+                pioneers.append(pioneer_hotkey)
+
+        return pioneers

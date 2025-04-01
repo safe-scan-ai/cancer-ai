@@ -213,9 +213,19 @@ class CompetitionManager(SerializableManager):
         if len(self.results) == 0:
             bt.logging.error("No models were able to run")
             return None, None
+        
+        # see if there are any duplicate scores, slash the copied models owners
+        grouped_duplicated_hotkeys = self.group_duplicate_scores()
+        bt.logging.info(f"duplicated models: {grouped_duplicated_hotkeys}")
+        if len(grouped_duplicated_hotkeys) > 0:
+            pioneer_models_hotkeys = self.model_manager.get_pioneer_models_from_duplicated_models(grouped_duplicated_hotkeys)
+            hotkeys_to_slash = [hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys]
+            self.slash_model_copiers(hotkeys_to_slash)
+        
         winning_hotkey, winning_model_result = sorted(
             self.results, key=lambda x: x[1].score, reverse=True
         )[0]
+
         for miner_hotkey, model_result in self.results:
             bt.logging.info(f"Model from {miner_hotkey} successfully evaluated")
             bt.logging.trace(
@@ -226,3 +236,25 @@ class CompetitionManager(SerializableManager):
             f"Winning hotkey for competition {self.competition_id}: {winning_hotkey}"
         )
         return winning_hotkey, winning_model_result
+
+
+    def group_duplicate_scores(self) -> list[list[str]]:
+        """
+        Groups hotkeys for models with identical scores.
+        """
+        score_to_hotkeys = {}
+        for hotkey, result in self.results:
+            score = round(result.score, 6)
+            if score in score_to_hotkeys and score > 0.0:
+                score_to_hotkeys[score].append(hotkey)
+            else:
+                score_to_hotkeys[score] = [hotkey]
+        
+        grouped_duplicates = [hotkeys for hotkeys in score_to_hotkeys.values() if len(hotkeys) > 1]
+        return grouped_duplicates
+    
+    def slash_model_copiers(self, hotkeys_to_slash: list[str]):
+        for hotkey, result in self.results:
+            if hotkey in hotkeys_to_slash:
+                bt.logging.info(f"Slashing model copier for hotkey: {hotkey} (setting score to 0.0)")
+                result.score = 0.0
