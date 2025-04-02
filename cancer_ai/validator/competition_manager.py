@@ -236,6 +236,7 @@ class CompetitionManager(SerializableManager):
         bt.logging.info(
             f"Winning hotkey for competition {self.competition_id}: {winning_hotkey}"
         )
+        self.dataset_manager.delete_dataset()
         return winning_hotkey, winning_model_result
 
 
