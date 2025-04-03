@@ -95,6 +95,9 @@ class DatasetManager(SerializableManager):
 
         bt.logging.debug(f"Dataset extracted to: { self.local_compressed_path}")
 
+        # Ensure the extraction directory exists
+        os.makedirs(self.local_extracted_dir, exist_ok=True)
+        
         # TODO add error handling
         zip_file_path = self.local_compressed_path
         extract_dir = self.local_extracted_dir
