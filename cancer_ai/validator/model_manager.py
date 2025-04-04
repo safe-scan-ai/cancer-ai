@@ -206,8 +206,10 @@ class ModelManager(SerializableManager):
                     else:
                         file_date = datetime.fromisoformat(str(file_date_str))
 
-                    if file_date.tzinfo is None:
+                    if file_date.tzinfo is None or file_date.tzinfo.utcoffset(file_date) is None:
                         file_date = file_date.replace(tzinfo=timezone.utc)
+                    else:
+                        file_date = file_date.astimezone(timezone.utc)
 
                 except Exception as e:
                     bt.logging.error(
@@ -216,7 +218,7 @@ class ModelManager(SerializableManager):
                     continue
 
                 if pioneer_date is None or file_date < pioneer_date:
-                    pioneer_date = file_date
+                    pioneer_date = file_date.astimezone(timezone.utc)
                     pioneer_hotkey = hotkey
                     pioneer_model_info = model_info
 
@@ -226,7 +228,11 @@ class ModelManager(SerializableManager):
                         early_hotkey, early_date = self.db_controller.compare_hotkeys(pioneer_hotkey, hotkey)
                         if early_hotkey is not None:
                             pioneer_hotkey = early_hotkey
-                            pioneer_date = early_date
+                            pioneer_date = (
+                                early_date.astimezone(timezone.utc)
+                                if early_date.tzinfo
+                                else early_date.replace(tzinfo=timezone.utc)
+                            )
                         else:
                             bt.warning.info(
                                 f"No records exist for either hotkey in the DB. "
