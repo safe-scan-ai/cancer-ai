@@ -10,6 +10,7 @@ from huggingface_hub import HfApi, login as hf_login
 import huggingface_hub
 import onnx
 import argparse
+import hashlib
 
 from cancer_ai.validator.utils import run_command
 from cancer_ai.validator.model_run_manager import ModelRunManager, ModelInfo
@@ -146,6 +147,27 @@ class MinerManagerCLI:
             return
         bt.logging.info(f"Code zip path: {self.code_zip_path}")
 
+    def _compute_model_hash(self, repo_id, model_filename, repo_type):
+        """Compute 8-byte SHA-1 hash of the model file from Hugging Face."""
+        try:
+            # Download the model file from Hugging Face
+            model_path = huggingface_hub.hf_hub_download(
+                repo_id=repo_id,
+                filename=model_filename,
+                repo_type=repo_type,
+            )
+            sha1 = hashlib.sha1()
+            with open(model_path, 'rb') as f:
+                while chunk := f.read(8192):
+                    sha1.update(chunk)
+            full_hash = sha1.digest()
+            truncated_hash = full_hash[:8]  # Truncate to 8 bytes
+            bt.logging.info(f"Computed 8-byte hash: {truncated_hash.hex()}")
+            return truncated_hash
+        except Exception as e:
+            bt.logging.error(f"Failed to compute model hash: {e}")
+            return None
+
     async def submit_model(self) -> None:
         # Check if the required model and files are present in hugging face repo
 
@@ -172,12 +194,34 @@ class MinerManagerCLI:
             subtensor=self.subtensor, netuid=self.config.netuid, wallet=self.wallet
         )
 
-        print(self.config)
+        if len(self.config.hf_repo_type.encode('utf-8')) > 7:
+            bt.logging.error("hf_repo_type must be 7 bytes or less")
+            return
+
+        if len(self.config.hf_repo_id.encode('utf-8')) > 32:
+            bt.logging.error("hf_repo_id must be 32 bytes or less")
+            return
+        
+        if len(self.config.hf_model_name.encode('utf-8')) > 32:
+            bt.logging.error("hf_model_filename must be 32 bytes or less")
+            return
+        
+        if len(self.config.hf_code_filename.encode('utf-8')) > 31:
+            bt.logging.error("hf_code_filename must be 31 bytes or less")
+            return
 
         if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_model_name, self.config.hf_repo_type):
             return
 
         if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_code_filename, self.config.hf_repo_type):
+            return
+
+        model_hash = self._compute_model_hash(
+            self.config.hf_repo_id, self.config.hf_model_name, self.config.hf_repo_type
+        )
+
+        if not model_hash:
+            bt.logging.error("Failed to compute model hash")
             return
 
         # Push model metadata to chain
@@ -188,6 +232,7 @@ class MinerManagerCLI:
             hf_repo_type=self.config.hf_repo_type,
             hf_code_filename=self.config.hf_code_filename,
             block=None,
+            model_hash=model_hash,
         )
         await self.metadata_store.store_model_metadata(model_id)
         bt.logging.success(

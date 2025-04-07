@@ -119,6 +119,7 @@ class CompetitionManager(SerializableManager):
             hf_code_filename=chain_miner_model.hf_code_filename,
             hf_repo_type=chain_miner_model.hf_repo_type,
             competition_id=chain_miner_model.competition_id,
+            block=chain_miner_model.block
         )
         return model_info
 
@@ -134,7 +135,7 @@ class CompetitionManager(SerializableManager):
         bt.logging.info(f"Amount of hotkeys: {len(self.hotkeys)}")
 
         latest_models = self.db_controller.get_latest_models(
-            self.hotkeys, self.competition_id
+            self.hotkeys, self.competition_id, self.config.models_query_cutoff
         )
         for hotkey, model in latest_models.items():
             try:
@@ -219,7 +220,7 @@ class CompetitionManager(SerializableManager):
         grouped_duplicated_hotkeys = self.group_duplicate_scores()
         bt.logging.info(f"duplicated models: {grouped_duplicated_hotkeys}")
         if len(grouped_duplicated_hotkeys) > 0:
-            pioneer_models_hotkeys = self.model_manager.get_pioneer_models_from_duplicated_models(grouped_duplicated_hotkeys)
+            pioneer_models_hotkeys = self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
             hotkeys_to_slash = [hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys]
             self.slash_model_copiers(hotkeys_to_slash)
         

@@ -19,6 +19,7 @@ class ModelInfo:
     competition_id: str | None = None
     file_path: str | None = None
     model_type: str | None = None
+    block: int | None = None
 
 
 class ModelManager(SerializableManager):
@@ -155,7 +156,7 @@ class ModelManager(SerializableManager):
             os.remove(self.hotkey_store[hotkey].file_path)
         self.hotkey_store[hotkey] = None
 
-    def get_pioneer_models_from_duplicated_models(
+    def get_pioneer_models_from_duplicated_models_hf(
         self, grouped_hotkeys: list[list[str]]
     ) -> list[str]:
         """
@@ -244,4 +245,91 @@ class ModelManager(SerializableManager):
             if pioneer_hotkey is not None:
                 pioneers.append(pioneer_hotkey)
 
+        return pioneers
+    
+    def get_pioneer_models_from_duplicated_models_db(self, grouped_hotkeys: list[list[str]]) -> list[str]:
+        pioneers = []
+        for group in grouped_hotkeys:
+            pioneer_hotkey = None
+            pioneer_submit_block = None
+
+            for hotkey in group:
+                model_info = self.hotkey_store.get(hotkey)
+
+                if pioneer_submit_block is None or model_info.block < pioneer_submit_block:
+                    pioneer_submit_block = model_info.block
+                    pioneer_hotkey = hotkey
+
+            if pioneer_hotkey is not None:
+                pioneers.append(pioneer_hotkey)
+        
+        return pioneers
+
+    def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> list[str]:
+        """
+        Does a check on whether chain submit date was later then HF commit date. If not slashes.
+        Compares chain submit date duplicated models to elect a pioneer based on block of submission (date)
+        """
+        pioneers = []
+
+        if self.config.hf_token:
+            fs = HfFileSystem(token=self.config.hf_token)
+        else:
+            fs = HfFileSystem()
+
+        for group in grouped_hotkeys:
+            candidate_hotkeys = []
+
+            for hotkey in group:
+                model_info = self.hotkey_store.get(hotkey)
+                if not model_info:
+                    bt.logging.error(f"Model info for hotkey {hotkey} not found.")
+                    continue
+
+                try:
+                    files = fs.ls(model_info.hf_repo_id)
+                except Exception as e:
+                    bt.logging.error(f"Failed to list files in {model_info.hf_repo_id}: {e}")
+                    continue
+
+                file_date_str = None
+                for file in files:
+                    if file["name"].endswith(model_info.hf_model_filename):
+                        file_date_str = file["last_commit"]["date"]
+                        break
+
+                if not file_date_str:
+                    bt.logging.error(
+                        f"File {model_info.hf_model_filename} not found in {model_info.hf_repo_id} for {hotkey}"
+                    )
+                    continue
+
+                try:
+                    if isinstance(file_date_str, datetime):
+                        hf_commit_date = file_date_str
+                    else:
+                        hf_commit_date = datetime.fromisoformat(str(file_date_str))
+
+                    if hf_commit_date.tzinfo is None or hf_commit_date.tzinfo.utcoffset(hf_commit_date) is None:
+                        hf_commit_date = hf_commit_date.replace(tzinfo=timezone.utc)
+                    else:
+                        hf_commit_date = hf_commit_date.astimezone(timezone.utc)
+
+                except Exception as e:
+                    bt.logging.error(f"Failed to parse HF commit date {file_date_str} for {hotkey}: {e}")
+                    continue
+
+                try:
+                    block_timestamp = self.db_controller.get_block_timestamp(model_info.block)
+                    block_timestamp = block_timestamp.replace(tzinfo=timezone.utc)
+                except Exception as e:
+                    bt.logging.error(f"Failed to get block timestamp for {model_info.block}: {e}")
+                    continue
+                
+                if hf_commit_date <= block_timestamp:
+                    candidate_hotkeys.append((hotkey, model_info.block))
+
+            if candidate_hotkeys:
+                pioneer_hotkey = min(candidate_hotkeys, key=lambda x: x[1])[0]
+                pioneers.append(pioneer_hotkey)
         return pioneers

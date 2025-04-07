@@ -56,7 +56,7 @@ class Validator(BaseValidatorNeuron):
         print(cancer_ai_logo)
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
-        self.db_controller = ModelDBController(self.config.db_path)
+        self.db_controller = ModelDBController(db_path=self.config.db_path, subtensor=self.subtensor)
 
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
@@ -249,7 +249,7 @@ class Validator(BaseValidatorNeuron):
                 if not winning_hotkey:
                     continue
 
-                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey).hf_link
+                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=self.config.models_query_cutoff).hf_link
             except Exception:
                 formatted_traceback = traceback.format_exc()
                 bt.logging.error(f"Error running competition: {formatted_traceback}")
@@ -293,7 +293,8 @@ class Validator(BaseValidatorNeuron):
             for miner_hotkey, evaluation_result in competition_manager.results:
                 try:
                     model = self.db_controller.get_latest_model(
-                        hotkey=miner_hotkey
+                        hotkey=miner_hotkey,
+                        cutoff_time=self.config.models_query_cutoff,
                     )
                     model_link = model.hf_link if model is not None else None
                     
