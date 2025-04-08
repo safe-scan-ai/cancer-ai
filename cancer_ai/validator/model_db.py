@@ -20,17 +20,39 @@ class ChainMinerModelDB(Base):
     date_submitted = Column(DateTime, nullable=False)
     block = Column(Integer, nullable=False)
     hotkey = Column(String, nullable=False)
+    model_hash = Column(String, nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint('date_submitted', 'hotkey', name='pk_date_hotkey'),
     )
 
 class ModelDBController:
-    def __init__(self, db_path: str = "models.db"):
+    def __init__(self, db_path: str = "models.db", subtensor: bt.subtensor = None):
         db_url = f"sqlite:///{os.path.abspath(db_path)}"
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+        self.subtensor = subtensor
+
+        if subtensor is not None and "test" not in self.subtensor.chain_endpoint.lower():
+            self.subtensor = bt.subtensor(network="archive")
+
+        self._migrate_database()
+
+    def _migrate_database(self):
+        """Check and apply migration for model_hash column if missing."""
+        with self.engine.connect() as connection:
+            result = connection.execute("PRAGMA table_info(models)").fetchall()
+            column_names = [row[1] for row in result]
+            if "model_hash" not in column_names:
+                try:
+                    connection.execute("ALTER TABLE models ADD COLUMN model_hash TEXT CHECK(LENGTH(model_hash) <= 8)")
+                    bt.logging.info("Migrated database: Added model_hash column with length constraint to models table")
+                except Exception as e:
+                    bt.logging.error(f"Failed to migrate database: {e}")
+                    raise
+
+
     
     def add_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
         session = self.Session()
@@ -63,12 +85,14 @@ class ModelDBController:
             session.close()
 
     def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel | None:
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
         bt.logging.debug(f"Getting latest DB model for hotkey {hotkey}")
         session = self.Session()
         try:
             model_record = (
                 session.query(ChainMinerModelDB)
                 .filter(ChainMinerModelDB.hotkey == hotkey)
+                .filter(ChainMinerModelDB.date_submitted < cutoff_time)
                 .order_by(ChainMinerModelDB.date_submitted.desc())
                 .first()
             )
@@ -115,6 +139,9 @@ class ModelDBController:
                 existing_model.hf_model_filename = chain_miner_model.hf_model_filename
                 existing_model.hf_repo_type = chain_miner_model.hf_repo_type
                 existing_model.hf_code_filename = chain_miner_model.hf_code_filename
+                existing_model.date_submitted = self.get_block_timestamp(chain_miner_model.block)
+                existing_model.block = chain_miner_model.block
+                existing_model.model_hash = chain_miner_model.model_hash
 
                 session.commit()
                 bt.logging.debug(f"Successfully updated DB model for hotkey {hotkey}.")
@@ -131,8 +158,8 @@ class ModelDBController:
             session.close()
 
 
-    def get_latest_models(self, hotkeys: list[str], competition_id: str) -> dict[str, ChainMinerModel]:
-        # cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
+    def get_latest_models(self, hotkeys: list[str], competition_id: str, cutoff: int = None) -> dict[str, ChainMinerModel]:
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff) if cutoff else datetime.now(timezone.utc)
         session = self.Session()
         try:
             # Use a correlated subquery to get the latest record for each hotkey that doesn't violate the cutoff
@@ -142,8 +169,8 @@ class ModelDBController:
                     session.query(ChainMinerModelDB)
                     .filter(ChainMinerModelDB.hotkey == hotkey)
                     .filter(ChainMinerModelDB.competition_id == competition_id)
-                    # .filter(ChainMinerModelDB.date_submitted < cutoff_time)
-                    # .order_by(ChainMinerModelDB.date_submitted.desc())  # Order by newest first
+                    .filter(ChainMinerModelDB.date_submitted < cutoff_time)
+                    .order_by(ChainMinerModelDB.date_submitted.desc())  # Order by newest first
                     .first()  # Get the first (newest) record that meets the cutoff condition
                 )
                 if model_record:
@@ -195,9 +222,10 @@ class ModelDBController:
             hf_model_filename = chain_miner_model.hf_model_filename,
             hf_repo_type = chain_miner_model.hf_repo_type,
             hf_code_filename = chain_miner_model.hf_code_filename,
-            date_submitted = datetime.now(timezone.utc), # temporary fix, can't be null
-            block = 1, # temporary fix , can't be null
-            hotkey = hotkey
+            date_submitted = self.get_block_timestamp(chain_miner_model.block),
+            block = chain_miner_model.block,
+            hotkey = hotkey,
+            model_hash=chain_miner_model.model_hash
         )
 
     def convert_db_model_to_chain_model(self, model_record: ChainMinerModelDB) -> ChainMinerModel:
@@ -208,6 +236,7 @@ class ModelDBController:
             hf_repo_type=model_record.hf_repo_type,
             hf_code_filename=model_record.hf_code_filename,
             block=model_record.block,
+            model_hash=model_record.model_hash,
         )
     
     def compare_hotkeys(
@@ -269,3 +298,28 @@ class ModelDBController:
             raise
         finally:
             session.close()
+
+    def get_block_timestamp(self, block_number) -> datetime:
+        """Gets the timestamp of a block given its number."""
+        try:
+            block_hash = self.subtensor.get_block_hash(block_number)
+
+            if block_hash is None:
+                raise ValueError(f"Block hash not found for block number {block_number}")
+
+            timestamp_info = self.subtensor.substrate.query(
+                module="Timestamp",
+                storage_function="Now",
+                block_hash=block_hash
+            )
+
+            if timestamp_info is None:
+                raise ValueError(f"Timestamp not found for block hash {block_hash}")
+
+            timestamp_ms = timestamp_info.value
+            block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
+
+            return block_datetime
+        except Exception as e:
+            bt.logging.error(f"Error retrieving block timestamp: {e}")
+            raise

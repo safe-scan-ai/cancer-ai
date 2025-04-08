@@ -56,7 +56,7 @@ class Validator(BaseValidatorNeuron):
         print(cancer_ai_logo)
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
-        self.db_controller = ModelDBController(self.config.db_path)
+        self.db_controller = ModelDBController(db_path=self.config.db_path, subtensor=self.subtensor)
 
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
@@ -153,6 +153,7 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.error("NO WINNING HOTKEY")
         except Exception as e:
             bt.logging.error(f"Error evaluating {data_package.dataset_hf_filename}: {e}")
+            return
 
         models_results = competition_manager.results
         
@@ -165,8 +166,8 @@ class Validator(BaseValidatorNeuron):
         
         # Enable if you want to have results in CSV for debugging purposes
         # await self.log_results_to_csv(data_package, top_hotkey, models_results)
-
-        bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
+        if winning_hotkey:
+            bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
 
         bt.logging.warning("Competition results store before update")
         bt.logging.warning(self.competition_results_store.model_dump_json())
@@ -249,7 +250,7 @@ class Validator(BaseValidatorNeuron):
                 if not winning_hotkey:
                     continue
 
-                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey).hf_link
+                winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=self.config.models_query_cutoff).hf_link
             except Exception:
                 formatted_traceback = traceback.format_exc()
                 bt.logging.error(f"Error running competition: {formatted_traceback}")
@@ -293,7 +294,8 @@ class Validator(BaseValidatorNeuron):
             for miner_hotkey, evaluation_result in competition_manager.results:
                 try:
                     model = self.db_controller.get_latest_model(
-                        hotkey=miner_hotkey
+                        hotkey=miner_hotkey,
+                        cutoff_time=self.config.models_query_cutoff,
                     )
                     model_link = model.hf_link if model is not None else None
                     

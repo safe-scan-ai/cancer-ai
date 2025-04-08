@@ -25,12 +25,16 @@ class ChainMinerModel(BaseModel):
         description="Block on which this model was claimed on the chain."
     )
 
+    model_hash: Optional[str] = Field(
+        description="8-byte SHA-1 hash of the model file from Hugging Face."
+    )
+
     class Config:
         arbitrary_types_allowed = True
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
-        return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}"
+        return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}:{self.model_hash}"
 
     @property
     def hf_link(self) -> str:
@@ -41,7 +45,7 @@ class ChainMinerModel(BaseModel):
     def from_compressed_str(cls, cs: str) -> Type["ChainMinerModel"]:
         """Returns an instance of this class from a compressed string representation"""
         tokens = cs.split(":")
-        if len(tokens) != 5:
+        if len(tokens) != 6:
             return None
         return cls(
             hf_repo_id=tokens[0],
@@ -49,6 +53,7 @@ class ChainMinerModel(BaseModel):
             hf_code_filename=tokens[2],
             competition_id=tokens[3],
             hf_repo_type=tokens[4],
+            model_hash=tokens[5],
             block=None,
         )
 

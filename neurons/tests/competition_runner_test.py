@@ -62,7 +62,7 @@ async def run_competitions(
             dataset_hf_id=competition_cfg.dataset_hf_filename,
             dataset_hf_repo_type=competition_cfg.dataset_hf_repo_type,
             test_mode=True,
-            db_controller=ModelDBController(subtensor, test_config.db_path)
+            db_controller=ModelDBController(db_path=test_config.db_path, subtensor=subtensor)
         )
         results[competition_cfg.competition_id] = await competition_manager.evaluate()
 
@@ -86,7 +86,7 @@ def config_for_scheduler(subtensor: bt.subtensor) -> Dict[str, CompetitionManage
                 dataset_hf_id=competition_cfg.dataset_hf_filename,
                 dataset_hf_repo_type=competition_cfg.dataset_hf_repo_type,
                 test_mode=True,
-                db_controller=ModelDBController(subtensor, test_config.db_path)
+                db_controller=ModelDBController(db_path=test_config.db_path, subtensor=subtensor)
             )
     return time_arranged_competitions
 

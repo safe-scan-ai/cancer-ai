@@ -3,6 +3,8 @@ from typing import List, Tuple
 
 import bittensor as bt
 import wandb
+import hashlib
+
 from dotenv import load_dotenv
 
 from .manager import SerializableManager
@@ -28,6 +30,7 @@ COMPETITION_HANDLER_MAPPING = {
     "melanoma-testnet": MelanomaCompetitionHandler,
     "melanoma-7": MelanomaCompetitionHandler,
     "melanoma-2": MelanomaCompetitionHandler,
+    "melanoma-3": MelanomaCompetitionHandler,
 }
 
 
@@ -119,6 +122,8 @@ class CompetitionManager(SerializableManager):
             hf_code_filename=chain_miner_model.hf_code_filename,
             hf_repo_type=chain_miner_model.hf_repo_type,
             competition_id=chain_miner_model.competition_id,
+            block=chain_miner_model.block,
+            model_hash=chain_miner_model.model_hash,
         )
         return model_info
 
@@ -134,7 +139,7 @@ class CompetitionManager(SerializableManager):
         bt.logging.info(f"Amount of hotkeys: {len(self.hotkeys)}")
 
         latest_models = self.db_controller.get_latest_models(
-            self.hotkeys, self.competition_id
+            self.hotkeys, self.competition_id, self.config.models_query_cutoff
         )
         for hotkey, model in latest_models.items():
             try:
@@ -152,7 +157,8 @@ class CompetitionManager(SerializableManager):
     async def evaluate(self) -> Tuple[str | None, ModelEvaluationResult | None]:
         """Returns hotkey and competition id of winning model miner"""
         bt.logging.info(f"Start of evaluation of {self.competition_id}")
-
+        
+        hotkeys_to_slash = []
         # TODO add mock models functionality
 
         await self.update_miner_models()
@@ -170,7 +176,7 @@ class CompetitionManager(SerializableManager):
         y_test = competition_handler.prepare_y_pred(y_test)
 
         # evaluate models
-        for miner_hotkey in self.model_manager.hotkey_store:
+        for miner_hotkey, model_info in self.model_manager.hotkey_store.items():
             bt.logging.info(f"Evaluating hotkey: {miner_hotkey}")
             model_or_none = await self.model_manager.download_miner_model(miner_hotkey)
             if not model_or_none:
@@ -178,6 +184,16 @@ class CompetitionManager(SerializableManager):
                     f"Failed to download model for hotkey {miner_hotkey}  Skipping."
                 )
                 continue
+
+            try:
+                computed_hash = self._compute_model_hash(model_info.file_path)
+            except Exception as e:
+                bt.logging.error(f"Failed to compute model hash: {e}  Skipping.")
+                continue
+        
+            if computed_hash != model_info.model_hash:
+                bt.logging.info(f"The hash of model uploaded by {miner_hotkey} does not match hash of model submitted on-chain. Slashing.")
+                hotkeys_to_slash.append(miner_hotkey)
 
             try:
                 model_manager = ModelRunManager(
@@ -216,11 +232,11 @@ class CompetitionManager(SerializableManager):
             return None, None
         
         # see if there are any duplicate scores, slash the copied models owners
-        grouped_duplicated_hotkeys = self.group_duplicate_scores()
+        grouped_duplicated_hotkeys = self.group_duplicate_scores(hotkeys_to_slash)
         bt.logging.info(f"duplicated models: {grouped_duplicated_hotkeys}")
         if len(grouped_duplicated_hotkeys) > 0:
-            pioneer_models_hotkeys = self.model_manager.get_pioneer_models_from_duplicated_models(grouped_duplicated_hotkeys)
-            hotkeys_to_slash = [hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys]
+            pioneer_models_hotkeys = self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
+            hotkeys_to_slash.extend([hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys])
             self.slash_model_copiers(hotkeys_to_slash)
         
         winning_hotkey, winning_model_result = sorted(
@@ -240,12 +256,14 @@ class CompetitionManager(SerializableManager):
         return winning_hotkey, winning_model_result
 
 
-    def group_duplicate_scores(self) -> list[list[str]]:
+    def group_duplicate_scores(self, hotkeys_to_slash: list[str]) -> list[list[str]]:
         """
         Groups hotkeys for models with identical scores.
         """
         score_to_hotkeys = {}
         for hotkey, result in self.results:
+            if hotkey in hotkeys_to_slash:
+                continue
             score = round(result.score, 6)
             if score in score_to_hotkeys and score > 0.0:
                 score_to_hotkeys[score].append(hotkey)
@@ -260,3 +278,18 @@ class CompetitionManager(SerializableManager):
             if hotkey in hotkeys_to_slash:
                 bt.logging.info(f"Slashing model copier for hotkey: {hotkey} (setting score to 0.0)")
                 result.score = 0.0
+
+    def _compute_model_hash(self, file_path) -> str:
+        """Compute an 8-character hexadecimal SHA-1 hash of the model file."""
+        sha1 = hashlib.sha1()
+        try:
+            with open(file_path, 'rb') as f:
+                while chunk := f.read(8192):
+                    sha1.update(chunk)
+            full_hash = sha1.hexdigest()
+            truncated_hash = full_hash[:8]
+            bt.logging.info(f"Computed 8-character hash: {truncated_hash}")
+            return truncated_hash
+        except Exception as e:
+            bt.logging.error(f"Error computing hash for {file_path}: {e}")
+            return None
