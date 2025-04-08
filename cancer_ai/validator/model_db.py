@@ -1,6 +1,6 @@
 import bittensor as bt
 import os
-from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer, Binary
+from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, timezone
@@ -20,7 +20,7 @@ class ChainMinerModelDB(Base):
     date_submitted = Column(DateTime, nullable=False)
     block = Column(Integer, nullable=False)
     hotkey = Column(String, nullable=False)
-    model_hash = Column(Binary(length=8), nullable=True)  # New field
+    model_hash = Column(String, nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint('date_submitted', 'hotkey', name='pk_date_hotkey'),
@@ -46,12 +46,12 @@ class ModelDBController:
             column_names = [row[1] for row in result]
             if "model_hash" not in column_names:
                 try:
-                    connection.execute("ALTER TABLE models ADD COLUMN model_hash BINARY(8)")
-                    connection.commit()
-                    bt.logging.info("Migrated database: Added model_hash column to models table")
+                    connection.execute("ALTER TABLE models ADD COLUMN model_hash TEXT CHECK(LENGTH(model_hash) <= 8)")
+                    bt.logging.info("Migrated database: Added model_hash column with length constraint to models table")
                 except Exception as e:
                     bt.logging.error(f"Failed to migrate database: {e}")
                     raise
+
 
     
     def add_model(self, chain_miner_model: ChainMinerModel, hotkey: str):
@@ -225,7 +225,7 @@ class ModelDBController:
             date_submitted = self.get_block_timestamp(chain_miner_model.block),
             block = chain_miner_model.block,
             hotkey = hotkey,
-            model_hash=chain_miner_model.hash
+            model_hash=chain_miner_model.model_hash
         )
 
     def convert_db_model_to_chain_model(self, model_record: ChainMinerModelDB) -> ChainMinerModel:

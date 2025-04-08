@@ -8,6 +8,7 @@ import bittensor as bt
 from dotenv import load_dotenv
 from huggingface_hub import HfApi, login as hf_login
 import huggingface_hub
+from huggingface_hub import hf_hub_download
 import onnx
 import argparse
 import hashlib
@@ -148,9 +149,8 @@ class MinerManagerCLI:
         bt.logging.info(f"Code zip path: {self.code_zip_path}")
 
     def _compute_model_hash(self, repo_id, model_filename, repo_type):
-        """Compute 8-byte SHA-1 hash of the model file from Hugging Face."""
+        """Compute an 8-character hexadecimal SHA-1 hash of the model file from Hugging Face."""
         try:
-            # Download the model file from Hugging Face
             model_path = huggingface_hub.hf_hub_download(
                 repo_id=repo_id,
                 filename=model_filename,
@@ -160,9 +160,9 @@ class MinerManagerCLI:
             with open(model_path, 'rb') as f:
                 while chunk := f.read(8192):
                     sha1.update(chunk)
-            full_hash = sha1.digest()
-            truncated_hash = full_hash[:8]  # Truncate to 8 bytes
-            bt.logging.info(f"Computed 8-byte hash: {truncated_hash.hex()}")
+            full_hash = sha1.hexdigest()
+            truncated_hash = full_hash[:8]  # Take the first 8 characters of the hex digest
+            bt.logging.info(f"Computed 8-character hash: {truncated_hash}")
             return truncated_hash
         except Exception as e:
             bt.logging.error(f"Failed to compute model hash: {e}")

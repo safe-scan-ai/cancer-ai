@@ -153,6 +153,7 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.error("NO WINNING HOTKEY")
         except Exception as e:
             bt.logging.error(f"Error evaluating {data_package.dataset_hf_filename}: {e}")
+            return
 
         models_results = competition_manager.results
         
@@ -165,8 +166,8 @@ class Validator(BaseValidatorNeuron):
         
         # Enable if you want to have results in CSV for debugging purposes
         # await self.log_results_to_csv(data_package, top_hotkey, models_results)
-
-        bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
+        if winning_hotkey:
+            bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
 
         bt.logging.warning("Competition results store before update")
         bt.logging.warning(self.competition_results_store.model_dump_json())
