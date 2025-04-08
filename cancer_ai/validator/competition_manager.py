@@ -30,6 +30,7 @@ COMPETITION_HANDLER_MAPPING = {
     "melanoma-testnet": MelanomaCompetitionHandler,
     "melanoma-7": MelanomaCompetitionHandler,
     "melanoma-2": MelanomaCompetitionHandler,
+    "melanoma-3": MelanomaCompetitionHandler,
 }
 
 
