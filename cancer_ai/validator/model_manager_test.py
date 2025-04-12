@@ -1,11 +1,10 @@
+import os
 import pytest
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 from .model_manager import (
     ModelManager,
-    ModelInfo,
-)  # Replace with the actual module name
-import os
+)
 
 hotkey = "test_hotkey"
 repo_id = "test_repo_id"

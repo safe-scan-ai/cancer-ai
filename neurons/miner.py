@@ -14,7 +14,8 @@ import argparse
 import hashlib
 
 from cancer_ai.validator.utils import run_command
-from cancer_ai.validator.model_run_manager import ModelRunManager, ModelInfo
+from cancer_ai.validator.model_run_manager import ModelRunManager
+from cancer_ai.validator.models import ModelInfo
 from cancer_ai.validator.dataset_manager import DatasetManager
 from cancer_ai.validator.competition_manager import COMPETITION_HANDLER_MAPPING
 

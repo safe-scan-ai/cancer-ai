@@ -13,8 +13,8 @@ from .dataset_manager import DatasetManager
 from .model_run_manager import ModelRunManager
 from .exceptions import ModelRunException
 from .model_db import ModelDBController
+from .utils import chain_miner_to_model_info
 
-from cancer_ai.validator.models import WandBLogModelEntry
 from .competition_handlers.melanoma_handler import MelanomaCompetitionHandler
 from .competition_handlers.base_handler import ModelEvaluationResult
 from .tests.mock_data import get_mock_hotkeys_with_models
@@ -142,9 +142,8 @@ class CompetitionManager(SerializableManager):
             self.hotkeys, self.competition_id, self.config.models_query_cutoff
         )
         for hotkey, model in latest_models.items():
-            try:
-                model_info = await self.chain_miner_to_model_info(model)
-            except ValueError:
+            model_info = chain_miner_to_model_info(model)
+            if model_info.competition_id != self.competition_id:
                 bt.logging.warning(
                     f"Miner {hotkey} with competition id {model.competition_id} does not belong to {self.competition_id} competition, skipping"
                 )

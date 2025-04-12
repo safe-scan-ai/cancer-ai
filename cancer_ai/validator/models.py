@@ -1,6 +1,7 @@
 from typing import List, ClassVar, Optional, ClassVar, Optional
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 from datetime import datetime
+from dataclasses import dataclass
 
 class CompetitionModel(BaseModel):
     competition_id: str
@@ -81,9 +82,27 @@ class WandBLogModelEntry(WanDBLogBase):
     average_score: float = 0.0
 
 class WanDBLogCompetitionWinner(WanDBLogBase):
-    """Model for logging competition winners to WandB.
-    Used in validator.py for logging competition evaluation results.
-    """
-    log_type: str = "competition_result"
-    winning_hotkey: str = ""
-    winning_evaluation_hotkey: str = ""  # Used in error case
+    """Summary of competition"""
+
+    log_type: str = "competition_summary"
+    
+    
+    competition_winning_hotkey: str
+    competition_winning_uid: int
+
+    average_winning_hotkey: str
+    average_winning_uid: int
+
+
+@dataclass
+class ModelInfo:
+    hf_repo_id: str | None = None
+    hf_model_filename: str | None = None
+    hf_code_filename: str | None = None
+    hf_repo_type: str | None = None
+
+    competition_id: str | None = None
+    file_path: str | None = None
+    model_type: str | None = None
+    block: int | None = None
+    model_hash: str | None = None

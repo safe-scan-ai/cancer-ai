@@ -3,24 +3,13 @@ from dataclasses import dataclass, asdict, is_dataclass
 from datetime import datetime, timezone, timedelta
 
 import bittensor as bt
-from huggingface_hub import HfApi, hf_hub_url, HfFileSystem
+from huggingface_hub import HfApi, HfFileSystem
 
+from .models import ModelInfo
 from .manager import SerializableManager
 from .exceptions import ModelRunException
 
 
-@dataclass
-class ModelInfo:
-    hf_repo_id: str | None = None
-    hf_model_filename: str | None = None
-    hf_code_filename: str | None = None
-    hf_repo_type: str | None = None
-
-    competition_id: str | None = None
-    file_path: str | None = None
-    model_type: str | None = None
-    block: int | None = None
-    model_hash: str | None = None
 
 
 class ModelManager(SerializableManager):
