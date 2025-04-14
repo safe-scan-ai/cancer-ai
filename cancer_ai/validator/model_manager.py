@@ -71,7 +71,7 @@ class ModelManager(SerializableManager):
         try:
             model_info.file_path = self.api.hf_hub_download(
                 repo_id=model_info.hf_repo_id,
-                repo_type=model_info.hf_repo_type,
+                repo_type="model",
                 filename=model_info.hf_model_filename,
                 cache_dir=self.config.models.model_dir,
                 token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
