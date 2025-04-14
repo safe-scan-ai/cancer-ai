@@ -57,20 +57,29 @@ class NewDatasetFile(BaseModel):
 
 
 class WanDBLogBase(BaseModel):
-    """Base class for WandB log entries."""
+    """Base class for WandB log entries"""
+    uuid: str # competition unique identifier
     log_type: str
     validator_hotkey: str
-    model_link: str
+    dataset_filename: str
+    
     competition_id: str
+    
     errors: str = ""
-    run_time: str = ""
+    log_type: str
+    run_time_s: float = 0.0
+
 
 class WandBLogModelEntry(WanDBLogBase):
-    """Model for logging model evaluation results to WandB.
-    """
+    """Individual model evaluation results"""
     log_type: str = "model_results"
+    uid: int
+    
     miner_hotkey: str
+    model_url: str
+
     tested_entries: int
+    
     accuracy: float
     precision: float
     fbeta: float
@@ -78,12 +87,14 @@ class WandBLogModelEntry(WanDBLogBase):
     confusion_matrix: list
     roc_curve: dict
     roc_auc: float
+
     score: float
     average_score: float = 0.0
+    # TODO use error field for errors / rejections
+    
 
-class WanDBLogCompetitionWinner(WanDBLogBase):
+class WanDBLogCompetitionWinners(WanDBLogBase):
     """Summary of competition"""
-
     log_type: str = "competition_summary"
     
     

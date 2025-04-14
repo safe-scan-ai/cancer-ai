@@ -20,6 +20,8 @@ class ModelEvaluationResult(BaseModel):
 
     score: float = 0.0
 
+    error: str = ""
+
     class Config:
         arbitrary_types_allowed = True
 
