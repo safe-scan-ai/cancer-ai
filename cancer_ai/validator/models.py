@@ -66,19 +66,21 @@ class WanDBLogBase(BaseModel):
     competition_id: str
     
     errors: str = ""
-    log_type: str
     run_time_s: float = 0.0
 
-
-class WandBLogModelEntry(WanDBLogBase):
-    """Individual model evaluation results"""
+class WanDBLogModelBase(WanDBLogBase):
     log_type: str = "model_results"
     uid: int
-    
     miner_hotkey: str
-    model_url: str
+    
+    score: float = 0.0
+    average_score: float = 0.0
 
+class WandBLogModelEntry(WanDBLogModelBase):
+    """Individual model evaluation results"""
+    
     tested_entries: int
+    model_url : str
     
     accuracy: float
     precision: float
@@ -87,16 +89,14 @@ class WandBLogModelEntry(WanDBLogBase):
     confusion_matrix: list
     roc_curve: dict
     roc_auc: float
-
-    score: float
-    average_score: float = 0.0
-    # TODO use error field for errors / rejections
+    
+class WanDBLogModelErrorEntry(WanDBLogModelBase):
+    pass    
     
 
 class WanDBLogCompetitionWinners(WanDBLogBase):
     """Summary of competition"""
     log_type: str = "competition_summary"
-    
     
     competition_winning_hotkey: str
     competition_winning_uid: int

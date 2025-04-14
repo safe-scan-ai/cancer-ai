@@ -186,18 +186,18 @@ class CompetitionManager(SerializableManager):
                 bt.logging.error(
                     f"Failed to download model for hotkey {miner_hotkey}  Skipping."
                 )
-                self.error_results.append(miner_hotkey, "Failed to download model")
+                self.error_results.append((miner_hotkey, "Failed to download model"))
                 continue
 
             computed_hash = self._compute_model_hash(model_info.file_path)
             if not computed_hash:
                 bt.logging.info("Could not determine model hash. Skipping.")
-                self.error_results.append(miner_hotkey, "Could not determine model hash")
+                self.error_results.append((miner_hotkey, "Could not determine model hash"))
                 continue
         
             if computed_hash != model_info.model_hash:
                 bt.logging.info(f"The hash of model uploaded by {miner_hotkey} does not match hash of model submitted on-chain. Slashing.")
-                self.error_results.append(miner_hotkey, "The hash of model uploaded does not match hash of model submitted on-chain")
+                self.error_results.append((miner_hotkey, "The hash of model uploaded does not match hash of model submitted on-chain"))
                 hotkeys_to_slash.append(miner_hotkey)
 
             model_manager = ModelRunManager(
@@ -211,7 +211,7 @@ class CompetitionManager(SerializableManager):
                 bt.logging.error(
                     f"Model hotkey: {miner_hotkey} failed to run. Skipping. error: {e}"
                 )
-                self.error_results.append(miner_hotkey, f"Failed to run model: {e}")
+                self.error_results.append((miner_hotkey, f"Failed to run model: {e}"))
                 continue
 
             try:
@@ -223,7 +223,7 @@ class CompetitionManager(SerializableManager):
                 bt.logging.error(
                     f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}"
                 )
-                self.error_results.append(miner_hotkey, f"Error evaluating model: {e}")
+                self.error_results.append((miner_hotkey, f"Error evaluating model: {e}"))
                 bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error. error: {e}")
 
         if len(self.results) == 0:
