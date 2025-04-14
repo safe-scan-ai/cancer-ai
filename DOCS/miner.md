@@ -148,7 +148,6 @@ python neurons/miner.py \
     --hf_code_filename skin_melanoma_small.zip\
     --hf_model_name best_model.onnx \
     --hf_repo_id safescanai/test_dataset \
-    --hf_repo_type model \
     --wallet.name miner2 \
     --wallet.hotkey default \
     --netuid 163 \

@@ -237,12 +237,6 @@ def add_common_args(cls, parser):
         default="./config/competition_config.json",
     )
 
-    parser.add_argument(
-        "--hf_repo_type",
-        type=str,
-        help="Hugging Face repository type to submit the model from.",
-        default="model",
-    )
 
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
