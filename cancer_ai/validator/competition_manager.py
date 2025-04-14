@@ -74,6 +74,7 @@ class CompetitionManager(SerializableManager):
         self.subtensor = subtensor
         self.competition_id = competition_id
         self.results: list[tuple[str, ModelEvaluationResult]] = []
+        self.error_results: list[tuple[str, str]] = []
         self.model_manager = ModelManager(self.config, db_controller)
         self.dataset_manager = DatasetManager(
             config=self.config,
@@ -173,44 +174,44 @@ class CompetitionManager(SerializableManager):
             X_test=X_test, y_test=y_test
         )
         y_test = competition_handler.prepare_y_pred(y_test)
+        evaluation_counter = 0 
+        models_amount = len(self.model_manager.hotkey_store.items())
+        bt.logging.info(f"Evaluating {models_amount} models")
 
-        # evaluate models
         for miner_hotkey, model_info in self.model_manager.hotkey_store.items():
-            bt.logging.info(f"Evaluating hotkey: {miner_hotkey}")
-            model_or_none = await self.model_manager.download_miner_model(miner_hotkey)
-            if not model_or_none:
+            evaluation_counter +=1
+            bt.logging.info(f"Evaluating {evaluation_counter}/{models_amount} hotkey: {miner_hotkey}")
+            model_downloaded = await self.model_manager.download_miner_model(miner_hotkey)
+            if not model_downloaded:
                 bt.logging.error(
                     f"Failed to download model for hotkey {miner_hotkey}  Skipping."
                 )
+                self.error_results.append(miner_hotkey, "Failed to download model")
                 continue
 
-            try:
-                computed_hash = self._compute_model_hash(model_info.file_path)
-            except Exception as e:
-                bt.logging.error(f"Failed to compute model hash: {e}  Skipping.")
+            computed_hash = self._compute_model_hash(model_info.file_path)
+            if not computed_hash:
+                bt.logging.info("Could not determine model hash. Skipping.")
+                self.error_results.append(miner_hotkey, "Could not determine model hash")
                 continue
         
             if computed_hash != model_info.model_hash:
                 bt.logging.info(f"The hash of model uploaded by {miner_hotkey} does not match hash of model submitted on-chain. Slashing.")
+                self.error_results.append(miner_hotkey, "The hash of model uploaded does not match hash of model submitted on-chain")
                 hotkeys_to_slash.append(miner_hotkey)
 
-            try:
-                model_manager = ModelRunManager(
-                    self.config, self.model_manager.hotkey_store[miner_hotkey]
-                )
-            except ModelRunException as e:
-                bt.logging.error(
-                    f"Model hotkey: {miner_hotkey} failed to initialize. Skipping. Error: {e}"
-                )
-                continue
+            model_manager = ModelRunManager(
+                self.config, self.model_manager.hotkey_store[miner_hotkey]
+            )
             start_time = time.time()
 
             try:
                 y_pred = await model_manager.run(X_test)
-            except ModelRunException:
+            except ModelRunException as e:
                 bt.logging.error(
-                    f"Model hotkey: {miner_hotkey} failed to run. Skipping"
+                    f"Model hotkey: {miner_hotkey} failed to run. Skipping. error: {e}"
                 )
+                self.error_results.append(miner_hotkey, f"Failed to run model: {e}")
                 continue
 
             try:
@@ -222,9 +223,9 @@ class CompetitionManager(SerializableManager):
                 bt.logging.error(
                     f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}"
                 )
-                import traceback
-                bt.logging.error(f"Stacktrace: {traceback.format_exc()}")
-                bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error")
+                self.error_results.append(miner_hotkey, f"Error evaluating model: {e}")
+                bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error. error: {e}")
+
         if len(self.results) == 0:
             bt.logging.error("No models were able to run")
             return None, None
