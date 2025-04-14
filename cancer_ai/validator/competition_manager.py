@@ -212,11 +212,10 @@ class CompetitionManager(SerializableManager):
                     f"Model hotkey: {miner_hotkey} failed to run. Skipping"
                 )
                 continue
-            run_time_s = time.time() - start_time
 
             try:
                 model_result = competition_handler.get_model_result(
-                    y_test, y_pred, run_time_s
+                    y_test, y_pred, time.time() - start_time
                 )
                 self.results.append((miner_hotkey, model_result))
             except Exception as e:
