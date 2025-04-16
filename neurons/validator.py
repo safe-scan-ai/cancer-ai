@@ -113,12 +113,13 @@ class Validator(BaseValidatorNeuron):
 
             hotkey = str(hotkey)
             bt.logging.debug(f"Downloading model {i+1}/{len(self.hotkeys)} from hotkey {hotkey}")
-            chain_model_metadata = await self.chain_models.retrieve_model_metadata(hotkey)
-            if not chain_model_metadata:
-                bt.logging.warning(
-                    f"Cannot get miner model for hotkey {hotkey} from the chain, skipping"
-                    )
+            try:
+                uid = self.metagraph.hotkeys.index(hotkey)
+                chain_model_metadata = await self.chain_models.retrieve_model_metadata(hotkey, uid)
+            except Exception as e:
+                bt.logging.warning(f"Cannot get miner model for hotkey {hotkey} from the chain: {e}. Skipping.")
                 continue
+            
             try:
                 self.db_controller.add_model(chain_model_metadata, hotkey)
             except Exception as e:
