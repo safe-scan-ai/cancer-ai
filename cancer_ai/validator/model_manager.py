@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass, asdict, is_dataclass
+from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 import bittensor as bt
@@ -13,7 +14,7 @@ from .exceptions import ModelRunException
 
 
 class ModelManager(SerializableManager):
-    def __init__(self, config, db_controller) -> None:
+    def __init__(self, config, db_controller, parent: Optional["CompetitionManager"] = None) -> None:
         self.config = config
         self.db_controller = db_controller
 
@@ -21,6 +22,7 @@ class ModelManager(SerializableManager):
             os.makedirs(self.config.models.model_dir)
         self.api = HfApi()
         self.hotkey_store: dict[str, ModelInfo] = {}
+        self.parent = parent
 
     def get_state(self):
         return {k: asdict(v) for k, v in self.hotkey_store.items() if is_dataclass(v)}
@@ -166,12 +168,14 @@ class ModelManager(SerializableManager):
                 model_info = self.hotkey_store.get(hotkey)
                 if not model_info:
                     bt.logging.error(f"Model info for hotkey {hotkey} not found.")
+                    self.parent.error_results.append((hotkey, "Model info not found."))
                     continue
 
                 try:
                     files = fs.ls(model_info.hf_repo_id)
                 except Exception as e:
                     bt.logging.error(f"Failed to list files in {model_info.hf_repo_id}: {e}")
+                    self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
                     continue
 
                 file_date_str = None
@@ -184,6 +188,7 @@ class ModelManager(SerializableManager):
                     bt.logging.error(
                         f"File {model_info.hf_model_filename} not found in {model_info.hf_repo_id} for {hotkey}"
                     )
+                    self.parent.error_results.append((hotkey, "model file not found in hf repo."))
                     continue
 
                 try:
@@ -199,6 +204,7 @@ class ModelManager(SerializableManager):
 
                 except Exception as e:
                     bt.logging.error(f"Failed to parse HF commit date {file_date_str} for {hotkey}: {e}")
+                    self.parent.error_results.append((hotkey, "Failed to parse HF commit date."))
                     continue
 
                 try:
@@ -206,6 +212,7 @@ class ModelManager(SerializableManager):
                     block_timestamp = block_timestamp.replace(tzinfo=timezone.utc)
                 except Exception as e:
                     bt.logging.error(f"Failed to get block timestamp for {model_info.block}: {e}")
+                    self.parent.error_results.append((hotkey, "Failed to get block timestamp."))
                     continue
                 
                 if hf_commit_date <= block_timestamp:
