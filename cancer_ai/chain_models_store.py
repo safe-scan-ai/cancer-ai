@@ -86,63 +86,41 @@ class ChainModelMetadata:
             model_id.to_compressed_str(),
         )
 
-    async def retrieve_model_metadata(self, hotkey: str) -> Optional[ChainMinerModel]:
+    async def retrieve_model_metadata(self, hotkey: str, uid: int) -> ChainMinerModel:
         """Retrieves model metadata on this subnet for specific hotkey"""
-        metadata = await get_metadata_with_timeout(self.subtensor, self.netuid, hotkey)
-        if metadata is None:
-            self.subnet_metadata = self.subtensor.metagraph(self.netuid)
-            metadata = await get_metadata_with_timeout(self.subtensor, self.netuid, hotkey)
-            if metadata is None:
-                return None
+        try:
+            metadata = get_metadata(self.subtensor, self.netuid, hotkey)
+        except Exception:
+            raise 
 
-        uids = self.subnet_metadata.uids
-        hotkeys = self.subnet_metadata.hotkeys
-        uid = next((uid for uid, hk in zip(uids, hotkeys) if hk == hotkey), None)
+        if metadata is None:
+            raise ValueError(f"No metadata found for hotkey {hotkey}")
 
         try:
             chain_str = self.subtensor.get_commitment(self.netuid, uid)
-        except Exception as e:
-            bt.logging.debug(f"Failed to retrieve commitment for hotkey {hotkey}: {e}")
-            return None
-
-        if not metadata:
-            return None
+        except Exception:
+            raise 
 
         model = None
         try:
             model = ChainMinerModel.from_compressed_str(chain_str)
             bt.logging.debug(f"Model: {model}")
             if model is None:
-                bt.logging.error(
-                    f"Metadata might be in old format on the chain for hotkey {hotkey}. Raw value: {chain_str}"
+                raise ValueError(
+                    f"Metadata might be in old format or invalid for hotkey '{hotkey}'. Raw value: {chain_str}"
                 )
-                return None
         except Exception:
-            # If the metadata format is not correct on the chain then we return None.
-            bt.logging.error(
-                f"Failed to parse the metadata on the chain for hotkey {hotkey}. Raw value: {chain_str}"
-            )
-            return None
+            raise
         # The block id at which the metadata is stored
         model.block = metadata["block"]
         return model
 
-def timeout(seconds):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            try:
-                return await asyncio.wait_for(func(*args, **kwargs), timeout=seconds)
-            except asyncio.TimeoutError:
-                bt.logging.debug("Metadata retrieval timed out, refreshing subnet metadata")
-                return None
-        return wrapper
-    return decorator
-
 @retry(tries=10, delay=5)
-def get_metadata_with_retry(subtensor, netuid, hotkey):
-    return bt.core.extrinsics.serving.get_metadata(subtensor, netuid, hotkey)
-
-@timeout(10)  # 10 second timeout
-async def get_metadata_with_timeout(subtensor, netuid, hotkey):
-    return get_metadata_with_retry(subtensor, netuid, hotkey)
+def get_metadata(subtensor, netuid, hotkey):
+    """Synchronous metadata fetch with retry logic."""
+    try:
+        return bt.core.extrinsics.serving.get_metadata(subtensor, netuid, hotkey)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to get metadata from chain for hotkey '{hotkey}': {e}"
+        ) from e
