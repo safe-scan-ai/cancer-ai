@@ -246,6 +246,7 @@ class Validator(BaseValidatorNeuron):
                 wandb.init(project=competition_id, group="competition_evaluation")
                 error_log = WanDBLogBase(
                     uuid=competition_uuid,
+                    log_type="competition_error",
                     competition_id=competition_id,
                     run_time_s=(datetime.datetime.now() - competition_start_time).seconds,
                     validator_hotkey=self.wallet.hotkey.ss58_address,
