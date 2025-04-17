@@ -186,7 +186,6 @@ class CompetitionManager(SerializableManager):
                 bt.logging.error(
                     f"Failed to download model for hotkey {miner_hotkey}  Skipping."
                 )
-                self.error_results.append((miner_hotkey, "Failed to download model"))
                 continue
 
             computed_hash = self._compute_model_hash(model_info.file_path)

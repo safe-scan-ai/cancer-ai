@@ -48,6 +48,7 @@ class ModelManager(SerializableManager):
             files = fs.ls(model_info.hf_repo_id)
         except Exception as e:
             bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id}: {e}")
+            self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
             return False
             
         # Find the specific file and its upload date
@@ -60,11 +61,13 @@ class ModelManager(SerializableManager):
         
         if not file_date:
             bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}")
+            self.parent.error_results.append((hotkey, f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}"))
             return False
             
         # Parse and check if the model is too recent to download
         is_too_recent, parsed_date = self.is_model_too_recent(file_date, model_info.hf_model_filename, hotkey)
         if is_too_recent:
+            self.parent.error_results.append((hotkey, f"Model is too recent"))
             return False
         
         file_date = parsed_date
@@ -80,11 +83,13 @@ class ModelManager(SerializableManager):
             )
         except Exception as e:
             bt.logging.error(f"Failed to download model file: {e}")
+            self.parent.error_results.append((hotkey, f"Failed to download model file: {e}"))
             return False
 
         # Verify the downloaded file exists
         if not os.path.exists(model_info.file_path):
             bt.logging.error(f"Downloaded file does not exist at {model_info.file_path}")
+            self.parent.error_results.append((hotkey, f"Downloaded file does not exist at {model_info.file_path}"))
             return False
         
         bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
