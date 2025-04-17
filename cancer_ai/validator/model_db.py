@@ -1,5 +1,6 @@
 import bittensor as bt
 import os
+import traceback
 from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -86,8 +87,9 @@ class ModelDBController:
 
     def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel | None:
         cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
-        bt.logging.debug(f"Getting latest DB model for hotkey {hotkey}")
+        bt.logging.trace(f"Getting latest DB model for hotkey {hotkey}")
         session = self.Session()
+        model_record = None
         try:
             model_record = (
                 session.query(ChainMinerModelDB)
@@ -96,18 +98,16 @@ class ModelDBController:
                 .order_by(ChainMinerModelDB.date_submitted.desc())
                 .first()
             )
-            if model_record:
-                return self.convert_db_model_to_chain_model(model_record)
-            return None
         except Exception as e:
-            import traceback
-            stack_trace = traceback.format_exc()
-            bt.logging.error(f"Error in get_latest_model for hotkey {hotkey}: {e}")
-            bt.logging.error(f"Stack trace: {stack_trace}")
-            # Re-raise the exception to be caught by higher-level error handlers
+            bt.logging.error(f"Error in get_latest_model for hotkey {hotkey}: {e}\n {traceback.format_exc()}")
             raise
         finally:
             session.close()
+
+        if not model_record:
+            return None
+        
+        return self.convert_db_model_to_chain_model(model_record)
 
     def delete_model(self, date_submitted: datetime, hotkey: str):
         session = self.Session()

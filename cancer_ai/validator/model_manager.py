@@ -1,30 +1,20 @@
 import os
 from dataclasses import dataclass, asdict, is_dataclass
+from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 import bittensor as bt
-from huggingface_hub import HfApi, hf_hub_url, HfFileSystem
+from huggingface_hub import HfApi, HfFileSystem
 
+from .models import ModelInfo
 from .manager import SerializableManager
 from .exceptions import ModelRunException
 
 
-@dataclass
-class ModelInfo:
-    hf_repo_id: str | None = None
-    hf_model_filename: str | None = None
-    hf_code_filename: str | None = None
-    hf_repo_type: str | None = None
-
-    competition_id: str | None = None
-    file_path: str | None = None
-    model_type: str | None = None
-    block: int | None = None
-    model_hash: str | None = None
 
 
 class ModelManager(SerializableManager):
-    def __init__(self, config, db_controller) -> None:
+    def __init__(self, config, db_controller, parent: Optional["CompetitionManager"] = None) -> None:
         self.config = config
         self.db_controller = db_controller
 
@@ -32,6 +22,7 @@ class ModelManager(SerializableManager):
             os.makedirs(self.config.models.model_dir)
         self.api = HfApi()
         self.hotkey_store: dict[str, ModelInfo] = {}
+        self.parent = parent
 
     def get_state(self):
         return {k: asdict(v) for k, v in self.hotkey_store.items() if is_dataclass(v)}
@@ -57,6 +48,7 @@ class ModelManager(SerializableManager):
             files = fs.ls(model_info.hf_repo_id)
         except Exception as e:
             bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id}: {e}")
+            self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
             return False
             
         # Find the specific file and its upload date
@@ -69,11 +61,13 @@ class ModelManager(SerializableManager):
         
         if not file_date:
             bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}")
+            self.parent.error_results.append((hotkey, f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}"))
             return False
             
         # Parse and check if the model is too recent to download
         is_too_recent, parsed_date = self.is_model_too_recent(file_date, model_info.hf_model_filename, hotkey)
         if is_too_recent:
+            self.parent.error_results.append((hotkey, f"Model is too recent"))
             return False
         
         file_date = parsed_date
@@ -82,18 +76,20 @@ class ModelManager(SerializableManager):
         try:
             model_info.file_path = self.api.hf_hub_download(
                 repo_id=model_info.hf_repo_id,
-                repo_type=model_info.hf_repo_type,
+                repo_type="model",
                 filename=model_info.hf_model_filename,
                 cache_dir=self.config.models.model_dir,
                 token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
             )
         except Exception as e:
             bt.logging.error(f"Failed to download model file: {e}")
+            self.parent.error_results.append((hotkey, f"Failed to download model file: {e}"))
             return False
 
         # Verify the downloaded file exists
         if not os.path.exists(model_info.file_path):
             bt.logging.error(f"Downloaded file does not exist at {model_info.file_path}")
+            self.parent.error_results.append((hotkey, f"Downloaded file does not exist at {model_info.file_path}"))
             return False
         
         bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
@@ -177,12 +173,14 @@ class ModelManager(SerializableManager):
                 model_info = self.hotkey_store.get(hotkey)
                 if not model_info:
                     bt.logging.error(f"Model info for hotkey {hotkey} not found.")
+                    self.parent.error_results.append((hotkey, "Model info not found."))
                     continue
 
                 try:
                     files = fs.ls(model_info.hf_repo_id)
                 except Exception as e:
                     bt.logging.error(f"Failed to list files in {model_info.hf_repo_id}: {e}")
+                    self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
                     continue
 
                 file_date_str = None
@@ -195,6 +193,7 @@ class ModelManager(SerializableManager):
                     bt.logging.error(
                         f"File {model_info.hf_model_filename} not found in {model_info.hf_repo_id} for {hotkey}"
                     )
+                    self.parent.error_results.append((hotkey, "model file not found in hf repo."))
                     continue
 
                 try:
@@ -210,6 +209,7 @@ class ModelManager(SerializableManager):
 
                 except Exception as e:
                     bt.logging.error(f"Failed to parse HF commit date {file_date_str} for {hotkey}: {e}")
+                    self.parent.error_results.append((hotkey, "Failed to parse HF commit date."))
                     continue
 
                 try:
@@ -217,6 +217,7 @@ class ModelManager(SerializableManager):
                     block_timestamp = block_timestamp.replace(tzinfo=timezone.utc)
                 except Exception as e:
                     bt.logging.error(f"Failed to get block timestamp for {model_info.block}: {e}")
+                    self.parent.error_results.append((hotkey, "Failed to get block timestamp."))
                     continue
                 
                 if hf_commit_date <= block_timestamp:

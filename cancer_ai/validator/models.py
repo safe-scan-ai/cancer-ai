@@ -1,6 +1,7 @@
 from typing import List, ClassVar, Optional, ClassVar, Optional
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 from datetime import datetime
+from dataclasses import dataclass
 
 class CompetitionModel(BaseModel):
     competition_id: str
@@ -56,20 +57,31 @@ class NewDatasetFile(BaseModel):
 
 
 class WanDBLogBase(BaseModel):
-    """Base class for WandB log entries."""
+    """Base class for WandB log entries"""
+    uuid: str # competition unique identifier
     log_type: str
     validator_hotkey: str
-    model_link: str
+    dataset_filename: str
+    
     competition_id: str
+    
     errors: str = ""
-    run_time: str = ""
+    run_time_s: float = 0.0
 
-class WandBLogModelEntry(WanDBLogBase):
-    """Model for logging model evaluation results to WandB.
-    """
+class WanDBLogModelBase(WanDBLogBase):
     log_type: str = "model_results"
+    uid: int
     miner_hotkey: str
+    
+    score: float = 0.0
+    average_score: float = 0.0
+
+class WandBLogModelEntry(WanDBLogModelBase):
+    """Individual model evaluation results"""
+    
     tested_entries: int
+    model_url : str
+    
     accuracy: float
     precision: float
     fbeta: float
@@ -77,13 +89,31 @@ class WandBLogModelEntry(WanDBLogBase):
     confusion_matrix: list
     roc_curve: dict
     roc_auc: float
-    score: float
-    average_score: float = 0.0
+    
+class WanDBLogModelErrorEntry(WanDBLogModelBase):
+    pass    
+    
 
-class WanDBLogCompetitionWinner(WanDBLogBase):
-    """Model for logging competition winners to WandB.
-    Used in validator.py for logging competition evaluation results.
-    """
-    log_type: str = "competition_result"
-    winning_hotkey: str = ""
-    winning_evaluation_hotkey: str = ""  # Used in error case
+class WanDBLogCompetitionWinners(WanDBLogBase):
+    """Summary of competition"""
+    log_type: str = "competition_summary"
+    
+    competition_winning_hotkey: str
+    competition_winning_uid: int
+
+    average_winning_hotkey: str
+    average_winning_uid: int
+
+
+@dataclass
+class ModelInfo:
+    hf_repo_id: str | None = None
+    hf_model_filename: str | None = None
+    hf_code_filename: str | None = None
+    hf_repo_type: str | None = None
+
+    competition_id: str | None = None
+    file_path: str | None = None
+    model_type: str | None = None
+    block: int | None = None
+    model_hash: str | None = None

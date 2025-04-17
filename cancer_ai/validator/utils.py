@@ -11,9 +11,9 @@ import bittensor as bt
 from retry import retry
 from huggingface_hub import HfApi, hf_hub_download
 
+from cancer_ai.chain_models_store import ChainMinerModel
+from .models import ModelInfo
 from cancer_ai.validator.models import (
-    CompetitionsListModel,
-    CompetitionModel,
     NewDatasetFile,
     OrganizationDataReferenceFactory,
 )
@@ -401,7 +401,7 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
                 shutil.move(filepath, os.path.join(already_released_dir, filename))
                 bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
                 return NewDatasetFile(
-                    competition_id=random.choice(["melanoma-testnet","melanoma-1"]), 
+                    competition_id=random.choice(["melanoma-3"]), 
                     dataset_hf_repo="local",
                     dataset_hf_filename=os.path.join(already_released_dir, filename),
                 )
@@ -409,3 +409,15 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
                 bt.logging.error(f"Error processing {filename}: {e}")
 
     return None
+
+
+def chain_miner_to_model_info(chain_miner_model: ChainMinerModel) -> ModelInfo:
+    return ModelInfo(
+        hf_repo_id=chain_miner_model.hf_repo_id,
+        hf_model_filename=chain_miner_model.hf_model_filename,
+        hf_code_filename=chain_miner_model.hf_code_filename,
+        hf_repo_type=chain_miner_model.hf_repo_type,
+        competition_id=chain_miner_model.competition_id,
+        block=chain_miner_model.block,
+        model_hash=chain_miner_model.model_hash,
+    )

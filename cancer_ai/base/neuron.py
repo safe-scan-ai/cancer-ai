@@ -117,7 +117,8 @@ class BaseNeuron(ABC):
             try: 
                 # Ensure miner or validator hotkey is still registered on the network.
                 self.check_registered()
-
+                if self.config.filesystem_evaluation:
+                        break
                 if self.should_sync_metagraph() or force_sync:
                     bt.logging.info("Resyncing metagraph in progress.")
                     self.resync_metagraph(force_sync=True)

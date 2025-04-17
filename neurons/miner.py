@@ -14,7 +14,8 @@ import argparse
 import hashlib
 
 from cancer_ai.validator.utils import run_command
-from cancer_ai.validator.model_run_manager import ModelRunManager, ModelInfo
+from cancer_ai.validator.model_run_manager import ModelRunManager
+from cancer_ai.validator.models import ModelInfo
 from cancer_ai.validator.dataset_manager import DatasetManager
 from cancer_ai.validator.competition_manager import COMPETITION_HANDLER_MAPPING
 
@@ -148,13 +149,13 @@ class MinerManagerCLI:
             return
         bt.logging.info(f"Code zip path: {self.code_zip_path}")
 
-    def _compute_model_hash(self, repo_id, model_filename, repo_type):
+    def _compute_model_hash(self, repo_id, model_filename):
         """Compute an 8-character hexadecimal SHA-1 hash of the model file from Hugging Face."""
         try:
             model_path = huggingface_hub.hf_hub_download(
                 repo_id=repo_id,
                 filename=model_filename,
-                repo_type=repo_type,
+                repo_type="model",
             )
             sha1 = hashlib.sha1()
             with open(model_path, 'rb') as f:
@@ -194,10 +195,6 @@ class MinerManagerCLI:
             subtensor=self.subtensor, netuid=self.config.netuid, wallet=self.wallet
         )
 
-        if len(self.config.hf_repo_type.encode('utf-8')) > 7:
-            bt.logging.error("hf_repo_type must be 7 bytes or less")
-            return
-
         if len(self.config.hf_repo_id.encode('utf-8')) > 32:
             bt.logging.error("hf_repo_id must be 32 bytes or less")
             return
@@ -217,7 +214,7 @@ class MinerManagerCLI:
             return
 
         model_hash = self._compute_model_hash(
-            self.config.hf_repo_id, self.config.hf_model_name, self.config.hf_repo_type
+            self.config.hf_repo_id, self.config.hf_model_name
         )
 
         if not model_hash:
@@ -229,7 +226,7 @@ class MinerManagerCLI:
             competition_id=self.config.competition_id,
             hf_repo_id=self.config.hf_repo_id,
             hf_model_filename=self.config.hf_model_name,
-            hf_repo_type=self.config.hf_repo_type,
+            hf_repo_type="model",
             hf_code_filename=self.config.hf_code_filename,
             block=None,
             model_hash=model_hash,
