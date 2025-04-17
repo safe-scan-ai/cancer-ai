@@ -276,6 +276,7 @@ class CompetitionManager(SerializableManager):
         for hotkey, result in self.results:
             if hotkey in hotkeys_to_slash:
                 bt.logging.info(f"Slashing model copier for hotkey: {hotkey} (setting score to 0.0)")
+                self.error_results.append((hotkey, "Slashing model copier - setting score to 0.0"))
                 result.score = 0.0
 
     def _compute_model_hash(self, file_path) -> str:
