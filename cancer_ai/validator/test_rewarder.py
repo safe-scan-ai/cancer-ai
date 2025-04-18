@@ -28,7 +28,7 @@ class TestCompetitionResultsStore(unittest.TestCase):
     def test_update_average_score(self):
         self.store.add_score(self.competition_id, self.hotkey, self.score, self.date)
         self.assertEqual(
-            self.store.average_scores[self.competition_id][self.hotkey], self.score
+            self.store.average_scores[self.competition_id][self.hotkey], self.score / 5
         )
 
     def test_delete_dead_hotkeys(self):
@@ -53,7 +53,7 @@ class TestCompetitionResultsStore(unittest.TestCase):
 
     def test_step_by_step(self):
         scores_sequential = [1, 2, 1.5, 1.5, 7, 8]
-        averages_sequential = [1, 1.5, 1.5, 1.5, 2.6, 4.0]
+        averages_sequential = [1/5, (1+2)/5, (1+2+1.5)/5, (1+2+1.5+1.5)/5, (1+2+1.5+1.5+7)/5, (2+1.5+1.5+7+8)/5]
         for i in range(6):
             self.store.add_score(self.competition_id, self.hotkey, scores_sequential[i])
             self.assertEqual(

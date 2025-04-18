@@ -62,7 +62,7 @@ class TestCompetitionResultsStore(unittest.TestCase):
         self.store.add_score(self.competition_id_1, self.hotkey_1, 0.8)
         
         # Verify average score was calculated correctly (automatically updated by add_score)
-        expected_average = (0.7 + 0.9 + 0.8) / 3
+        expected_average = (0.7 + 0.9 + 0.8) / 5
         self.assertAlmostEqual(self.store.average_scores[self.competition_id_1][self.hotkey_1], expected_average)
 
     def test_delete_dead_hotkeys(self):
