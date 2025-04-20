@@ -227,7 +227,7 @@ def add_common_args(cls, parser):
         "--models.dataset_dir",
         type=str,
         help="Path for storing datasets.",
-        default="/tmp/datasets",
+        default="/tmp/datasets-extracted",
     )
 
     parser.add_argument(

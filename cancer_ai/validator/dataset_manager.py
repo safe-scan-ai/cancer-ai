@@ -91,7 +91,7 @@ class DatasetManager(SerializableManager):
         )
         # delete old unpacked dataset
         if os.path.exists(self.local_extracted_dir):
-            os.system(f"rm -R {self.local_extracted_dir}")
+            os.system(f"chmod -R u+rw {self.local_extracted_dir} && rm -R {self.local_extracted_dir}")
 
         bt.logging.debug(f"Dataset extracted to: { self.local_compressed_path}")
 
@@ -101,8 +101,8 @@ class DatasetManager(SerializableManager):
         # TODO add error handling
         zip_file_path = self.local_compressed_path
         extract_dir = self.local_extracted_dir
-        command = f'unzip -o "{zip_file_path}" -d {extract_dir}'
-        out, err = await run_command(command)
+        command = f'unzip -o "{zip_file_path}" -d {extract_dir} && chmod -R u+rw {extract_dir}'
+        _, err = await run_command(command)
         if err:
             bt.logging.error(f"Error unzipping dataset: {err}")
             raise DatasetManagerException(f"Error unzipping dataset: {err}")
