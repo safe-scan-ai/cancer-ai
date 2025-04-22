@@ -21,6 +21,18 @@ class ModelScore(BaseModel):
 
 
 class CompetitionResultsStore(BaseModel):
+    def get_newest_score(self, competition_id: str, hotkey: Hotkey) -> float | None:
+        """Return the newest score for a given competition/hotkey, or None if not found."""
+        scores = self.score_map.get(competition_id, {}).get(hotkey, [])
+        if not scores:
+            return None
+        return scores[-1].score
+
+    def get_scores(self, competition_id: str, hotkey: Hotkey) -> list[float]:
+        """Return all scores for a given competition/hotkey, newest first."""
+        scores = self.score_map.get(competition_id, {}).get(hotkey, [])
+        return [s.score for s in reversed(scores)]
+
     # Structure: {competition_id: {hotkey: [ModelScore, ...]}}
     score_map: dict[str, dict[Hotkey, list[ModelScore]]] = {}
     # Structure: {competition_id: {hotkey: average_score}}
@@ -64,13 +76,7 @@ class CompetitionResultsStore(BaseModel):
         scores = self.score_map[competition_id][hotkey][-MOVING_AVERAGE_LENGTH:]
         scores = [score.score for score in scores]
         bt.logging.debug(f"Scores used to calculate average for hotkey {hotkey}: {scores}")
-        try:
-            result = sum(
-                score
-                for score in scores
-            ) / len(scores)
-        except ZeroDivisionError:
-            result = 0.0
+        result = sum(score for score in scores) / MOVING_AVERAGE_LENGTH
 
         if competition_id not in self.average_scores:
             self.average_scores[competition_id] = {}
