@@ -21,6 +21,18 @@ class ModelScore(BaseModel):
 
 
 class CompetitionResultsStore(BaseModel):
+    def get_newest_score(self, competition_id: str, hotkey: Hotkey) -> float | None:
+        """Return the newest score for a given competition/hotkey, or None if not found."""
+        scores = self.score_map.get(competition_id, {}).get(hotkey, [])
+        if not scores:
+            return None
+        return scores[-1].score
+
+    def get_scores(self, competition_id: str, hotkey: Hotkey) -> list[float]:
+        """Return all scores for a given competition/hotkey, newest first."""
+        scores = self.score_map.get(competition_id, {}).get(hotkey, [])
+        return [s.score for s in reversed(scores)]
+
     # Structure: {competition_id: {hotkey: [ModelScore, ...]}}
     score_map: dict[str, dict[Hotkey, list[ModelScore]]] = {}
     # Structure: {competition_id: {hotkey: average_score}}
