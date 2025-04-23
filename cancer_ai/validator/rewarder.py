@@ -130,6 +130,14 @@ class CompetitionResultsStore(BaseModel):
         # Update the current top hotkey and score
         self.current_top_hotkeys[competition_id] = (new_top_hotkey, new_top_score)
         return new_top_hotkey
+        
+    def get_hotkeys_with_non_zero_scores(self, competition_id) -> list[str]:
+        if competition_id not in self.average_scores or not self.average_scores[competition_id]:
+            raise ValueError(f"No hotkeys to choose from for competition {competition_id}")
+        scores = self.average_scores[competition_id]
+        hotkeys = [hk for hk, score in scores.items() if score > 0]
+        hotkeys.sort(key=lambda hk: scores[hk], reverse=True)
+        return hotkeys
 
     def get_competitions(self) -> list[str]:
         return list(self.score_map.keys())

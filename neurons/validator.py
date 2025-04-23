@@ -353,22 +353,26 @@ class Validator(BaseValidatorNeuron):
     
     def update_scores(self, competition_weights: dict[str, float]):
         """Update scores based on competition weights."""
+        MINIMAL_SCORE = 0.0001
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
-        
         for competition_id, weight in competition_weights.items():
             try:
                 winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
-                if winner_hotkey is not None:
-                    if winner_hotkey in self.metagraph.hotkeys:
-                        winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
-                        self.scores[winner_idx] += weight
-                        bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
-                    else:
-                        bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
+                if winner_hotkey is not None and winner_hotkey in self.metagraph.hotkeys:
+                    winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
+                    self.scores[winner_idx] += weight
+                    bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
+                    # Add small score to other non-zero hotkeys
+                    non_zero_hotkeys = self.competition_results_store.get_hotkeys_with_non_zero_scores(competition_id)
+                    for hk in non_zero_hotkeys:
+                        if hk != winner_hotkey and hk in self.metagraph.hotkeys:
+                            idx = self.metagraph.hotkeys.index(hk)
+                            self.scores[idx] += MINIMAL_SCORE * weight
+                else:
+                    bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
             except ValueError as e:
                 bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
                 continue
-        
         bt.logging.debug("Scores from UPDATE_SCORES:")
         bt.logging.debug(f"{self.scores}")
         self.save_state()
