@@ -262,7 +262,6 @@ class CompetitionManager(SerializableManager):
         - result.metrics_key  = the full tuple of metrics
         - result.metrics_hash = hash(metrics_key)
         """
-        # map from metrics‐tuple → list of hotkeys
         metrics_to_hotkeys: dict[tuple, list[str]] = {}
 
         for hotkey, result in self.results:
