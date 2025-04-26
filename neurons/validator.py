@@ -296,7 +296,7 @@ class Validator(BaseValidatorNeuron):
             wandb.init(project=competition_id, group="model_evaluation")
             for miner_hotkey, evaluation_result in competition_manager.results:
 
-                if miner_hotkey in competition_manager.error_keys:
+                if miner_hotkey in competition_manager.error_results:
                     continue
 
                 try:
