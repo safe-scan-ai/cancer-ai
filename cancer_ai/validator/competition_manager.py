@@ -256,11 +256,9 @@ class CompetitionManager(SerializableManager):
 
     def group_duplicate_scores(self, hotkeys_to_slash: list[str]) -> list[list[str]]:
         """
-        Groups hotkeys for models whose full evaluation-metric tuple
+        Groups hotkeys for models whose full evaluation‐metric tuple
         (all floats rounded to 6dp, confusion_matrix, fpr, tpr, tested_entries)
-        is identical. Also annotates each ModelEvaluationResult in-place:
-        - result.metrics_key  = the full tuple of metrics
-        - result.metrics_hash = hash(metrics_key)
+        is identical.
         """
         metrics_to_hotkeys: dict[tuple, list[str]] = {}
 
@@ -274,7 +272,6 @@ class CompetitionManager(SerializableManager):
                 round(result.recall,     6),
                 round(result.fbeta,      6),
                 round(result.roc_auc,    6),
-                round(result.run_time_s, 6),
                 round(result.score,      6),
                 result.tested_entries,
                 tuple(tuple(row) for row in result.confusion_matrix),
@@ -282,12 +279,10 @@ class CompetitionManager(SerializableManager):
                 tuple(round(x, 6) for x in result.tpr),
             )
 
-            result.metrics_key = key
-            result.metrics_hash = hash(key)
 
             metrics_to_hotkeys.setdefault(key, []).append(hotkey)
 
-        return [hotkeys for hotkeys in metrics_to_hotkeys.values() if len(hotkeys) > 1]
+        return [group for group in metrics_to_hotkeys.values() if len(group) > 1]
 
     
     def slash_model_copiers(self, hotkeys_to_slash: list[str]):
