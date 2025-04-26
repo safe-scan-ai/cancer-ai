@@ -256,20 +256,34 @@ class CompetitionManager(SerializableManager):
 
     def group_duplicate_scores(self, hotkeys_to_slash: list[str]) -> list[list[str]]:
         """
-        Groups hotkeys for models with identical scores.
+        Groups hotkeys for models whose full evaluation‐metric tuple
+        (all floats rounded to 6dp, confusion_matrix, fpr, tpr, tested_entries)
+        is identical.
         """
-        score_to_hotkeys = {}
+        metrics_to_hotkeys: dict[tuple, list[str]] = {}
+
         for hotkey, result in self.results:
             if hotkey in hotkeys_to_slash:
                 continue
-            score = round(result.score, 6)
-            if score in score_to_hotkeys and score > 0.0:
-                score_to_hotkeys[score].append(hotkey)
-            else:
-                score_to_hotkeys[score] = [hotkey]
-        
-        grouped_duplicates = [hotkeys for hotkeys in score_to_hotkeys.values() if len(hotkeys) > 1]
-        return grouped_duplicates
+
+            key = (
+                round(result.accuracy,   6),
+                round(result.precision,  6),
+                round(result.recall,     6),
+                round(result.fbeta,      6),
+                round(result.roc_auc,    6),
+                round(result.score,      6),
+                result.tested_entries,
+                tuple(tuple(row) for row in result.confusion_matrix),
+                tuple(round(x, 6) for x in result.fpr),
+                tuple(round(x, 6) for x in result.tpr),
+            )
+
+
+            metrics_to_hotkeys.setdefault(key, []).append(hotkey)
+
+        return [group for group in metrics_to_hotkeys.values() if len(group) > 1]
+
     
     def slash_model_copiers(self, hotkeys_to_slash: list[str]):
         for hotkey, result in self.results:
