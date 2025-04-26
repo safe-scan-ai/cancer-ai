@@ -134,7 +134,7 @@ class Validator(BaseValidatorNeuron):
         time.sleep(5)
         data_package = get_local_dataset(self.config.local_dataset_dir)
         if not data_package:
-            bt.logging.error("NO NEW DATA PACKAGES")
+            bt.logging.info("No new data packages found.")
             return
         competition_manager = CompetitionManager(
                 config=self.config,
@@ -295,6 +295,10 @@ class Validator(BaseValidatorNeuron):
             # Logging results
             wandb.init(project=competition_id, group="model_evaluation")
             for miner_hotkey, evaluation_result in competition_manager.results:
+
+                if miner_hotkey in competition_manager.error_keys:
+                    continue
+
                 try:
                     model = self.db_controller.get_latest_model(
                         hotkey=miner_hotkey,
