@@ -177,7 +177,7 @@ class Validator(BaseValidatorNeuron):
         competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api)
         bt.logging.warning("Competition results store after update")
         bt.logging.warning(self.competition_results_store.model_dump_json())
-        self.update_scores(competition_weights)
+        self.update_scores(competition_weights, 0.0001, 0.0002)
 
 
     async def monitor_datasets(self):
@@ -266,7 +266,7 @@ class Validator(BaseValidatorNeuron):
             # Update competition results
             bt.logging.info(f"Competition result for {competition_id}: {winning_hotkey}")
             competition_weights = await self.competition_results_store.update_competition_results(competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api)
-            self.update_scores(competition_weights)
+            self.update_scores(competition_weights, 0.0001, 0.0002)
 
             average_winning_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
             winner_log = WanDBLogCompetitionWinners(
@@ -351,31 +351,86 @@ class Validator(BaseValidatorNeuron):
             
             wandb.finish()
     
-    def update_scores(self, competition_weights: dict[str, float]):
-        """Update scores based on competition weights."""
-        MINIMAL_SCORE = 0.0001
+
+    def update_scores(
+        self,
+        competition_weights: dict[str, float],
+        min_min_score: float,
+        max_min_score: float
+    ):
+        """
+        For each competition:
+        1) Award the winner its full `weight`.
+        2) Linearly spread concrete minimal values in [min_min_score … max_min_score]
+            across the other non‐winner hotkeys (highest raw → max_min_score, lowest → min_min_score).
+        3) Do NOT multiply those minimal values by the weight—just add them directly.
+        """
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
-        for competition_id, weight in competition_weights.items():
+
+        for comp_id, weight in competition_weights.items():
             try:
-                winner_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
-                if winner_hotkey is not None and winner_hotkey in self.metagraph.hotkeys:
-                    winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
-                    self.scores[winner_idx] += weight
-                    bt.logging.info(f"Applied weight {weight} for competition {competition_id} winner {winner_hotkey}")
-                    # Add small score to other non-zero hotkeys
-                    non_zero_hotkeys = self.competition_results_store.get_hotkeys_with_non_zero_scores(competition_id)
-                    for hk in non_zero_hotkeys:
-                        if hk != winner_hotkey and hk in self.metagraph.hotkeys:
-                            idx = self.metagraph.hotkeys.index(hk)
-                            self.scores[idx] += MINIMAL_SCORE * weight
-                else:
-                    bt.logging.warning(f"Winning hotkey {winner_hotkey} not found for competition {competition_id}")
+                winner_hotkey = self.competition_results_store.get_top_hotkey(comp_id)
             except ValueError as e:
-                bt.logging.warning(f"Error getting top hotkey for competition {competition_id}: {e}")
+                bt.logging.warning(f"[{comp_id}] cannot determine winner: {e}")
                 continue
-        bt.logging.debug("Scores from UPDATE_SCORES:")
-        bt.logging.debug(f"{self.scores}")
+
+            if winner_hotkey in self.metagraph.hotkeys:
+                winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
+                self.scores[winner_idx] += weight
+                bt.logging.info(
+                    f"[{comp_id}] +{weight:.6f} to winner {winner_hotkey}"
+                )
+            else:
+                bt.logging.warning(
+                    f"[{comp_id}] winner {winner_hotkey!r} not in metagraph"
+                )
+
+            try:
+                all_hotkeys = self.competition_results_store.get_hotkeys_with_non_zero_scores(comp_id)
+            except ValueError as e:
+                bt.logging.warning(f"[{comp_id}] {e}")
+                continue
+
+            # remove the winner from the list
+            non_winners = [hk for hk in all_hotkeys if hk != winner_hotkey]
+            k = len(non_winners)
+            if k == 0:
+                continue
+
+            # compute the minimal-value sequence:
+            # index 0 (highest score) → max_min_score,
+            # index k-1 (lowest) → min_min_score
+            if k > 1:
+                span = max_min_score - min_min_score
+                step = span / (k - 1)
+                minimal_values = [
+                    max_min_score - i * step
+                    for i in range(k)
+                ]
+            else:
+                # single runner-up gets the top of the band
+                minimal_values = [max_min_score]
+
+            # apply those concrete minimal values (not scaled by weight)
+            for minimal, hk in zip(minimal_values, non_winners):
+                if hk in self.metagraph.hotkeys:
+                    idx = self.metagraph.hotkeys.index(hk)
+                    self.scores[idx] += minimal
+                    bt.logging.info(
+                        f"[{comp_id}] +{minimal:.6f} to non-winner {hk}"
+                    )
+                else:
+                    bt.logging.warning(
+                        f"[{comp_id}] non-winner {hk!r} not in metagraph"
+                    )
+
+        bt.logging.debug(
+            "Scores from update_scores:\n"
+            f"{np.array2string(self.scores, precision=7, floatmode='fixed', separator=', ')}"
+        )
+
         self.save_state()
+
 
     async def log_results_to_csv(self, file_name: str, data_package: NewDatasetFile, top_hotkey: str, models_results: list):
         """Debug method for dumping rewards for testing """
