@@ -1,4 +1,5 @@
 import os
+import asyncio
 from dataclasses import dataclass, asdict, is_dataclass
 from typing import Optional
 from datetime import datetime, timezone, timedelta
@@ -35,6 +36,9 @@ class ModelManager(SerializableManager):
         Returns:
             bool: True if the model was downloaded successfully, False otherwise.
         """
+        MAX_RETRIES = 3
+        RETRY_DELAY = 2  # seconds
+        
         model_info = self.hotkey_store[hotkey]
         
         if self.config.hf_token:
@@ -43,26 +47,42 @@ class ModelManager(SerializableManager):
             fs = HfFileSystem()
         repo_path = os.path.join(model_info.hf_repo_id, model_info.hf_model_filename)
         
-        # List files in the repository and get file date
-        try:
-            files = fs.ls(model_info.hf_repo_id)
-        except Exception as e:
-            bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id}: {e}")
-            self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
-            return False
-            
-        # Find the specific file and its upload date
+        # List files in the repository and get file date with retry
+        files = None
         file_date = None
-        for file in files:
-            if model_info.hf_model_filename.lower() in file["name"].lower():
-                # Extract the upload date
-                file_date = file["last_commit"]["date"]
-                break
+        for retry_counter in range(MAX_RETRIES):
+            try:
+                files = fs.ls(model_info.hf_repo_id)
+                
+                # Find the specific file and its upload date
+                for file in files:
+                    if model_info.hf_model_filename.lower() in file["name"].lower():
+                        # Extract the upload date
+                        file_date = file["last_commit"]["date"]
+                        break
+                        
+                if file_date:  # If we found the file, break out of the retry loop
+                    break
+                else:
+                    # File not found but repository exists, so we'll try again
+                    if retry_counter < MAX_RETRIES - 1:
+                        bt.logging.warning(f"Retry {retry_counter+1}/{MAX_RETRIES}: File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}, retrying...")
+                        await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))
+                    else:
+                        bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts")
+                        self.parent.error_results.append((hotkey, f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}"))
+                        return False
+                        
+            except Exception as e:
+                if retry_counter < MAX_RETRIES - 1:
+                    bt.logging.warning(f"Retry {retry_counter+1}/{MAX_RETRIES}: Failed to list files in repository {model_info.hf_repo_id}: {e}")
+                    await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))  # Exponential backoff
+                else:
+                    bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts: {e}")
+                    self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
+                    return False
         
-        if not file_date:
-            bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}")
-            self.parent.error_results.append((hotkey, f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}"))
-            return False
+        # We don't need this check anymore since we handle it in the retry loop
             
         # Parse and check if the model is too recent to download
         is_too_recent, parsed_date = self.is_model_too_recent(file_date, model_info.hf_model_filename, hotkey)
@@ -72,19 +92,25 @@ class ModelManager(SerializableManager):
         
         file_date = parsed_date
         
-        # Download the file
-        try:
-            model_info.file_path = self.api.hf_hub_download(
-                repo_id=model_info.hf_repo_id,
-                repo_type="model",
-                filename=model_info.hf_model_filename,
-                cache_dir=self.config.models.model_dir,
-                token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
-            )
-        except Exception as e:
-            bt.logging.error(f"Failed to download model file: {e}")
-            self.parent.error_results.append((hotkey, f"Failed to download model file: {e}"))
-            return False
+        # Download the file with retry
+        for retry_counter in range(MAX_RETRIES):
+            try:
+                model_info.file_path = self.api.hf_hub_download(
+                    repo_id=model_info.hf_repo_id,
+                    repo_type="model",
+                    filename=model_info.hf_model_filename,
+                    cache_dir=self.config.models.model_dir,
+                    token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
+                )
+                break
+            except Exception as e:
+                if retry_counter < MAX_RETRIES - 1:
+                    bt.logging.warning(f"Retry {retry_counter+1}/{MAX_RETRIES}: Failed to download model file: {e}")
+                    await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))  # Exponential backoff
+                else:
+                    bt.logging.error(f"Failed to download model file after {MAX_RETRIES} attempts: {e}")
+                    self.parent.error_results.append((hotkey, f"Failed to download model file: {e}"))
+                    return False
 
         # Verify the downloaded file exists
         if not os.path.exists(model_info.file_path):
