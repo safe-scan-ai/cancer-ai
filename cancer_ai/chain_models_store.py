@@ -88,29 +88,22 @@ class ChainModelMetadata:
 
     async def retrieve_model_metadata(self, hotkey: str, uid: int) -> ChainMinerModel:
         """Retrieves model metadata on this subnet for specific hotkey"""
-        try:
-            metadata = get_metadata(self.subtensor, self.netuid, hotkey)
-        except Exception:
-            raise 
+        await asyncio.sleep(0.2) # temp fix for 429
+        
+        metadata = get_metadata(self.subtensor, self.netuid, hotkey)
 
         if metadata is None:
             raise ValueError(f"No metadata found for hotkey {hotkey}")
 
-        try:
-            chain_str = self.subtensor.get_commitment(self.netuid, uid)
-        except Exception:
-            raise 
+        chain_str = self.subtensor.get_commitment(self.netuid, uid)
 
-        model = None
-        try:
-            model = ChainMinerModel.from_compressed_str(chain_str)
-            bt.logging.debug(f"Model: {model}")
-            if model is None:
-                raise ValueError(
-                    f"Metadata might be in old format or invalid for hotkey '{hotkey}'. Raw value: {chain_str}"
-                )
-        except Exception:
-            raise
+        model = ChainMinerModel.from_compressed_str(chain_str)
+        bt.logging.debug(f"Model: {model}")
+        if model is None:
+            raise ValueError(
+                f"Metadata might be in old format or invalid for hotkey '{hotkey}'. Raw value: {chain_str}"
+            )
+        
         # The block id at which the metadata is stored
         model.block = metadata["block"]
         return model
