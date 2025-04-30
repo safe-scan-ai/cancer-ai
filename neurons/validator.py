@@ -426,7 +426,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.debug(
             "Scores from update_scores:\n"
-            f"{np.array2string(self.scores, precision=7, floatmode='fixed', separator=', ')}"
+            f"{np.array2string(self.scores, precision=7, floatmode='fixed', separator=', ', suppress_small=True)}"
         )
 
         self.save_state()
