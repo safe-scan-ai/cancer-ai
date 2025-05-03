@@ -59,6 +59,22 @@ class TestCompetitionResultsStore(unittest.TestCase):
         expected_average = (0.7 + 0.9 + 0.8) / 5
         self.assertAlmostEqual(self.store.average_scores[self.competition_id_1][self.hotkey_1], expected_average)
 
+    def test_get_hotkeys_with_non_zero_scores(self):
+        store = CompetitionResultsStore()
+        competition_id = "comp"
+        store.average_scores[competition_id] = {
+            "hk1": 0.0,
+            "hk2": 0.9,
+            "hk3": 0.2,
+            "hk4": 0.7,
+            "hk5": 1.0
+        }
+        result = store.get_hotkeys_with_non_zero_scores(competition_id)
+        self.assertEqual(result, ["hk5", "hk2", "hk4", "hk3"])  # Sorted descending, >0 only
+        # Edge case: all zero or negative
+        store.average_scores[competition_id] = {"hk1": 0.0, "hk3": 0.0}
+        self.assertEqual(store.get_hotkeys_with_non_zero_scores(competition_id), [])
+
     def test_delete_dead_hotkeys(self):
         self.store.add_score(self.competition_id, self.hotkey, self.score, self.date)
         active_hotkeys = []
