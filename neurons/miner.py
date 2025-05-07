@@ -25,6 +25,15 @@ from cancer_ai.utils.config import path_config, add_miner_args
 from cancer_ai.validator.utils import get_newest_competition_packages
 
 
+LICENSE_NOTICE = """
+🔒 License Notice:
+To share your model for Safe Scan competition, it must be released under the MIT license.
+
+✅ By continuing, you confirm that your model is licensed under the MIT License,
+which allows open use, modification, and distribution with attribution.
+
+📤 Make sure your HuggingFace repository has license set to MIT.
+"""
 class MinerManagerCLI:
     def __init__(self, config=None):
 
@@ -171,7 +180,7 @@ class MinerManagerCLI:
 
     async def submit_model(self) -> None:
         # Check if the required model and files are present in hugging face repo
-
+        print(LICENSE_NOTICE)
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
         self.metagraph = self.subtensor.metagraph(self.config.netuid)

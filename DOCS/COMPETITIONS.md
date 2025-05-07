@@ -27,6 +27,7 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
 
 - **Model Submission**: Participants, referred to as miners, must submit their trained models at the end of each competition.
 - **Format**: All models must be in ONNX format. This ensures uniform testing and allows for broad deployment options, including on mobile and web platforms.
+- **License**: All models must be licensed under the MIT License to ensure the open nature of the competition and to allow unrestricted use worldwide.
 - **Training Code**: Each submission should include the code used for training the model to ensure transparency and reproducibility.
 - **Upload Process**: Models are uploaded to Hugging Face at the end of each test. Miners then submit the Hugging Face repository link on the blockchain for evaluation by validators.
 - **Timing Constraint**: Only models submitted at least 30 minutes before the competition start time are eligible for evaluation. This requirement ensures that models have not been retrained with the new data batch, maintaining fairness and integrity across the competition.
