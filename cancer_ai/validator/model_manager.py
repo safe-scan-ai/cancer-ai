@@ -8,13 +8,12 @@ import bittensor as bt
 from huggingface_hub import HfApi, HfFileSystem
 
 from .models import ModelInfo
-from .manager import SerializableManager
 from .exceptions import ModelRunException
 
 
 
 
-class ModelManager(SerializableManager):
+class ModelManager():
     def __init__(self, config, db_controller, parent: Optional["CompetitionManager"] = None) -> None:
         self.config = config
         self.db_controller = db_controller
@@ -49,7 +48,7 @@ class ModelManager(SerializableManager):
             fs = HfFileSystem()
         repo_path = os.path.join(model_info.hf_repo_id, model_info.hf_model_filename)
 
-        if not self.model_license_valid(hotkey):
+        if not await self.model_license_valid(hotkey):
             bt.logging.error(f"License for {model_info.hf_repo_id} not found or invalid")
             self.parent.error_results.append((hotkey, "MIT license not found"))
             return False
