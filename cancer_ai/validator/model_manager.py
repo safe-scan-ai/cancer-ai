@@ -27,9 +27,15 @@ class ModelManager():
     async def model_license_valid(self, hotkey) -> bool:
         try:
             model_info = self.api.model_info(self.hotkey_store[hotkey].hf_repo_id)
+            meta_license = None
+            if model_info.card_data:
+                meta_license = model_info.card_data.get("license")
+            if meta_license and "mit" in meta_license:
+                return True
+            return False
         except Exception as e:            
             bt.logging.error(f"Cannot get information about repository {self.hotkey_store[hotkey].hf_repo_id}. Error: {e}")
-        return "license:mit" in model_info
+            return False
 
 
     async def download_miner_model(self, hotkey) -> bool:
