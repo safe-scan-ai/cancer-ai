@@ -6,6 +6,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, timezone
 from ..chain_models_store import ChainMinerModel
+from retry import retry
 
 Base = declarative_base()
 
@@ -299,6 +300,7 @@ class ModelDBController:
         finally:
             session.close()
 
+    @retry(tries=5, delay=5)
     def get_block_timestamp(self, block_number) -> datetime:
         """Gets the timestamp of a block given its number."""
         try:
