@@ -58,7 +58,7 @@ class ModelManager():
             bt.logging.error(f"License for {model_info.hf_repo_id} not found or invalid")
             self.parent.error_results.append((hotkey, "MIT license not found"))
             return False
-             
+        bt.logging.debug(f"License found for {model_info.hf_repo_id}")
         # List files in the repository and get file date with retry
         files = None
         file_date = None
