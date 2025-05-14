@@ -8,13 +8,12 @@ import bittensor as bt
 from huggingface_hub import HfApi, HfFileSystem
 
 from .models import ModelInfo
-from .manager import SerializableManager
 from .exceptions import ModelRunException
 
 
 
 
-class ModelManager(SerializableManager):
+class ModelManager():
     def __init__(self, config, db_controller, parent: Optional["CompetitionManager"] = None) -> None:
         self.config = config
         self.db_controller = db_controller
@@ -25,11 +24,19 @@ class ModelManager(SerializableManager):
         self.hotkey_store: dict[str, ModelInfo] = {}
         self.parent = parent
 
-    def get_state(self):
-        return {k: asdict(v) for k, v in self.hotkey_store.items() if is_dataclass(v)}
+    async def model_license_valid(self, hotkey) -> bool:
+        try:
+            model_info = self.api.model_info(self.hotkey_store[hotkey].hf_repo_id)
+            meta_license = None
+            if model_info.card_data:
+                meta_license = model_info.card_data.get("license")
+            if meta_license and "mit" in meta_license:
+                return True
+            return False
+        except Exception as e:            
+            bt.logging.error(f"Cannot get information about repository {self.hotkey_store[hotkey].hf_repo_id}. Error: {e}")
+            return False
 
-    def set_state(self, hotkey_models: dict):
-        self.hotkey_store = {k: ModelInfo(**v) for k, v in hotkey_models.items()}
 
     async def download_miner_model(self, hotkey) -> bool:
         """Downloads the newest model from Hugging Face and saves it to disk.
@@ -46,7 +53,12 @@ class ModelManager(SerializableManager):
         else:
             fs = HfFileSystem()
         repo_path = os.path.join(model_info.hf_repo_id, model_info.hf_model_filename)
-        
+
+        if not await self.model_license_valid(hotkey):
+            bt.logging.error(f"License for {model_info.hf_repo_id} not found or invalid")
+            self.parent.error_results.append((hotkey, "MIT license not found"))
+            return False
+        bt.logging.debug(f"License found for {model_info.hf_repo_id}")
         # List files in the repository and get file date with retry
         files = None
         file_date = None
