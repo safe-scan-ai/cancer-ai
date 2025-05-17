@@ -88,7 +88,7 @@ class ChainModelMetadata:
 
     async def retrieve_model_metadata(self, hotkey: str, uid: int) -> ChainMinerModel:
         """Retrieves model metadata on this subnet for specific hotkey"""
-        await asyncio.sleep(0.2) # temp fix for 429
+        await asyncio.sleep(0.8) # temp fix for 429
         
         metadata = get_metadata(self.subtensor, self.netuid, hotkey)
 
