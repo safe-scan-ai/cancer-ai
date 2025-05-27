@@ -95,7 +95,12 @@ class ChainModelMetadata:
         if metadata is None:
             raise ValueError(f"No metadata found for hotkey {hotkey}")
 
-        chain_str = self.subtensor.get_commitment(self.netuid, uid)
+        chain_str = get_commitment(self.subtensor, self.netuid, uid)
+        
+        if chain_str is None:
+            raise ValueError(
+                f"No chain string found for hotkey '{hotkey}' and uid {uid}"
+            )
 
         model = ChainMinerModel.from_compressed_str(chain_str)
         bt.logging.debug(f"Model: {model}")
@@ -108,7 +113,7 @@ class ChainModelMetadata:
         model.block = metadata["block"]
         return model
 
-@retry(tries=10, delay=5)
+@retry(tries=10, delay=1, backoff=2, max_delay=30)
 def get_metadata(subtensor, netuid, hotkey):
     """Synchronous metadata fetch with retry logic."""
     try:
@@ -116,4 +121,14 @@ def get_metadata(subtensor, netuid, hotkey):
     except Exception as e:
         raise RuntimeError(
             f"Failed to get metadata from chain for hotkey '{hotkey}': {e}"
+        ) from e
+    
+@retry(tries=8, delay=0.5, backoff=2, max_delay=20)
+def get_commitment(subtensor, netuid, uid):
+    """Synchronous commitment fetch with exponential-backoff and contextual errors."""
+    try:
+        return subtensor.get_commitment(netuid, uid)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to get commitment from chain for uid={uid}: {e}"
         ) from e
