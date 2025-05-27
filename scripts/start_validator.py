@@ -59,6 +59,9 @@ def generate_pm2_config(pm2_name: str, args: List[str]) -> None:
                 name: '{pm2_name}',
                 script: 'neurons/validator.py',
                 interpreter: '{sys.executable}',
+                autorestart: true,
+                restart_delay: 30000,
+                max_restarts: 100,
                 env: {{
                 PYTHONPATH: '{os.environ.get('PYTHONPATH', '')}:./',
                 }},
