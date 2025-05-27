@@ -144,8 +144,11 @@ class BaseNeuron(ABC):
                 time.sleep(delay)
 
         if attempt == retries:
-            bt.logging.error("Failed to sync metagraph. Exiting...")
-            sys.exit(0)
+            bt.logging.error(
+                "Failed to sync metagraph after %d retries; exiting.",
+                retries,
+            )
+            sys.exit(1)
 
     def check_registered(self):
         retries = 3
