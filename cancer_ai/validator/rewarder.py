@@ -133,32 +133,22 @@ class CompetitionResultsStore(BaseModel):
         
     def get_hotkeys_with_non_zero_scores(self, competition_id: str) -> list[str]:
         """
-        Return all hotkeys for `competition_id` whose newest score is > 0,
-        sorted descending by that newest score. Raises ValueError if
-        - competition_id not in score_map
-        - no hotkey has a positive newest score
+        Return all hotkeys for `competition_id` whose *average* score is > 0,
+        sorted descending by that average.
         """
-        # 1) Ensure we have a map for this competition
-        if competition_id not in self.score_map:
-            raise ValueError(f"No hotkeys to choose from for competition {competition_id}")
+        if competition_id not in self.average_scores:
+            raise ValueError(f"No average scores to choose from for competition {competition_id}")
 
-        comp_map = self.score_map[competition_id]
+        comp_avg_map = self.average_scores[competition_id]
 
-        # 2) Build dict of hotkey -> newest_score (only > 0)
-        latest_scores: dict[str, float] = {}
-        for hk in comp_map:
-            score = self.get_newest_score(competition_id, hk)
-            if score is not None and score > 0:
-                latest_scores[hk] = score
+        positive_avg = { hk: avg for hk, avg in comp_avg_map.items() if avg > 0 }
 
-        # 3) If none positive, error out
-        if not latest_scores:
-            raise ValueError(f"No non-zero hotkey scores for competition {competition_id}")
+        if not positive_avg:
+            return []
 
-        # 4) Sort and return
         return sorted(
-            latest_scores.keys(),
-            key=lambda hk: latest_scores[hk],
+            positive_avg.keys(),
+            key=lambda hk: positive_avg[hk],
             reverse=True
         )
 
