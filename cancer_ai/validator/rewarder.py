@@ -141,6 +141,8 @@ class CompetitionResultsStore(BaseModel):
 
         comp_avg_map = self.average_scores[competition_id]
 
+        bt.logging.debug(f"Average scores for competition {competition_id}: {comp_avg_map}")
+
         positive_avg = { hk: avg for hk, avg in comp_avg_map.items() if avg > 0 }
 
         if not positive_avg:

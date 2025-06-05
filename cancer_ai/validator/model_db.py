@@ -302,7 +302,7 @@ class ModelDBController:
 
     @retry(tries=5, delay=5)
     def get_block_timestamp(self, block_number) -> datetime:
-        """Gets the timestamp of a block given its number."""
+        """Gets the timestamp of a given block."""
         try:
             block_hash = self.subtensor.get_block_hash(block_number)
 
@@ -323,5 +323,5 @@ class ModelDBController:
 
             return block_datetime
         except Exception as e:
-            bt.logging.error(f"Error retrieving block timestamp: {e}")
+            bt.logging.exception(f"Error retrieving block timestamp: {e}")
             raise
