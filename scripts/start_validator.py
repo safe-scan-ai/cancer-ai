@@ -220,7 +220,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--hf_token", default="", help="HF api token for Hugging Face."
+        "--hf_token", default="", help="Access token for Hugging Face."
     )
 
     flags, extra_args = parser.parse_known_args()
