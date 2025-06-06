@@ -55,7 +55,7 @@ pip install -r requirements.txt
 To run the validator script, use the following command:
 
 ```bash
-python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-hotkey --netuid=76
+python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-hotkey --netuid=76 --hf_token <your-huggingface-token>
 
 ```
 
@@ -67,6 +67,7 @@ python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-ho
 - `--subtensor.network`: Specifies the network name. Default is `"finney"`.
 - `--netuid`: Specifies the Netuid of the network. Default is `"76"`.
 - `--logging.debug`: Enables debug logging if set to `1`. Default is `1`.
+- `--hf_token`: Required for hugging face requests.
 
 ## How It Works
 

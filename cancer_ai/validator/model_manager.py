@@ -20,25 +20,29 @@ class ModelManager():
 
         if not os.path.exists(self.config.models.model_dir):
             os.makedirs(self.config.models.model_dir)
-        self.api = HfApi()
+        self.api = HfApi(token=self.config.hf_token)
         self.hotkey_store: dict[str, ModelInfo] = {}
         self.parent = parent
 
-    async def model_license_valid(self, hotkey) -> bool:
+
+    async def model_license_valid(self, hotkey) -> tuple[bool, Optional[str]]:
+        hf_id = self.hotkey_store[hotkey].hf_repo_id
         try:
-            model_info = self.api.model_info(self.hotkey_store[hotkey].hf_repo_id)
-            meta_license = None
-            if model_info.card_data:
-                meta_license = model_info.card_data.get("license")
-            if meta_license and "mit" in meta_license:
-                return True
-            return False
-        except Exception as e:            
-            bt.logging.error(f"Cannot get information about repository {self.hotkey_store[hotkey].hf_repo_id}. Error: {e}")
-            return False
+            model_info = self.api.model_info(hf_id, timeout=30)
+        except Exception as e:
+            bt.logging.error(f"Cannot get information about repository {hf_id}. Error: {e}")
+            return False, f"HF API ERROR: {e}"
 
+        meta_license = None
+        if model_info.card_data:
+            meta_license = model_info.card_data.get("license")
 
-    async def download_miner_model(self, hotkey) -> bool:
+        if meta_license and "mit" in meta_license.lower():
+            return True, None
+
+        return False, "NOT_MIT"
+
+    async def download_miner_model(self, hotkey, token: Optional[str] = None) -> bool:
         """Downloads the newest model from Hugging Face and saves it to disk.
         Returns:
             bool: True if the model was downloaded successfully, False otherwise.
@@ -47,17 +51,24 @@ class ModelManager():
         RETRY_DELAY = 2  # seconds
         
         model_info = self.hotkey_store[hotkey]
-        
-        if self.config.hf_token:
-            fs = HfFileSystem(token=self.config.hf_token)
-        else:
-            fs = HfFileSystem()
+                
+        fs = HfFileSystem(token=token)
+
         repo_path = os.path.join(model_info.hf_repo_id, model_info.hf_model_filename)
 
-        if not await self.model_license_valid(hotkey):
-            bt.logging.error(f"License for {model_info.hf_repo_id} not found or invalid")
-            self.parent.error_results.append((hotkey, "MIT license not found"))
+        is_valid, reason = await self.model_license_valid(hotkey)
+        if not is_valid:
+            hf_id = self.hotkey_store[hotkey].hf_repo_id
+
+            if reason.startswith("HF API ERROR"):
+                bt.logging.error(f"Could not verify license for {hf_id}: {reason.split(':', 1)[1]}")
+                self.parent.error_results.append((hotkey, "Couldn't verify license due to HF API error"))
+            else:
+                bt.logging.error(f"License for {hf_id} not found or invalid")
+                self.parent.error_results.append((hotkey, "MIT license not found or invalid"))
             return False
+
+
         bt.logging.debug(f"License found for {model_info.hf_repo_id}")
         # List files in the repository and get file date with retry
         files = None

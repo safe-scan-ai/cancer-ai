@@ -102,14 +102,8 @@ async def fetch_organization_data_references(
     custom_headers = {"Connection": "close"}
 
     try:
-        files = list_repo_tree_with_retry(
-            hf_api=hf_api,
-            repo_id=hf_repo_id,
-            repo_type="space",
-            token=None,
-            recursive=True,
-            expand=True,
-        )
+        # blocks event loop while sleeping between retries
+        files = _list_repo_tree_with_retry_sync(hf_api, hf_repo_id)
     except Exception as e:
         bt.logging.error("Failed to list repo tree after 10 attempts: %s", e)
         return yaml_data
@@ -211,14 +205,14 @@ async def sync_organizations_data_references(fetched_yaml_files: list[dict]):
     factory.update_from_dict(update_data)
 
 
-async def get_newest_competition_packages(config: bt.Config, hf_api: HfApi = None, packages_count: int = 30) -> list[dict]:
+async def get_newest_competition_packages(config: bt.Config, packages_count: int = 30) -> list[dict]:
     """
     Gets the link to the newest package for a specific competition.
     """
     newest_competition_packages: list[dict] = []
 
-    if hf_api is None:
-        hf_api = HfApi()
+    
+    hf_api = HfApi(token=config.hf_token)
     
     datasets_references = await fetch_organization_data_references(config.datasets_config_hf_repo_id, hf_api)
     await sync_organizations_data_references(datasets_references)
@@ -234,7 +228,6 @@ async def get_newest_competition_packages(config: bt.Config, hf_api: HfApi = Non
             hf_api=hf_api,
             repo_id=org.dataset_hf_repo,
             repo_type="dataset",
-            token=None,
             recursive=True,
             expand=True,
         )
@@ -294,7 +287,6 @@ async def check_for_new_dataset_files(
         files = hf_api.list_repo_tree(
             repo_id=org.dataset_hf_repo,
             repo_type="dataset",
-            token=None,  # these are public repos
             recursive=True,
             expand=True,
         )
@@ -363,11 +355,10 @@ async def get_competition_weights(config: bt.Config, hf_api: HfApi) -> dict[str,
     return weights_dict
 
 @retry(tries=10, delay=5, logger=bt.logging)
-def list_repo_tree_with_retry(hf_api, repo_id, repo_type, token, recursive, expand):
+def list_repo_tree_with_retry(hf_api, repo_id, repo_type, recursive, expand):
     return hf_api.list_repo_tree(
         repo_id=repo_id,
         repo_type=repo_type,
-        token=token,
         recursive=recursive,
         expand=expand,
     )
@@ -420,4 +411,22 @@ def chain_miner_to_model_info(chain_miner_model: ChainMinerModel) -> ModelInfo:
         competition_id=chain_miner_model.competition_id,
         block=chain_miner_model.block,
         model_hash=chain_miner_model.model_hash,
+    )
+
+@retry(
+    Exception,
+    tries=5,
+    delay=3,
+    backoff=3,
+    max_delay=81,
+    logger=bt.logging
+)
+def _list_repo_tree_with_retry_sync(hf_api: HfApi, hf_repo_id: str) -> list:
+    return list_repo_tree_with_retry(
+        hf_api=hf_api,
+        repo_id=hf_repo_id,
+        repo_type="space",
+    
+        recursive=True,
+        expand=True,
     )

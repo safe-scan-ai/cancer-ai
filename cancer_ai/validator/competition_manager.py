@@ -181,7 +181,7 @@ class CompetitionManager(SerializableManager):
         for miner_hotkey, model_info in self.model_manager.hotkey_store.items():
             evaluation_counter +=1
             bt.logging.info(f"Evaluating {evaluation_counter}/{models_amount} hotkey: {miner_hotkey}")
-            model_downloaded = await self.model_manager.download_miner_model(miner_hotkey)
+            model_downloaded = await self.model_manager.download_miner_model(miner_hotkey, token=self.config.hf_token)
             if not model_downloaded:
                 bt.logging.error(
                     f"Failed to download model for hotkey {miner_hotkey}  Skipping."
