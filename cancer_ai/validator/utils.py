@@ -426,7 +426,7 @@ def _list_repo_tree_with_retry_sync(hf_api: HfApi, hf_repo_id: str) -> list:
         hf_api=hf_api,
         repo_id=hf_repo_id,
         repo_type="space",
-        token=None,
+    
         recursive=True,
         expand=True,
     )
