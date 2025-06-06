@@ -219,5 +219,9 @@ if __name__ == "__main__":
         "--logging.debug", default=1, help="Enable debug logging."
     )
 
+    parser.add_argument(
+        "--hf_token", default="", help="HF api token for Hugging Face."
+    )
+
     flags, extra_args = parser.parse_known_args()
     main(flags.pm2_name, flags, extra_args)
