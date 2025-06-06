@@ -102,14 +102,8 @@ async def fetch_organization_data_references(
     custom_headers = {"Connection": "close"}
 
     try:
-        files = list_repo_tree_with_retry(
-            hf_api=hf_api,
-            repo_id=hf_repo_id,
-            repo_type="space",
-            token=None,
-            recursive=True,
-            expand=True,
-        )
+        # blocks event loop while sleeping between retries
+        files = _list_repo_tree_with_retry_sync(hf_api, hf_repo_id)
     except Exception as e:
         bt.logging.error("Failed to list repo tree after 10 attempts: %s", e)
         return yaml_data
@@ -420,4 +414,22 @@ def chain_miner_to_model_info(chain_miner_model: ChainMinerModel) -> ModelInfo:
         competition_id=chain_miner_model.competition_id,
         block=chain_miner_model.block,
         model_hash=chain_miner_model.model_hash,
+    )
+
+@retry(
+    Exception,
+    tries=5,
+    delay=3,
+    backoff=3,
+    max_delay=81,
+    logger=bt.logging
+)
+def _list_repo_tree_with_retry_sync(hf_api: HfApi, hf_repo_id: str) -> list:
+    return list_repo_tree_with_retry(
+        hf_api=hf_api,
+        repo_id=hf_repo_id,
+        repo_type="space",
+        token=None,
+        recursive=True,
+        expand=True,
     )
