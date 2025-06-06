@@ -58,12 +58,11 @@ class DatasetManager(SerializableManager):
         if not os.path.exists(self.local_extracted_dir):
             os.makedirs(self.local_extracted_dir)
 
-        self.local_compressed_path = HfApi().hf_hub_download(
+        self.local_compressed_path = HfApi(token=self.config.hf_token).hf_hub_download(
             self.hf_repo_id,
             self.hf_filename,
             cache_dir=Path(self.config.models.dataset_dir),
             repo_type=self.hf_repo_type,
-            token=self.config.hf_token if self.use_auth and hasattr(self.config, "hf_token") else None,
         )
 
     def delete_dataset(self) -> None:

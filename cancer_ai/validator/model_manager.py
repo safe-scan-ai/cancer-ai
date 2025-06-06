@@ -20,7 +20,7 @@ class ModelManager():
 
         if not os.path.exists(self.config.models.model_dir):
             os.makedirs(self.config.models.model_dir)
-        self.api = HfApi()
+        self.api = HfApi(token=self.config.hf_token)
         self.hotkey_store: dict[str, ModelInfo] = {}
         self.parent = parent
 
@@ -42,7 +42,7 @@ class ModelManager():
 
         return False, "NOT_MIT"
 
-    async def download_miner_model(self, hotkey) -> bool:
+    async def download_miner_model(self, hotkey, token: Optional[str] = None) -> bool:
         """Downloads the newest model from Hugging Face and saves it to disk.
         Returns:
             bool: True if the model was downloaded successfully, False otherwise.
@@ -51,11 +51,9 @@ class ModelManager():
         RETRY_DELAY = 2  # seconds
         
         model_info = self.hotkey_store[hotkey]
-        
-        if self.config.hf_token:
-            fs = HfFileSystem(token=self.config.hf_token)
-        else:
-            fs = HfFileSystem()
+                
+        fs = HfFileSystem(token=token)
+
         repo_path = os.path.join(model_info.hf_repo_id, model_info.hf_model_filename)
 
         is_valid, reason = await self.model_license_valid(hotkey)
