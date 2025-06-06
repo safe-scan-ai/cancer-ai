@@ -300,7 +300,7 @@ class ModelDBController:
         finally:
             session.close()
 
-    @retry(tries=5, delay=5)
+    @retry(tries=10, delay=1, backoff=2, max_delay=30)
     def get_block_timestamp(self, block_number) -> datetime:
         """Gets the timestamp of a given block."""
         try:
