@@ -55,7 +55,7 @@ pip install -r requirements.txt
 To run the validator script, use the following command:
 
 ```bash
-python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-hotkey --netuid=76 --hf_token <your-hf-token>
+python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-hotkey --netuid=76 --hf_token <your-huggingface-token>
 
 ```
 
