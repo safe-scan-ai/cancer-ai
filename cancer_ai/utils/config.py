@@ -83,7 +83,7 @@ def add_args(cls, parser):
         "--neuron.epoch_length",
         type=int,
         help="The default epoch length (how often we set weights, measured in 12 second blocks).",
-        default=100,
+        default=180,
     )
 
     parser.add_argument(
@@ -333,7 +333,7 @@ def add_validator_args(cls, parser):
         "--miners_refresh_interval",
         type=int,
         help="The interval at which to refresh the miners in minutes",
-        default=15,
+        default=30,
     )
 
     parser.add_argument(

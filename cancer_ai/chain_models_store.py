@@ -88,7 +88,7 @@ class ChainModelMetadata:
 
     async def retrieve_model_metadata(self, hotkey: str, uid: int) -> ChainMinerModel:
         """Retrieves model metadata on this subnet for specific hotkey"""
-        await asyncio.sleep(0.8) # temp fix for 429
+        await asyncio.sleep(2) # temp fix for 429
         
         metadata = get_metadata(self.subtensor, self.netuid, hotkey)
 
@@ -113,7 +113,7 @@ class ChainModelMetadata:
         model.block = metadata["block"]
         return model
 
-@retry(tries=10, delay=1, backoff=2, max_delay=30)
+@retry(tries=12, delay=1, backoff=2, max_delay=30)
 def get_metadata(subtensor, netuid, hotkey):
     """Synchronous metadata fetch with retry logic."""
     try:
@@ -123,7 +123,7 @@ def get_metadata(subtensor, netuid, hotkey):
             f"Failed to get metadata from chain for hotkey '{hotkey}': {e}"
         ) from e
     
-@retry(tries=8, delay=0.5, backoff=2, max_delay=20)
+@retry(tries=12, delay=0.5, backoff=2, max_delay=20)
 def get_commitment(subtensor, netuid, uid):
     """Synchronous commitment fetch with exponential-backoff and contextual errors."""
     try:
