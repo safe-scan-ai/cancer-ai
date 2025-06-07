@@ -110,22 +110,30 @@ class BaseNeuron(ABC):
     @abstractmethod
     def run(self): ...
 
-    def sync(self, retries=5, delay=10, force_sync=False):
+    def sync(self, force_sync: bool = False):
         """
-        Wrapper for synchronizing the state of the network for the given miner or validator.
+        Synchronize network state, retrying up to 5 times with fixed back-off:
+        20s → 40s → 80s → 160s → 300s  (total = 600s)
+        Exits with sys.exit(1) only if *all* retries fail.
         """
-        attempt = 0
-        while attempt < retries:
-            try: 
-                # Ensure miner or validator hotkey is still registered on the network.
+        delays = [20, 40, 80, 160, 300]
+
+        for attempt, delay in enumerate(delays, start=1):
+            try:
+                # Ensure the hotkey is still registered.
                 self.check_registered()
+
+                # If filesystem evaluation mode, no need to retry.
                 if self.config.filesystem_evaluation:
-                        break
+                    break
+
+                # Resync metagraph if needed or forced.
                 if self.should_sync_metagraph() or force_sync:
                     bt.logging.info("Resyncing metagraph in progress.")
                     self.resync_metagraph(force_sync=True)
                     self.save_state()
 
+                # Set weights if needed.
                 if self.should_set_weights():
                     self.set_weights()
                     self._last_updated_block = self.block
@@ -134,19 +142,22 @@ class BaseNeuron(ABC):
                 break
 
             except BrokenPipeError as e:
-                attempt += 1
-                bt.logging.error(f"BrokenPipeError: {e}. Retrying...")
-                time.sleep(delay)
-
+                bt.logging.error(
+                    f"[Attempt {attempt}] BrokenPipeError: {e}. "
+                    f"Sleeping {delay}s before retry…"
+                )
             except Exception as e:
-                attempt += 1
-                bt.logging.error(f"Unexpected error occurred: {e}. Retrying...")
-                time.sleep(delay)
+                bt.logging.error(
+                    f"[Attempt {attempt}] Unexpected error: {e}. "
+                    f"Sleeping {delay}s before retry…"
+                )
 
-        if attempt == retries:
+            # back-off before next attempt
+            time.sleep(delay)
+
+        else:
             bt.logging.error(
-                "Failed to sync metagraph after %d retries; exiting.",
-                retries,
+                f"Failed to sync metagraph after {len(delays)} retries (≈10 minutes); exiting."
             )
             sys.exit(1)
 
