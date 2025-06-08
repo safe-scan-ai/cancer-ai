@@ -1,5 +1,6 @@
 import os
 import asyncio
+import json
 from dataclasses import dataclass, asdict, is_dataclass
 from typing import Optional
 from datetime import datetime, timezone, timedelta
@@ -14,7 +15,7 @@ from .exceptions import ModelRunException
 
 
 class ModelManager():
-    def __init__(self, config, db_controller, parent: Optional["CompetitionManager"] = None) -> None:
+    def __init__(self, config, db_controller, subtensor: bt.subtensor, parent: Optional["CompetitionManager"] = None) -> None:
         self.config = config
         self.db_controller = db_controller
 
@@ -23,7 +24,11 @@ class ModelManager():
         self.api = HfApi(token=self.config.hf_token)
         self.hotkey_store: dict[str, ModelInfo] = {}
         self.parent = parent
+        self.subtensor = subtensor
 
+        # Default subtensor is not archive, but we need it for fetching the historical extrinsics data
+        if subtensor is not None and "test" not in self.subtensor.chain_endpoint.lower():
+            self.subtensor = bt.subtensor(network="archive")
 
     async def model_license_valid(self, hotkey) -> tuple[bool, Optional[str]]:
         hf_id = self.hotkey_store[hotkey].hf_repo_id
