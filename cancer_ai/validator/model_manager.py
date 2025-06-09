@@ -10,7 +10,7 @@ from huggingface_hub import HfApi, HfFileSystem
 
 from .models import ModelInfo
 from .exceptions import ModelRunException
-
+from .utils import decode_params
 
 
 
@@ -212,6 +212,7 @@ class ModelManager():
         """
         Does a check on whether chain submit date was later then HF commit date. If not slashes.
         Compares chain submit date duplicated models to elect a pioneer based on block of submission (date)
+        Every hotkey that is not included in the candidate list is a subject to slashing.
         """
         pioneers = []
 
@@ -242,7 +243,9 @@ class ModelManager():
                     if file["name"].endswith(model_info.hf_model_filename):
                         file_date_str = file["last_commit"]["date"]
                         break
-
+                
+                # If the file was not found, we cannot proceed because that means the model is not available
+                # in the HF repository, which is a critical error for the competition.
                 if not file_date_str:
                     bt.logging.error(
                         f"File {model_info.hf_model_filename} not found in {model_info.hf_repo_id} for {hotkey}"
@@ -267,7 +270,66 @@ class ModelManager():
                     continue
 
                 try:
-                    block_timestamp = self.db_controller.get_block_timestamp(model_info.block)
+                    matches = fs.glob(f"{model_info.hf_repo_id}/extrinsic_record.json", refresh=True)
+                    if not matches:
+                        raise FileNotFoundError("extrinsic_record.json not found in repo")
+
+                    record_path = matches[0]
+                    with fs.open(record_path, "r", encoding="utf-8") as rf:
+                        record_data = json.load(rf)
+
+                    file_hotkey = record_data.get("hotkey")
+                    extrinsic_id = record_data.get("extrinsic")
+                    if file_hotkey != hotkey or not extrinsic_id:
+                        raise ValueError(f"Invalid record contents: {record_data}")
+
+                except Exception as e:
+                    bt.logging.error(f"Failed to load HF repo extrinsic record for {hotkey}: {e}")
+                    self.parent.error_results.append((hotkey, "Invalid or missing extrinsic record in HF repo."))
+                    continue
+
+                try:
+                    blk_str, idx_str = extrinsic_id.split("-", 1)
+                    block_num = int(blk_str)
+                    ext_idx = int(idx_str, 16 if idx_str.lower().startswith("0x") else 10)
+
+                    block_data = self.subtensor.substrate.get_block(block_number=block_num)
+                    extrinsics = block_data.get("extrinsics", [])
+
+                    if ext_idx < 0 or ext_idx >= len(extrinsics):
+                        raise IndexError(f"Extrinsic index {ext_idx} out of bounds")
+
+                    ext = extrinsics[ext_idx]
+                    signer = ext.value.get("address")
+                    if signer != hotkey:
+                        raise ValueError(f"Extrinsic signer {signer} != expected hotkey {hotkey}")
+
+                    call = ext.value.get("call", {})
+                    module   = call.get("call_module")
+                    function = call.get("call_function")
+
+                    raw_params = {p["name"]: p["value"] for p in call.get("call_args", [])}
+                    decoded_params = decode_params(raw_params)
+
+                except Exception as e:
+                    bt.logging.exception(f"Failed to decode extrinsic {extrinsic_id} for {hotkey}: {e}")
+                    self.parent.error_results.append(
+                        (hotkey, f"Extrinsic {extrinsic_id} not found or invalid for hotkey.")
+                    )
+                    continue
+
+                bt.logging.info(f"Found Extrinsic {extrinsic_id} → {module}.{function} {decoded_params} for hotkey {hotkey}")
+
+                chain_record_model_hash = decoded_params['fields'][0]['Raw92'].split(':')[-1]
+                participant_model_hash = self.hotkey_store[hotkey].model_hash = decoded_params.get("model_hash")
+
+                if chain_record_model_hash != participant_model_hash:
+                    bt.logging.error(f"Model hash mismatch for {hotkey}: chain {chain_record_model_hash} != participant {participant_model_hash}")
+                    self.parent.error_results.append((hotkey, "Model hash mismatch."))
+                    continue
+
+                try:
+                    block_timestamp = self.db_controller.get_block_timestamp(block_num)
                     block_timestamp = block_timestamp.replace(tzinfo=timezone.utc)
                 except Exception as e:
                     bt.logging.error(f"Failed to get block timestamp for {model_info.block}: {e}")
