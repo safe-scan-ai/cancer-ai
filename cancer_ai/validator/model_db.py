@@ -240,66 +240,6 @@ class ModelDBController:
             model_hash=model_record.model_hash,
         )
     
-    def compare_hotkeys(
-        self, hotkey1: str, hotkey2: str
-    ) -> tuple[str | None, datetime | None]:
-        """
-        Compares two hotkeys in the DB and returns (earliest_hotkey, earliest_date_submitted).
-        If neither hotkey has any record, returns (None, None).
-        If only one hotkey has a record, that one is automatically considered 'earlier'.
-        """
-        session = self.Session()
-        try:
-            record1 = (
-                session.query(ChainMinerModelDB)
-                .filter(ChainMinerModelDB.hotkey == hotkey1)
-                .order_by(ChainMinerModelDB.date_submitted.asc())
-                .first()
-            )
-
-            record2 = (
-                session.query(ChainMinerModelDB)
-                .filter(ChainMinerModelDB.hotkey == hotkey2)
-                .order_by(ChainMinerModelDB.date_submitted.asc())
-                .first()
-            )
-
-            if record1 is None and record2 is None:
-                bt.logging.info(
-                    f"No records found for either hotkey: {hotkey1} or {hotkey2}"
-                )
-                return None, None
-
-            if record1 is None:
-                bt.logging.info(
-                    f"No DB record for hotkey {hotkey1}, so {hotkey2} is automatically earlier."
-                )
-                return hotkey2, record2.date_submitted
-
-            if record2 is None:
-                bt.logging.info(
-                    f"No DB record for hotkey {hotkey2}, so {hotkey1} is automatically earlier."
-                )
-                return hotkey1, record1.date_submitted
-
-            if record1.date_submitted <= record2.date_submitted:
-                bt.logging.info(
-                    f"hotkey {hotkey1} chosen as pioneer hotkey"
-                )
-                return hotkey1, record1.date_submitted
-            else:
-                bt.logging.info(
-                    f"hotkey {hotkey2} chosen as pioneer hotkey"
-                )
-                return hotkey2, record2.date_submitted
-
-        except Exception as e:
-            session.rollback()
-            bt.logging.error(f"Error comparing hotkeys {hotkey1} & {hotkey2}: {e}")
-            raise
-        finally:
-            session.close()
-
     @retry(tries=10, delay=1, backoff=2, max_delay=30)
     def get_block_timestamp(self, block_number) -> datetime:
         """Gets the timestamp of a given block."""

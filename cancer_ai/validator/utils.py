@@ -7,9 +7,12 @@ import time
 from functools import wraps
 import shutil
 import yaml
+import binascii
 import bittensor as bt
 from retry import retry
 from huggingface_hub import HfApi, hf_hub_download
+from typing import Union
+
 
 from cancer_ai.chain_models_store import ChainMinerModel
 from .models import ModelInfo
@@ -430,3 +433,28 @@ def _list_repo_tree_with_retry_sync(hf_api: HfApi, hf_repo_id: str) -> list:
         recursive=True,
         expand=True,
     )
+
+def decode_raw(raw_hex: str) -> str:
+    """
+    Decode a hex string (0x-prefixed or not) to UTF-8 if possible,
+    otherwise return the original string.
+    """
+    try:
+        # strip optional “0x”
+        hex_str = raw_hex[2:] if raw_hex.startswith("0x") else raw_hex
+        data = binascii.unhexlify(hex_str)
+        return data.decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError):
+        return raw_hex
+    
+def decode_params(obj):
+    """
+    Recursively walk a dict/list and decode any 0x-prefixed strings.
+    """
+    if isinstance(obj, dict):
+        return {k: decode_params(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [decode_params(v) for v in obj]
+    if isinstance(obj, str) and obj.startswith("0x"):
+        return decode_raw(obj)
+    return obj

@@ -75,7 +75,7 @@ class CompetitionManager(SerializableManager):
         self.competition_id = competition_id
         self.results: list[tuple[str, ModelEvaluationResult]] = []
         self.error_results: list[tuple[str, str]] = []
-        self.model_manager = ModelManager(self.config, db_controller, parent=self)
+        self.model_manager = ModelManager(self.config, db_controller, parent=self, subtensor=subtensor)
         self.dataset_manager = DatasetManager(
             config=self.config,
             competition_id=competition_id,
