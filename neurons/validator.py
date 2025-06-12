@@ -188,33 +188,14 @@ class Validator(BaseValidatorNeuron):
                 < self.config.monitor_datasets_interval
             ):
             return
+        
         self.last_monitor_datasets = time.time()
         bt.logging.info("Starting monitor_datasets")
 
-        try:
-            yaml_data = await fetch_organization_data_references(
-                self.config.datasets_config_hf_repo_id,
-                self.hf_api,
-            )
-            await sync_organizations_data_references(yaml_data)
-        except Exception as e:
-            bt.logging.error(f"Error in monitor_datasets initial setup: {e}\n Stack trace: {traceback.format_exc()}")
-            return
-        
-        self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-        bt.logging.info("Fetched and synced organization data references")
-        
-        try:
-            data_packages: list[NewDatasetFile] = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
-        except Exception as e:
-            stack_trace = traceback.format_exc()
-            bt.logging.error(f"Error checking for new dataset files: {e}\n Stack trace: {stack_trace}")
-            return
-        
+        data_packages = await self._get_new_data_packages()
         if not data_packages:
-            bt.logging.info("No new data packages found.")
             return
-        
+
         bt.logging.info(f"Found {len(data_packages)} new data packages")
         self.save_state()
         
@@ -367,7 +348,6 @@ class Validator(BaseValidatorNeuron):
         1) Award the winner its full `weight`.
         2) Linearly spread concrete minimal values in [min_min_score … max_min_score]
             across the other non‐winner hotkeys (highest raw → max_min_score, lowest → min_min_score).
-        3) Do NOT multiply those minimal values by the weight—just add them directly.
         """
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
 
@@ -566,9 +546,42 @@ class Validator(BaseValidatorNeuron):
                 if isinstance(timestamp, str):
                     state_dict['org_latest_updates'][org_id] = datetime.datetime.fromisoformat(timestamp)
 
+    async def _get_new_data_packages(self) -> list[NewDatasetFile] | None:
+        """
+        Fetches & syncs org references, then returns a non‐empty list of
+        NewDatasetFile, or None if there was an error or no new packages.
+        """
+        try:
+            yaml_data = await fetch_organization_data_references(
+                self.config.datasets_config_hf_repo_id,
+                self.hf_api,
+            )
+            await sync_organizations_data_references(yaml_data)
+            self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
+            bt.logging.info("Fetched and synced organization data references")
+        except Exception as e:
+            bt.logging.error(
+                f"Error in monitor_datasets initial setup: {e}\n"
+                f"Stack trace: {traceback.format_exc()}"
+            )
+            return None
 
+        try:
+            packages: list[NewDatasetFile] = await check_for_new_dataset_files(
+                self.hf_api, self.org_latest_updates
+            )
+        except Exception as e:
+            bt.logging.error(
+                f"Error checking for new dataset files: {e}\n"
+                f"Stack trace: {traceback.format_exc()}"
+            )
+            return None
 
-    
+        if not packages:
+            bt.logging.info("No new data packages found.")
+            return None
+
+        return packages
 
 
 if __name__ == "__main__":
