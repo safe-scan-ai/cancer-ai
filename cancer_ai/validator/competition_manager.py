@@ -233,7 +233,7 @@ class CompetitionManager(SerializableManager):
         grouped_duplicated_hotkeys = self.group_duplicate_scores(hotkeys_to_slash)
         bt.logging.info(f"duplicated models: {grouped_duplicated_hotkeys}")
         if len(grouped_duplicated_hotkeys) > 0:
-            pioneer_models_hotkeys = self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
+            pioneer_models_hotkeys = await self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
             hotkeys_to_slash.extend([hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys])
             self.slash_model_copiers(hotkeys_to_slash)
         
