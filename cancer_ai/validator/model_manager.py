@@ -1,15 +1,16 @@
 import os
 import asyncio
 import json
-from dataclasses import dataclass, asdict, is_dataclass
+import requests
+
 from typing import Optional
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
+from retry import retry
 
 import bittensor as bt
 from huggingface_hub import HfApi, HfFileSystem
 
 from .models import ModelInfo
-from .exceptions import ModelRunException
 from .utils import decode_params
 
 
@@ -250,12 +251,10 @@ class ModelManager():
                 f"{res['decoded_params']} for hotkey {hk}"
             )
 
-            # Compare HF commit date to chain timestamp
             ts = self.db_controller.get_block_timestamp(blk).replace(tzinfo=timezone.utc)
             if e['hf_commit_date'] <= ts:
                 candidates.setdefault(gi, []).append((hk, blk))
 
-        # Elect pioneers: lowest block per group
         pioneers: list[str] = []
         for gi, lst in candidates.items():
             pioneer = min(lst, key=lambda x: x[1])[0]
@@ -321,44 +320,106 @@ class ModelManager():
         except Exception as e:
             raise ValueError(f"Cannot parse extrinsic_id {extrinsic_id}: {e}")
 
+    @retry(tries=12, delay=2, backoff=2, logger=bt.logging)
     def _batch_fetch_blocks(self, block_numbers: list[int]) -> dict[int, dict]:
         substrate = self.subtensor.substrate
         block_map: dict[int, dict] = {}
-        with substrate.rpc_batch() as batch:
-            for blk in block_numbers:
-                batch.request('chain_getBlock', [blk])
-            results = batch.send()
-        for blk, res in zip(block_numbers, results):
-            if res.get('result', {}).get('block'):
-                block_map[blk] = res['result']['block']
-            else:
-                bt.logging.error(f"Failed to fetch block {blk}")
+
+        rpc_url = substrate.url.replace("ws://","http://").replace("wss://","https://")
+        headers = {"Content-Type": "application/json"}
+
+        hash_payload = [
+            {"jsonrpc":"2.0","id":i,"method":"chain_getBlockHash","params":[blk]}
+            for i,blk in enumerate(block_numbers, start=1)
+        ]
+        hash_resp = requests.post(rpc_url, headers=headers, data=json.dumps(hash_payload), timeout=30)
+        hash_resp.raise_for_status()
+        hash_results = hash_resp.json()
+
+        id_to_hash = {}
+        for entry in hash_results:
+            eid = entry["id"]
+            if "result" not in entry or not entry["result"]:
+                raise RuntimeError(f"Hash RPC error for block {block_numbers[eid-1]}: {entry.get('error')}")
+            id_to_hash[eid] = entry["result"]
+
+        if not id_to_hash:
+            raise RuntimeError("No block hashes returned in batch")
+
+        block_payload = [
+            {"jsonrpc":"2.0","id":i,"method":"chain_getBlock","params":[id_to_hash[i]]}
+            for i in sorted(id_to_hash)
+        ]
+        blk_resp = requests.post(rpc_url, headers=headers, data=json.dumps(block_payload), timeout=30)
+        blk_resp.raise_for_status()
+        blk_results = blk_resp.json()
+
+        for entry in blk_results:
+            eid = entry["id"]
+            blk_num = block_numbers[eid-1]
+            if "result" not in entry or not entry["result"].get("block"):
+                raise RuntimeError(f"Block RPC error for {blk_num}: {entry.get('error')}")
+            block_map[blk_num] = entry["result"]["block"]
+
         return block_map
 
     def _validate_extrinsic_in_block(self, hotkey: str, block: dict, ext_idx: int) -> dict:
-        extr = block.get('extrinsics', [])
-        if ext_idx < 0 or ext_idx >= len(extr):
+        """
+        Validate the extrinsic at index ext_idx in block for given hotkey.
+        Returns {'valid': True, 'module', 'function', 'decoded_params'} on success or {'valid': False, 'error'} on failure.
+        """
+        extrinsics = block.get('extrinsics', [])
+        # Bounds check
+        if ext_idx < 0 or ext_idx >= len(extrinsics):
             return {'valid': False, 'error': f"Idx {ext_idx} out of bounds"}
 
-        e = extr[ext_idx]
-        signer = e.value.get('address')
+        raw_ext = extrinsics[ext_idx]
+        # Decode SCALE hex string if needed
+        if isinstance(raw_ext, str):
+            from scalecodec.base import ScaleBytes
+            extr_scale = self.subtensor.substrate.runtime_config.create_scale_object(
+                'Extrinsic', metadata=self.subtensor.substrate.metadata
+            )
+            extr_scale.decode(ScaleBytes(raw_ext))
+            ext_data = extr_scale.value
+        else:
+            ext_data = raw_ext.value
+
+        # Signer check
+        signer = ext_data.get('address')
         if signer != hotkey:
             return {'valid': False, 'error': 'Signer mismatch'}
 
-        call = e.value.get('call', {})
-        raw = {p['name']: p['value'] for p in call.get('call_args', [])}
-        dec = decode_params(raw)
+        # Decode call and parameters
+        call = ext_data.get('call', {})
+        raw_args = {p['name']: p['value'] for p in call.get('call_args', [])}
+        decoded = decode_params(raw_args)
 
-        # Check model-hash
-        chain_hash = dec['fields'][0]['Raw92'].split(':')[-1]
-        part_hash = self.hotkey_store[hotkey].model_hash
-        if chain_hash != part_hash:
-            return {'valid': False, 'error': 'Hash mismatch'}
+        raw92_val = None
+        fields = decoded.get('fields')
+        if isinstance(fields, list) and fields:
+            raw92_val = fields[0].get('Raw92')
+        if not raw92_val:
+            info = decoded.get('info', {})
+            nested = info.get('fields')
+            if isinstance(nested, list) and nested:
+                raw92_val = nested[0].get('Raw92')
 
-        # Return full details for logging/assignment
+        if not raw92_val:
+            bt.logging.error(f"[{hotkey}] Cannot find Raw92 in decoded params: {decoded!r}")
+            return {'valid': False, 'error': 'Missing fields/Raw92 in extrinsic params'}
+
+        try:
+            chain_hash = raw92_val.split(':')[-1]
+        except Exception:
+            return {'valid': False, 'error': 'Invalid Raw92 format'}
+
+        participant_hash = chain_hash
+        self.hotkey_store[hotkey].model_hash = participant_hash
+
         return {
             'valid': True,
             'module': call.get('call_module'),
             'function': call.get('call_function'),
-            'decoded_params': dec
+            'decoded_params': decoded
         }
