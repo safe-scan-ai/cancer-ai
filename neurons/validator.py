@@ -197,6 +197,8 @@ class Validator(BaseValidatorNeuron):
                 self.hf_api,
             )
             await sync_organizations_data_references(yaml_data)
+
+            bt.logging.debug("org data reference fetched: ", yaml_data)
         except Exception as e:
             bt.logging.error(f"Error in monitor_datasets initial setup: {e}\n Stack trace: {traceback.format_exc()}")
             return
