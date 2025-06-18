@@ -546,6 +546,7 @@ class Validator(BaseValidatorNeuron):
                 self.competition_results_store = CompetitionResultsStore.model_validate(
                     state['competition_results_store']
                 )
+                self.competition_results_store._initialize(db_controller=ModelDBController(db_path=self.config.db_path, subtensor=self.subtensor))
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 bt.logging.error(f"Error loading JSON state: {e}")
                 if 'f' in locals() and f:

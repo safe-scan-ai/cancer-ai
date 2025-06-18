@@ -30,6 +30,8 @@ import bittensor as bt
 from typing import Union
 from traceback import print_exception
 
+from cancer_ai.validator.model_db import ModelDBController
+
 from .neuron import BaseNeuron
 from .utils.weight_utils import (
     process_weights_for_netuid,
@@ -73,6 +75,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
         self.competition_results_store = CompetitionResultsStore()
+        self.competition_results_store._initialize(db_controller=ModelDBController(db_path=self.config.db_path, subtensor=self.subtensor))
         self.org_latest_updates = {}
         self.load_state()
         # Init sync with the network. Updates the metagraph.

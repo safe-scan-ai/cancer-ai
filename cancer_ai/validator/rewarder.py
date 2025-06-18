@@ -21,6 +21,9 @@ class ModelScore(BaseModel):
 
 
 class CompetitionResultsStore(BaseModel):
+    def _initialize(self, db_controller: ModelDBController):
+        self._db_controller = db_controller
+    
     def get_newest_score(self, competition_id: str, hotkey: Hotkey) -> float | None:
         """Return the newest score for a given competition/hotkey, or None if not found."""
         scores = self.score_map.get(competition_id, {}).get(hotkey, [])
@@ -186,7 +189,7 @@ class CompetitionResultsStore(BaseModel):
         self.delete_inactive_competitions(list(competition_weights.keys()))
         
         # Get all hotkeys that have models for this competition from the database
-        latest_models = ModelDBController(db_path=config.db_path).get_latest_models(metagraph_hotkeys, competition_id)
+        latest_models = self._db_controller.get_latest_models(metagraph_hotkeys, competition_id)
         competition_miners = set(latest_models.keys())
 
         evaluated_miners = set()
