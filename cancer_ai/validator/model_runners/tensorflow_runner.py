@@ -1,19 +1,34 @@
 from . import BaseRunnerHandler
-from typing import List
+from typing import List, AsyncGenerator
 import bittensor as bt
+import numpy as np
 
 class TensorflowRunnerHandler(BaseRunnerHandler):
-    async def run(self, pred_x: List) -> List:
+    async def run(self, preprocessed_data_generator: AsyncGenerator[np.ndarray, None]) -> List:
+        """
+        Run TensorFlow model inference on preprocessed data chunks.
+        
+        Args:
+            preprocessed_data_generator: Generator yielding preprocessed numpy arrays
+            
+        Returns:
+            List of model predictions
+        """
         import tensorflow as tf
-        import numpy as np
-        from tensorflow.keras.preprocessing.image import load_img
-        bt.logging.info(f"Images to test{len(pred_x)}")
-        img_list = [load_img(img_path, target_size=(180, 180, 3)) for img_path in pred_x]
-        img_list = [np.expand_dims(test_img, axis=0) for test_img in img_list]
+        
+        bt.logging.info("Running TensorFlow model inference on preprocessed data")
         
         model = tf.keras.models.load_model(self.model_path)
-        # batched_predictions = model.predict(np.array(img_list))
-        # return [batched_predictions[i][0] for i in range(len(img_list))]
-        img_list = np.array(img_list)
-        img_list = np.squeeze(img_list, axis=1)
-        return model.predict(img_list, batch_size=10)
+        results = []
+        
+        async for chunk in preprocessed_data_generator:
+            try:
+                # TensorFlow expects (N, H, W, C) format, so transpose from (N, C, H, W)
+                chunk_transposed = np.transpose(chunk, (0, 2, 3, 1))
+                chunk_results = model.predict(chunk_transposed, batch_size=10)
+                results.extend(chunk_results)
+            except Exception as e:
+                bt.logging.error(f"TensorFlow inference error on chunk: {e}")
+                continue
+                
+        return results
