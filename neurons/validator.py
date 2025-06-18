@@ -187,6 +187,7 @@ class Validator(BaseValidatorNeuron):
                 time.time() - self.last_monitor_datasets
                 < self.config.monitor_datasets_interval
             ):
+            await asyncio.sleep(0.1)
             return
         self.last_monitor_datasets = time.time()
         bt.logging.info("Starting monitor_datasets")

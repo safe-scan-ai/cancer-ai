@@ -34,13 +34,17 @@ class ModelDBController:
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+        
         self.subtensor = subtensor
-
-        if subtensor is not None and "test" not in self.subtensor.chain_endpoint.lower():
-            self.subtensor = bt.subtensor(network="archive")
+        self.init_subtensor_connection()
 
         self._migrate_database()
 
+    def init_subtensor_connection(self):
+        if self.subtensor is not None and "test" not in self.subtensor.chain_endpoint.lower():
+            self.subtensor = bt.subtensor(network="archive")
+            bt.logging.warning(f"Created Archive Subtensor: {self.subtensor}")
+            
     def _migrate_database(self):
         """Check and apply migration for model_hash column if missing."""
         with self.engine.connect() as connection:
@@ -323,5 +327,6 @@ class ModelDBController:
 
             return block_datetime
         except Exception as e:
+            self.init_subtensor_connection()
             bt.logging.exception(f"Error retrieving block timestamp: {e}")
             raise
