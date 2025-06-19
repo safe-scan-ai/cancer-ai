@@ -160,7 +160,7 @@ torch==2.4.0
 tqdm==4.66.5
 typer==0.15.1
 typing_extensions==4.12.2
-urllib3==2.2.2
+urllib3==2.5.0
 uvicorn==0.30.0
 virtualenv==20.26.4
 wandb==0.17.7
