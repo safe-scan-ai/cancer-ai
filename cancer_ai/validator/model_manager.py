@@ -228,7 +228,7 @@ class ModelManager():
                 try:
                     files = fs.ls(model_info.hf_repo_id)
                 except Exception as e:
-                    bt.logging.error(f"Failed to list files in {model_info.hf_repo_id}: {e}")
+                    bt.logging.error(f"Failed to list files in {model_info.hf_repo_id}: {e}", exc_info=True)
                     self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
                     continue
 
@@ -257,7 +257,7 @@ class ModelManager():
                         hf_commit_date = hf_commit_date.astimezone(timezone.utc)
 
                 except Exception as e:
-                    bt.logging.error(f"Failed to parse HF commit date {file_date_str} for {hotkey}: {e}")
+                    bt.logging.error(f"Failed to parse HF commit date {file_date_str} for {hotkey}: {e}", exc_info=True)
                     self.parent.error_results.append((hotkey, "Failed to parse HF commit date."))
                     continue
 
@@ -265,7 +265,7 @@ class ModelManager():
                     block_timestamp = self.db_controller.get_block_timestamp(model_info.block)
                     block_timestamp = block_timestamp.replace(tzinfo=timezone.utc)
                 except Exception as e:
-                    bt.logging.error(f"Failed to get block timestamp for {model_info.block}: {e}")
+                    bt.logging.error(f"Failed to get block timestamp for {model_info.block}: {e}", exc_info=True)
                     self.parent.error_results.append((hotkey, "Failed to get block timestamp."))
                     continue
                 

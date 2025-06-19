@@ -173,7 +173,7 @@ class CompetitionResultsStore(BaseModel):
             if competition_id in self.current_top_hotkeys:
                 del self.current_top_hotkeys[competition_id]
 
-    async def update_competition_results(self, competition_id: str, model_results: list[tuple[str, ModelEvaluationResult]], config: bt.config, metagraph_hotkeys:list[Hotkey], hf_api):
+    async def update_competition_results(self, competition_id: str, model_results: list[tuple[str, ModelEvaluationResult]], config: bt.config, metagraph_hotkeys:list[Hotkey], hf_api, db_controller: ModelDBController):
         """Update competition results for a specific competition."""
 
         # Delete hotkeys from competition result score which don't exist anymore
@@ -186,7 +186,7 @@ class CompetitionResultsStore(BaseModel):
         self.delete_inactive_competitions(list(competition_weights.keys()))
         
         # Get all hotkeys that have models for this competition from the database
-        latest_models = ModelDBController(db_path=config.db_path).get_latest_models(metagraph_hotkeys, competition_id)
+        latest_models = db_controller.get_latest_models(metagraph_hotkeys, competition_id)
         competition_miners = set(latest_models.keys())
 
         evaluated_miners = set()
