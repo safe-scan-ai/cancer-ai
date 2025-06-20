@@ -221,7 +221,7 @@ class CompetitionManager(SerializableManager):
                 self.results.append((miner_hotkey, model_result))
             except Exception as e:
                 bt.logging.error(
-                    f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}"
+                    f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}", exc_info=True
                 )
                 self.error_results.append((miner_hotkey, f"Error evaluating model: {e}"))
                 bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error. error: {e}")
@@ -305,5 +305,5 @@ class CompetitionManager(SerializableManager):
             bt.logging.info(f"Computed 8-character hash: {truncated_hash}")
             return truncated_hash
         except Exception as e:
-            bt.logging.error(f"Error computing hash for {file_path}: {e}")
+            bt.logging.error(f"Error computing hash for {file_path}: {e}", exc_info=True)
             return None

@@ -124,7 +124,7 @@ class Validator(BaseValidatorNeuron):
             try:
                 self.db_controller.add_model(chain_model_metadata, hotkey)
             except Exception as e:
-                bt.logging.error(f"An error occured while trying to persist the model info: {e}")
+                bt.logging.error(f"An error occured while trying to persist the model info: {e}", exc_info=True)
 
         self.db_controller.clean_old_records(self.hotkeys)
         self.last_miners_refresh = time.time()
@@ -174,7 +174,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.warning("Competition results store before update")
         bt.logging.warning(self.competition_results_store.model_dump_json())
-        competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api)
+        competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller)
         bt.logging.warning("Competition results store after update")
         bt.logging.warning(self.competition_results_store.model_dump_json())
         self.update_scores(competition_weights, 0.0001, 0.0002)
@@ -265,7 +265,7 @@ class Validator(BaseValidatorNeuron):
             
             # Update competition results
             bt.logging.info(f"Competition result for {competition_id}: {winning_hotkey}")
-            competition_weights = await self.competition_results_store.update_competition_results(competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api)
+            competition_weights = await self.competition_results_store.update_competition_results(competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller)
             self.update_scores(competition_weights, 0.0001, 0.0002)
 
             average_winning_hotkey = self.competition_results_store.get_top_hotkey(competition_id)

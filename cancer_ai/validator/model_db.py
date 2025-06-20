@@ -1,11 +1,15 @@
 import bittensor as bt
 import os
+import re, traceback
+
 import traceback
 from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, timezone
 from ..chain_models_store import ChainMinerModel
+from websockets.client import OPEN as WS_OPEN
+
 from retry import retry
 
 Base = declarative_base()
@@ -34,12 +38,44 @@ class ModelDBController:
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+
+        if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
+            subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
 
-        if subtensor is not None and "test" not in self.subtensor.chain_endpoint.lower():
-            self.subtensor = bt.subtensor(network="archive")
+        # Capture the original connect() and override with _ws_connect wrapper
+        # Substrate-interface calls connect() on every RPC under the hood,
+        # so we wrap it to reuse the same socket unless it's truly closed.
+        self._orig_ws_connect = self.subtensor.substrate.connect
+        self.subtensor.substrate.connect = self._ws_connect
+
+        ws = self.subtensor.substrate.connect()
+        bt.logging.info(f"Initial WebSocket state: {ws.state}")
 
         self._migrate_database()
+
+    def _ws_connect(self, *args, **kwargs):
+        """
+        Replacement for substrate.connect().
+        Reuses existing WebSocketClientProtocol if State.OPEN;
+        otherwise performs a fresh handshake via original connect().
+        """
+        # Check current socket
+        current = getattr(self.subtensor.substrate, "ws", None)
+        if current is not None and current.state == WS_OPEN:
+            return current
+
+        # If socket not open, reconnect
+        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
+        try:
+            new_ws = self._orig_ws_connect(*args, **kwargs)
+        except Exception as e:
+            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
+            raise
+
+        # Update the substrate.ws attribute so future calls reuse this socket
+        setattr(self.subtensor.substrate, "ws", new_ws)
+        return new_ws
 
     def _migrate_database(self):
         """Check and apply migration for model_hash column if missing."""
@@ -153,7 +189,7 @@ class ModelDBController:
 
         except Exception as e:
             session.rollback()
-            bt.logging.error(f"Error updating DB model for hotkey {hotkey}: {e}")
+            bt.logging.error(f"Error updating DB model for hotkey {hotkey}: {e}", exc_info=True)
             raise e
         finally:
             session.close()
@@ -265,3 +301,10 @@ class ModelDBController:
         except Exception as e:
             bt.logging.exception(f"Error retrieving block timestamp: {e}")
             raise
+
+    def close(self):
+        try:
+            bt.logging.debug("Closing ModelDBController and websocket connection.")
+            self.subtensor.substrate.close_websocket()
+        except Exception:
+            pass

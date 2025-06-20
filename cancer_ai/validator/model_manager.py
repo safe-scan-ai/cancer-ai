@@ -301,7 +301,6 @@ class ModelManager():
                     bt.logging.error(f"Model hash comparison failed for {hotkey}: {e}", exc_info=True)
                     self.parent.error_results.append((hotkey, "Model hash mismatch or extraction error."))
                     continue
-
                 
                 candidate_hotkeys.append((hotkey, block_num))
 
