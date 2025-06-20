@@ -6,6 +6,7 @@ from functools import wraps
 import bittensor as bt
 from pydantic import BaseModel, Field
 from retry import retry
+from websockets.client import OPEN as WS_OPEN
 
 
 
@@ -72,7 +73,41 @@ class ChainModelMetadata:
             wallet  # Wallet is only needed to write to the chain, not to read.
         )
         self.netuid = netuid
+
+        self._orig_ws_connect = self.subtensor.substrate.connect
+        self.subtensor.substrate.connect = self._ws_connect
+
+        try:
+            ws = self.subtensor.substrate.connect()
+            bt.logging.info(f"[ChainModelMetadata] Initial WS state: {ws.state}")
+        except Exception as e:
+            bt.logging.error("Initial WS connect failed: %s", e, exc_info=True)
+
         self.subnet_metadata = self.subtensor.metagraph(self.netuid)
+
+
+    def _ws_connect(self, *args, **kwargs):
+        """
+        Replacement for substrate.connect().
+        Reuses existing WebSocketClientProtocol if State.OPEN;
+        otherwise performs a fresh handshake via original connect().
+        """
+        # Check current socket
+        current = getattr(self.subtensor.substrate, "ws", None)
+        if current is not None and current.state == WS_OPEN:
+            return current
+
+        # If socket not open, reconnect
+        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
+        try:
+            new_ws = self._orig_ws_connect(*args, **kwargs)
+        except Exception as e:
+            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
+            raise
+
+        # Update the substrate.ws attribute so future calls reuse this socket
+        setattr(self.subtensor.substrate, "ws", new_ws)
+        return new_ws
 
     async def store_model_metadata(self, model_id: ChainMinerModel):
         """Stores model metadata on this subnet for a specific wallet."""
@@ -112,6 +147,13 @@ class ChainModelMetadata:
         # The block id at which the metadata is stored
         model.block = metadata["block"]
         return model
+    
+    def close(self):
+        try:
+            bt.logging.debug("Closing ModelDBController and websocket connection.")
+            self.subtensor.substrate.close_websocket()
+        except Exception:
+            pass
 
 @retry(tries=12, delay=1, backoff=2, max_delay=30)
 def get_metadata(subtensor, netuid, hotkey):
