@@ -154,7 +154,7 @@ class Validator(BaseValidatorNeuron):
             if not winning_hotkey:
                 bt.logging.error("NO WINNING HOTKEY")
         except Exception as e:
-            bt.logging.error(f"Error evaluating {data_package.dataset_hf_filename}: {e}")
+            bt.logging.error(f"Error evaluating {data_package.dataset_hf_filename}: {e}", exc_info=True)
             return
 
         models_results = competition_manager.results

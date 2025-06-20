@@ -210,10 +210,16 @@ class ModelManager():
 
     def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> list[str]:
         """
+        Does a check on whether chain submit date was later then HF commit date. If not slashes.
         Compares chain submit date duplicated models to elect a pioneer based on block of submission (date)
         Every hotkey that is not included in the candidate list is a subject to slashing.
         """
         pioneers = []
+
+        if self.config.hf_token:
+            fs = HfFileSystem(token=self.config.hf_token)
+        else:
+            fs = HfFileSystem()
 
         for group in grouped_hotkeys:
             candidate_hotkeys = []
@@ -240,7 +246,7 @@ class ModelManager():
                         raise ValueError(f"Invalid record contents: {record_data}")
 
                 except Exception as e:
-                    bt.logging.error(f"Failed to load HF repo extrinsic record for {hotkey}: {e}")
+                    bt.logging.error(f"Failed to load HF repo extrinsic record for {hotkey}: {e}", exc_info=True)
                     self.parent.error_results.append((hotkey, "Invalid or missing extrinsic record in HF repo."))
                     continue
 
@@ -268,7 +274,7 @@ class ModelManager():
                     decoded_params = decode_params(raw_params)
 
                 except Exception as e:
-                    bt.logging.exception(f"Failed to decode extrinsic {extrinsic_id} for {hotkey}: {e}")
+                    bt.logging.exception(f"Failed to decode extrinsic {extrinsic_id} for {hotkey}: {e}", exc_info=True)
                     self.parent.error_results.append(
                         (hotkey, f"Extrinsic {extrinsic_id} not found or invalid for hotkey.")
                     )
@@ -276,13 +282,26 @@ class ModelManager():
 
                 bt.logging.info(f"Found Extrinsic {extrinsic_id} → {module}.{function} {decoded_params} for hotkey {hotkey}")
 
-                chain_record_model_hash = decoded_params['fields'][0]['Raw92'].split(':')[-1]
-                participant_model_hash = self.hotkey_store[hotkey].model_hash = decoded_params.get("model_hash")
+                try:
+                    info = decoded_params.get("info", {})
+                    fields = info.get("fields", [])
+                    if not fields or "Raw92" not in fields[0]:
+                        raise KeyError("Missing Raw92 field in decoded_params")
 
-                if chain_record_model_hash != participant_model_hash:
-                    bt.logging.error(f"Model hash mismatch for {hotkey}: chain {chain_record_model_hash} != participant {participant_model_hash}")
-                    self.parent.error_results.append((hotkey, "Model hash mismatch."))
+                    raw92 = fields[0]["Raw92"]
+                    chain_model_hash = raw92.split(":")[-1]
+                    participant_model_hash = self.hotkey_store[hotkey].model_hash
+
+                    if chain_model_hash != participant_model_hash:
+                        raise ValueError(
+                            f"chain {chain_model_hash} != participant {participant_model_hash}"
+                        )
+
+                except Exception as e:
+                    bt.logging.error(f"Model hash comparison failed for {hotkey}: {e}", exc_info=True)
+                    self.parent.error_results.append((hotkey, "Model hash mismatch or extraction error."))
                     continue
+
                 
                 candidate_hotkeys.append((hotkey, block_num))
 
