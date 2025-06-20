@@ -210,16 +210,10 @@ class ModelManager():
 
     def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> list[str]:
         """
-        Does a check on whether chain submit date was later then HF commit date. If not slashes.
         Compares chain submit date duplicated models to elect a pioneer based on block of submission (date)
         Every hotkey that is not included in the candidate list is a subject to slashing.
         """
         pioneers = []
-
-        if self.config.hf_token:
-            fs = HfFileSystem(token=self.config.hf_token)
-        else:
-            fs = HfFileSystem()
 
         for group in grouped_hotkeys:
             candidate_hotkeys = []
@@ -229,44 +223,6 @@ class ModelManager():
                 if not model_info:
                     bt.logging.error(f"Model info for hotkey {hotkey} not found.")
                     self.parent.error_results.append((hotkey, "Model info not found."))
-                    continue
-
-                try:
-                    files = fs.ls(model_info.hf_repo_id)
-                except Exception as e:
-                    bt.logging.error(f"Failed to list files in {model_info.hf_repo_id}: {e}")
-                    self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
-                    continue
-
-                file_date_str = None
-                for file in files:
-                    if file["name"].endswith(model_info.hf_model_filename):
-                        file_date_str = file["last_commit"]["date"]
-                        break
-                
-                # If the file was not found, we cannot proceed because that means the model is not available
-                # in the HF repository, which is a critical error for the competition.
-                if not file_date_str:
-                    bt.logging.error(
-                        f"File {model_info.hf_model_filename} not found in {model_info.hf_repo_id} for {hotkey}"
-                    )
-                    self.parent.error_results.append((hotkey, "model file not found in hf repo."))
-                    continue
-
-                try:
-                    if isinstance(file_date_str, datetime):
-                        hf_commit_date = file_date_str
-                    else:
-                        hf_commit_date = datetime.fromisoformat(str(file_date_str))
-
-                    if hf_commit_date.tzinfo is None or hf_commit_date.tzinfo.utcoffset(hf_commit_date) is None:
-                        hf_commit_date = hf_commit_date.replace(tzinfo=timezone.utc)
-                    else:
-                        hf_commit_date = hf_commit_date.astimezone(timezone.utc)
-
-                except Exception as e:
-                    bt.logging.error(f"Failed to parse HF commit date {file_date_str} for {hotkey}: {e}")
-                    self.parent.error_results.append((hotkey, "Failed to parse HF commit date."))
                     continue
 
                 try:
@@ -327,17 +283,8 @@ class ModelManager():
                     bt.logging.error(f"Model hash mismatch for {hotkey}: chain {chain_record_model_hash} != participant {participant_model_hash}")
                     self.parent.error_results.append((hotkey, "Model hash mismatch."))
                     continue
-
-                try:
-                    block_timestamp = self.db_controller.get_block_timestamp(block_num)
-                    block_timestamp = block_timestamp.replace(tzinfo=timezone.utc)
-                except Exception as e:
-                    bt.logging.error(f"Failed to get block timestamp for {model_info.block}: {e}")
-                    self.parent.error_results.append((hotkey, "Failed to get block timestamp."))
-                    continue
                 
-                if hf_commit_date <= block_timestamp:
-                    candidate_hotkeys.append((hotkey, model_info.block))
+                candidate_hotkeys.append((hotkey, block_num))
 
             if candidate_hotkeys:
                 pioneer_hotkey = min(candidate_hotkeys, key=lambda x: x[1])[0]
