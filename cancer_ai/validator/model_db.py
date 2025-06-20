@@ -8,7 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, timezone
 from ..chain_models_store import ChainMinerModel
-from websockets.client import OPEN as WS_OPEN   # the enum constant
+from websockets.client import OPEN as WS_OPEN
 
 from retry import retry
 
