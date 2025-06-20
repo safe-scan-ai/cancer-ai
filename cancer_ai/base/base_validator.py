@@ -182,7 +182,7 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.error(f"Validator state: running={self.is_running}, should_exit={self.should_exit}")
             
             if self.exit_event:
-                bt.logging.error("Setting exit event and terminating validator")
+                bt.logging.error("Setting exit event and terminating validator", exc_info=True)
                 self.exit_event.set()
             sys.exit(1)
 

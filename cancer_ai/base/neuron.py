@@ -144,12 +144,12 @@ class BaseNeuron(ABC):
             except BrokenPipeError as e:
                 bt.logging.error(
                     f"[Attempt {attempt}] BrokenPipeError: {e}. "
-                    f"Sleeping {delay}s before retry…"
+                    f"Sleeping {delay}s before retry…", exc_info=True
                 )
             except Exception as e:
                 bt.logging.error(
                     f"[Attempt {attempt}] Unexpected error: {e}. "
-                    f"Sleeping {delay}s before retry…"
+                    f"Sleeping {delay}s before retry…", exc_info=True
                 )
 
             # back-off before next attempt
@@ -157,7 +157,7 @@ class BaseNeuron(ABC):
 
         else:
             bt.logging.error(
-                f"Failed to sync metagraph after {len(delays)} retries (≈10 minutes); exiting."
+                f"Failed to sync metagraph after {len(delays)} retries (≈10 minutes); exiting.", exc_info=True
             )
             sys.exit(1)
 
@@ -173,14 +173,15 @@ class BaseNeuron(ABC):
                     if not self.is_registered:
                         bt.logging.error(
                             f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
-                            f" Please register the hotkey using `btcli subnets register` before trying again"
+                            f" Please register the hotkey using `btcli subnets register` before trying again",
+                            exc_info=True
                         )
                         sys.exit()
 
                 return self.is_registered
 
             except Exception as e:
-                bt.logging.error(f"Error checking validator's hotkey registration: {e}")
+                bt.logging.error(f"Error checking validator's hotkey registration: {e}", exc_info=True)
                 retries -= 1
                 if retries == 0:
                     sys.exit()
