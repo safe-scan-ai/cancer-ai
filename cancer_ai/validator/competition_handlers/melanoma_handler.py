@@ -124,14 +124,17 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
 
     async def get_preprocessed_data_generator(self) -> AsyncGenerator[np.ndarray, None]:
         """Generator that yields preprocessed data chunks"""
-        for chunk_path in self.preprocessed_chunks:
-            try:
-                with open(chunk_path, 'rb') as f:
-                    chunk_data = pickle.load(f)
-                    yield chunk_data
-            except Exception as e:
-                bt.logging.error(f"Failed to load preprocessed chunk {chunk_path}: {e}")
-                continue
+        for chunk_file in self.preprocessed_chunks:
+            if os.path.exists(chunk_file):
+                try:
+                    with open(chunk_file, 'rb') as f:
+                        chunk_data = pickle.load(f)
+                        yield chunk_data
+                except Exception as e:
+                    bt.logging.error(f"Error loading preprocessed chunk {chunk_file}: {e}")
+                    continue
+            else:
+                bt.logging.warning(f"Preprocessed chunk file not found: {chunk_file}")
 
     def cleanup_preprocessed_data(self) -> None:
         """Clean up preprocessed data files"""

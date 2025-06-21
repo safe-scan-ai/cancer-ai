@@ -26,9 +26,10 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
 
     async def get_preprocessed_data_generator(self) -> AsyncGenerator[np.ndarray, None]:
         """Generator that yields preprocessed data chunks"""
-        # Placeholder - yield empty generator for now
-        return
-        yield  # This line will never execute but satisfies the generator requirement
+        # Placeholder - for tricorder we might pass raw data or implement later
+        # This ensures the generator interface is satisfied but doesn't yield anything
+        if False:  # This condition will never be true, so nothing is yielded
+            yield np.array([])
 
     def cleanup_preprocessed_data(self) -> None:
         """Clean up preprocessed data files"""
