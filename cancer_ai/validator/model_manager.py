@@ -11,7 +11,7 @@ from huggingface_hub import HfApi, HfFileSystem
 from .models import ModelInfo
 from .exceptions import ModelRunException
 from .utils import decode_params
-
+from websockets.client import OPEN as WS_OPEN
 
 
 class ModelManager():
@@ -24,11 +24,42 @@ class ModelManager():
         self.api = HfApi(token=self.config.hf_token)
         self.hotkey_store: dict[str, ModelInfo] = {}
         self.parent = parent
+
+        if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
+            subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
 
-        # Default subtensor is not archive, but we need it for fetching the historical extrinsics data
-        if subtensor is not None and "test" not in self.subtensor.chain_endpoint.lower():
-            self.subtensor = bt.subtensor(network="archive")
+        # Capture the original connect() and override with _ws_connect wrapper
+        # Substrate-interface calls connect() on every RPC under the hood,
+        # so we wrap it to reuse the same socket unless it's truly closed.
+        self._orig_ws_connect = self.subtensor.substrate.connect
+        self.subtensor.substrate.connect = self._ws_connect
+
+        ws = self.subtensor.substrate.connect()
+        bt.logging.info(f"Initial WebSocket state: {ws.state}")
+
+    def _ws_connect(self, *args, **kwargs):
+        """
+        Replacement for substrate.connect().
+        Reuses existing WebSocketClientProtocol if State.OPEN;
+        otherwise performs a fresh handshake via original connect().
+        """
+        # Check current socket
+        current = getattr(self.subtensor.substrate, "ws", None)
+        if current is not None and current.state == WS_OPEN:
+            return current
+
+        # If socket not open, reconnect
+        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
+        try:
+            new_ws = self._orig_ws_connect(*args, **kwargs)
+        except Exception as e:
+            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
+            raise
+
+        # Update the substrate.ws attribute so future calls reuse this socket
+        setattr(self.subtensor.substrate, "ws", new_ws)
+        return new_ws
 
     async def model_license_valid(self, hotkey) -> tuple[bool, Optional[str]]:
         hf_id = self.hotkey_store[hotkey].hf_repo_id
