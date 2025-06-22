@@ -16,7 +16,8 @@ from .model_db import ModelDBController
 from .utils import chain_miner_to_model_info
 
 from .competition_handlers.melanoma_handler import MelanomaCompetitionHandler
-from .competition_handlers.base_handler import ModelEvaluationResult
+from .competition_handlers.tricorder_handler import TricorderCompetitionHandler
+from .competition_handlers.base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 from .tests.mock_data import get_mock_hotkeys_with_models
 from cancer_ai.chain_models_store import (
     ChainModelMetadata,
@@ -32,6 +33,7 @@ COMPETITION_HANDLER_MAPPING = {
     "melanoma-7": MelanomaCompetitionHandler,
     "melanoma-2": MelanomaCompetitionHandler,
     "melanoma-3": MelanomaCompetitionHandler,
+    "tricorder-1": TricorderCompetitionHandler,
 }
 
 
@@ -74,7 +76,7 @@ class CompetitionManager(SerializableManager):
         self.config = config
         self.subtensor = subtensor
         self.competition_id = competition_id
-        self.results: list[tuple[str, ModelEvaluationResult]] = []
+        self.results: list[tuple[str, BaseModelEvaluationResult]] = []
         self.error_results: list[tuple[str, str]] = []
         self.model_manager = ModelManager(self.config, db_controller, parent=self, subtensor=subtensor)
         self.dataset_manager = DatasetManager(
@@ -155,7 +157,7 @@ class CompetitionManager(SerializableManager):
             f"Amount of hotkeys with valid models: {len(self.model_manager.hotkey_store)}"
         )
 
-    async def evaluate(self) -> Tuple[str | None, ModelEvaluationResult | None]:
+    async def evaluate(self) -> Tuple[str | None, BaseModelEvaluationResult | None]:
         """Returns hotkey and competition id of winning model miner"""
         bt.logging.info(f"Start of evaluation of {self.competition_id}")
         
@@ -171,9 +173,14 @@ class CompetitionManager(SerializableManager):
         await self.dataset_manager.prepare_dataset()
         X_test, y_test = await self.dataset_manager.get_data()
 
-        competition_handler = COMPETITION_HANDLER_MAPPING[self.competition_id](
-            X_test=X_test, y_test=y_test
+        competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
+            X_test=X_test, y_test=y_test, config=self.config
         )
+        
+        # Set preprocessing directory and preprocess data once
+        competition_handler.set_preprocessed_data_dir(self.config.models.dataset_dir)
+        await competition_handler.preprocess_and_serialize_data(X_test)
+        
         y_test = competition_handler.prepare_y_pred(y_test)
         evaluation_counter = 0 
         models_amount = len(self.model_manager.hotkey_store.items())
@@ -206,7 +213,9 @@ class CompetitionManager(SerializableManager):
             start_time = time.time()
 
             try:
-                y_pred = await model_manager.run(X_test)
+                # Pass the preprocessed data generator instead of raw paths
+                preprocessed_data_gen = competition_handler.get_preprocessed_data_generator()
+                y_pred = await model_manager.run(preprocessed_data_gen)
             except ModelRunException as e:
                 bt.logging.error(
                     f"Model hotkey: {miner_hotkey} failed to run. Skipping. error: {e}"
@@ -251,6 +260,9 @@ class CompetitionManager(SerializableManager):
         bt.logging.info(
             f"Winning hotkey for competition {self.competition_id}: {winning_hotkey}"
         )
+        
+        # Cleanup preprocessed data
+        competition_handler.cleanup_preprocessed_data()
         self.dataset_manager.delete_dataset()
         return winning_hotkey, winning_model_result
 
