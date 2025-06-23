@@ -18,12 +18,6 @@ class BaseModelEvaluationResult(BaseModel):
         arbitrary_types_allowed = True
 
 
-class TricorderEvaluationResult(BaseModelEvaluationResult):
-    accuracy: float = 0.0
-    precision: float = 0.0
-    fbeta: float = 0.0
-
-
 class BaseCompetitionHandler:
     """
     Base class for handling different competition types.
