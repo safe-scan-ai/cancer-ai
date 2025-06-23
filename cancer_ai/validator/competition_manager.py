@@ -215,6 +215,7 @@ class CompetitionManager(SerializableManager):
             try:
                 # Pass the preprocessed data generator instead of raw paths
                 preprocessed_data_gen = competition_handler.get_preprocessed_data_generator()
+                bt.logging.info(f"Running model inference for hotkey {miner_hotkey}")
                 y_pred = await model_manager.run(preprocessed_data_gen)
             except ModelRunException as e:
                 bt.logging.error(

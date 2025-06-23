@@ -172,11 +172,12 @@ class Validator(BaseValidatorNeuron):
         if winning_hotkey:
             bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
 
-        bt.logging.warning("Competition results store before update")
-        bt.logging.warning(self.competition_results_store.model_dump_json())
-        competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller)
-        bt.logging.warning("Competition results store after update")
-        bt.logging.warning(self.competition_results_store.model_dump_json())
+
+        # bt.logging.warning("Competition results store before update")
+        # bt.logging.warning(self.competition_results_store.model_dump_json())
+        competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api)
+        # bt.logging.warning("Competition results store after update")
+        # bt.logging.warning(self.competition_results_store.model_dump_json())
         self.update_scores(competition_weights, 0.0001, 0.0002)
 
 

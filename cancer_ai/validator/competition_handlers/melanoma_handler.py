@@ -1,5 +1,3 @@
-from .base_handler import BaseCompetitionHandler
-from .base_handler import MelanomaEvaluationResult
 
 from typing import List, AsyncGenerator
 import numpy as np
@@ -18,6 +16,27 @@ from sklearn.metrics import (
     roc_curve,
     auc,
 )
+
+from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
+
+class MelanomaEvaluationResult(BaseModelEvaluationResult):
+    score: float = 0.0
+    predictions_raw: list = []
+    error: str = ""
+    run_time_s: float = 0.0
+    tested_entries: int = 0
+    accuracy: float = 0.0
+    precision: float = 0.0
+    recall: float = 0.0
+    fbeta: float = 0.0
+    confusion_matrix: list = [[0, 0], [0, 0]]
+    fpr: list = []
+    tpr: list = []
+    roc_auc: float = 0.0
+
+    class Config:
+        arbitrary_types_allowed = True
+
 
 # Weights for the competition, for calcualting model score
 WEIGHT_FBETA = 0.6

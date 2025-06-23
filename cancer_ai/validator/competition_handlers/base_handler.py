@@ -18,17 +18,6 @@ class BaseModelEvaluationResult(BaseModel):
         arbitrary_types_allowed = True
 
 
-class MelanomaEvaluationResult(BaseModelEvaluationResult):
-    accuracy: float = 0.0
-    precision: float = 0.0
-    recall: float = 0.0
-    fbeta: float = 0.0
-    confusion_matrix: list = [[0, 0], [0, 0]]
-    fpr: list = []
-    tpr: list = []
-    roc_auc: float = 0.0
-
-
 class TricorderEvaluationResult(BaseModelEvaluationResult):
     accuracy: float = 0.0
     precision: float = 0.0
@@ -56,19 +45,25 @@ class BaseCompetitionHandler:
 
         This method is responsible for preprocessing the data for the competition
         and serializing it for efficient reuse across multiple model evaluations.
-        
+
         Args:
             X_test: List of input data (typically file paths for images)
-            
+
         Returns:
             List of paths to serialized preprocessed data chunks
+        """
+
+    @abstractmethod
+    def set_preprocessed_data_dir(self, data_dir: str) -> None:
+        """
+        Abstract method to set directory for storing preprocessed data.
         """
 
     @abstractmethod
     def get_preprocessed_data_generator(self):
         """
         Abstract method to get preprocessed data generator.
-        
+
         Returns:
             Generator that yields preprocessed data chunks
         """
