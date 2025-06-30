@@ -323,7 +323,7 @@ class ModelManager():
                 try:
                     info    = decoded_params.get("info", {})
                     fields  = info.get("fields", [])
-                    raw_val = self._extract_raw_value(fields)          # <── instead of fixed "Raw92"
+                    raw_val = self._extract_raw_value(fields)
                     chain_model_hash       = raw_val.split(":")[-1]
                     participant_model_hash = self.hotkey_store[hotkey].model_hash
 
