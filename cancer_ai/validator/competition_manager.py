@@ -1,5 +1,5 @@
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import bittensor as bt
 import wandb
@@ -15,9 +15,10 @@ from .exceptions import ModelRunException
 from .model_db import ModelDBController
 from .utils import chain_miner_to_model_info
 
+from .competition_handlers.base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 from .competition_handlers.melanoma_handler import MelanomaCompetitionHandler
 from .competition_handlers.tricorder_handler import TricorderCompetitionHandler
-from .competition_handlers.base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
+
 from .tests.mock_data import get_mock_hotkeys_with_models
 from cancer_ai.chain_models_store import (
     ChainModelMetadata,
@@ -97,20 +98,11 @@ class CompetitionManager(SerializableManager):
         self.test_mode = test_mode
         self.local_fs_mode = local_fs_mode
 
+        self.competition_handler: Optional[BaseCompetitionHandler] = None
+
     def __repr__(self) -> str:
         return f"CompetitionManager<{self.competition_id}>"
 
-    
-
-    def get_state(self):
-        return {
-            "competition_id": self.competition_id,
-            "model_manager": self.model_manager.get_state(),
-        }
-
-    def set_state(self, state: dict):
-        self.competition_id = state["competition_id"]
-        self.model_manager.set_state(state["model_manager"])
 
     async def chain_miner_to_model_info(
         self, chain_miner_model: ChainMinerModel
@@ -173,15 +165,15 @@ class CompetitionManager(SerializableManager):
         await self.dataset_manager.prepare_dataset()
         X_test, y_test = await self.dataset_manager.get_data()
 
-        competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
+        self.competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
             X_test=X_test, y_test=y_test, config=self.config
         )
         
         # Set preprocessing directory and preprocess data once
-        competition_handler.set_preprocessed_data_dir(self.config.models.dataset_dir)
-        await competition_handler.preprocess_and_serialize_data(X_test)
+        self.competition_handler.set_preprocessed_data_dir(self.config.models.dataset_dir)
+        await self.competition_handler.preprocess_and_serialize_data(X_test)
         
-        y_test = competition_handler.prepare_y_pred(y_test)
+        y_test = self.competition_handler.prepare_y_pred(y_test)
         evaluation_counter = 0 
         models_amount = len(self.model_manager.hotkey_store.items())
         bt.logging.info(f"Evaluating {models_amount} models")
@@ -214,7 +206,7 @@ class CompetitionManager(SerializableManager):
 
             try:
                 # Pass the preprocessed data generator instead of raw paths
-                preprocessed_data_gen = competition_handler.get_preprocessed_data_generator()
+                preprocessed_data_gen = self.competition_handler.get_preprocessed_data_generator()
                 bt.logging.info(f"Running model inference for hotkey {miner_hotkey}")
                 y_pred = await model_manager.run(preprocessed_data_gen)
             except ModelRunException as e:
@@ -225,7 +217,7 @@ class CompetitionManager(SerializableManager):
                 continue
 
             try:
-                model_result = competition_handler.get_model_result(
+                model_result = self.competition_handler.get_model_result(
                     y_test, y_pred, time.time() - start_time
                 )
                 self.results.append((miner_hotkey, model_result))
@@ -263,38 +255,25 @@ class CompetitionManager(SerializableManager):
         )
         
         # Cleanup preprocessed data
-        competition_handler.cleanup_preprocessed_data()
+        self.competition_handler.cleanup_preprocessed_data()
         self.dataset_manager.delete_dataset()
         return winning_hotkey, winning_model_result
 
 
+
+
     def group_duplicate_scores(self, hotkeys_to_slash: list[str]) -> list[list[str]]:
         """
-        Groups hotkeys for models whose full evaluation‐metric tuple
-        (all floats rounded to 6dp, confusion_matrix, fpr, tpr, tested_entries)
-        is identical.
+        Groups hotkeys for models whose full evaluation‐metric tuple is identical.
         """
         metrics_to_hotkeys: dict[tuple, list[str]] = {}
 
         for hotkey, result in self.results:
             if hotkey in hotkeys_to_slash:
                 continue
-
-            key = (
-                round(result.accuracy,   6),
-                round(result.precision,  6),
-                round(result.recall,     6),
-                round(result.fbeta,      6),
-                round(result.roc_auc,    6),
-                round(result.score,      6),
-                result.tested_entries,
-                tuple(tuple(row) for row in result.confusion_matrix),
-                tuple(round(x, 6) for x in result.fpr),
-                tuple(round(x, 6) for x in result.tpr),
-            )
-
-
-            metrics_to_hotkeys.setdefault(key, []).append(hotkey)
+            
+            comparable_result = self.competition_handler.get_comparable_result(result)
+            metrics_to_hotkeys.setdefault(comparable_result, []).append(hotkey)
 
         return [group for group in metrics_to_hotkeys.values() if len(group) > 1]
 
