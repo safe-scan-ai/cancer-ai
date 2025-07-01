@@ -238,6 +238,14 @@ class ModelManager():
             os.remove(self.hotkey_store[hotkey].file_path)
         self.hotkey_store[hotkey] = None
 
+    def _extract_raw_value(self, fields: list[dict]) -> str:
+        """Return the first Raw<n> value from the `fields` list."""
+        for field in fields:
+            for k, v in field.items():
+                if k.startswith("Raw"):
+                    return v
+        raise KeyError("No Raw<n> entry found in `info.fields`")
+
 
     def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> list[str]:
         """
@@ -312,15 +320,11 @@ class ModelManager():
                     continue
 
                 bt.logging.info(f"Found Extrinsic {extrinsic_id} → {module}.{function} {decoded_params} for hotkey {hotkey}")
-
                 try:
-                    info = decoded_params.get("info", {})
-                    fields = info.get("fields", [])
-                    if not fields or "Raw92" not in fields[0]:
-                        raise KeyError("Missing Raw92 field in decoded_params")
-
-                    raw92 = fields[0]["Raw92"]
-                    chain_model_hash = raw92.split(":")[-1]
+                    info    = decoded_params.get("info", {})
+                    fields  = info.get("fields", [])
+                    raw_val = self._extract_raw_value(fields)
+                    chain_model_hash       = raw_val.split(":")[-1]
                     participant_model_hash = self.hotkey_store[hotkey].model_hash
 
                     if chain_model_hash != participant_model_hash:
