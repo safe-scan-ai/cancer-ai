@@ -141,6 +141,25 @@ BENIGN_WEIGHT = 1.0
 MEDIUM_RISK_WEIGHT = 2.0
 HIGH_RISK_WEIGHT = 3.0
 
+from cancer_ai.validator.models import WanDBLogModelBase
+
+class TricorderWanDBLogModelEntry(WanDBLogModelBase):
+    tested_entries: int
+    model_url: str
+    accuracy: float
+    precision: float
+    fbeta: float
+    recall: float
+    confusion_matrix: list
+    roc_curve: dict | None = None
+    roc_auc: float | None = None
+    weighted_f1: float | None = None
+    f1_by_class: list | None = None
+    class_weights: list | None = None
+    risk_category_scores: dict | None = None
+    predictions_raw: list | None = None
+    error: str | None = None
+
 class TricorderEvaluationResult(BaseModelEvaluationResult):
     """Results from evaluating a model on the tricorder competition."""
     accuracy: float = 0.0
@@ -153,7 +172,26 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
     confusion_matrix: List[List[int]] = Field(default_factory=lambda: [[0] * len(CLASS_INFO) for _ in range(len(CLASS_INFO))])
     risk_category_scores: Dict[RiskCategory, float] = Field(default_factory=lambda: {category: 0.0 for category in RiskCategory})
 
+    def to_log_dict(self) -> dict:
+        return {
+            "accuracy": self.accuracy,
+            "precision": self.precision,
+            "fbeta": self.fbeta,
+            "recall": self.recall,
+            "confusion_matrix": self.confusion_matrix,
+            "roc_curve": getattr(self, "roc_curve", None),
+            "roc_auc": getattr(self, "roc_auc", None),
+            "weighted_f1": getattr(self, "weighted_f1", None),
+            "f1_by_class": getattr(self, "f1_by_class", None),
+            "class_weights": getattr(self, "class_weights", None),
+            "risk_category_scores": getattr(self, "risk_category_scores", None),
+            "predictions_raw": getattr(self, "predictions_raw", None),
+            "error": getattr(self, "error", None),
+        }
+
 class TricorderCompetitionHandler(BaseCompetitionHandler):
+    WanDBLogModelClass = TricorderWanDBLogModelEntry
+
     """Handler for skin lesion classification competition with 10 classes.
     
     This handler manages the entire competition pipeline including:
@@ -449,6 +487,15 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                 run_time_s=run_time_s,
                 error=error_msg
             )
+
+    def get_comparable_result_fields(self) -> tuple[str, ...]:
+        """Field names for get_comparable_result, in order."""
+        return (
+            "accuracy",
+            "weighted_f1",
+            "risk_category_scores",
+            "predictions_raw",
+        )
 
     def get_comparable_result(self, result: TricorderEvaluationResult) -> tuple:
         """

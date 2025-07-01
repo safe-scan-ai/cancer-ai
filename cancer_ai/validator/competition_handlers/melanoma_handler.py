@@ -17,14 +17,22 @@ from sklearn.metrics import (
     auc,
 )
 
+from cancer_ai.validator.models import WanDBLogModelBase
 from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 
+class MelanomaWanDBLogModelEntry(WanDBLogModelBase):
+    model_url: str
+    accuracy: float
+    precision: float
+    fbeta: float
+    recall: float
+    confusion_matrix: list
+    roc_curve: dict
+    roc_auc: float
+
+
+
 class MelanomaEvaluationResult(BaseModelEvaluationResult):
-    score: float = 0.0
-    predictions_raw: list = []
-    error: str = ""
-    run_time_s: float = 0.0
-    tested_entries: int = 0
     accuracy: float = 0.0
     precision: float = 0.0
     recall: float = 0.0
@@ -33,6 +41,17 @@ class MelanomaEvaluationResult(BaseModelEvaluationResult):
     fpr: list = []
     tpr: list = []
     roc_auc: float = 0.0
+
+    def to_log_dict(self) -> dict:
+        return {
+            "accuracy": self.accuracy,
+            "precision": self.precision,
+            "fbeta": self.fbeta,
+            "recall": self.recall,
+            "confusion_matrix": self.confusion_matrix,
+            "roc_curve": {"fpr": self.fpr, "tpr": self.tpr} if self.fpr and self.tpr else {},
+            "roc_auc": self.roc_auc,
+        }
 
     class Config:
         arbitrary_types_allowed = True
@@ -49,6 +68,8 @@ MELANOMA_CHUNK_SIZE = 200
 
 
 class MelanomaCompetitionHandler(BaseCompetitionHandler):
+    WanDBLogModelClass = MelanomaWanDBLogModelEntry
+
     """Handler for melanoma competition - handles both data preprocessing and model evaluation"""
 
     def __init__(self, X_test, y_test, config=None) -> None:
@@ -155,6 +176,10 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
             else:
                 bt.logging.warning(f"Preprocessed chunk file not found: {chunk_file}")
 
+    def preprocess_data(self):
+        """Prepare the data for melanoma competition."""
+        pass
+
     def cleanup_preprocessed_data(self) -> None:
         """Clean up preprocessed data files"""
         if self.preprocessed_data_dir and self.preprocessed_data_dir.exists():
@@ -216,6 +241,16 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
             roc_auc=roc_auc,
             score=score,
             predictions_raw=y_pred_flat.tolist(),
+        )
+
+    def get_comparable_result_fields(self) -> tuple[str, ...]:
+        """Field names for get_comparable_result, in order."""
+        return (
+            "accuracy",
+            "precision",
+            "recall",
+            "fbeta",
+            "predictions_raw",
         )
 
     def get_comparable_result(self, result: MelanomaEvaluationResult) -> tuple:

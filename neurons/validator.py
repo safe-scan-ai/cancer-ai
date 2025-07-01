@@ -312,29 +312,18 @@ class Validator(BaseValidatorNeuron):
                     ):
                         avg_score = self.competition_results_store.average_scores[competition_id][miner_hotkey]
                     
-                    model_log = WandBLogModelEntry(
+                    ActualWanDBLogModelEntryClass = competition_manager.competition_handler.WanDBLogModelClass
+                    model_log = ActualWanDBLogModelEntryClass(
                         uuid=competition_uuid,
                         competition_id=competition_id,
                         miner_hotkey=miner_hotkey,
                         uid=self.metagraph.hotkeys.index(miner_hotkey),
                         validator_hotkey=self.wallet.hotkey.ss58_address,
-                        tested_entries=evaluation_result.tested_entries,
-                        accuracy=evaluation_result.accuracy,
-                        precision=evaluation_result.precision,
-                        fbeta=evaluation_result.fbeta,
-                        recall=evaluation_result.recall,
-                        confusion_matrix=evaluation_result.confusion_matrix,
-                        roc_curve={
-                            "fpr": evaluation_result.fpr,
-                            "tpr": evaluation_result.tpr,
-                        },
                         model_url=model.hf_link,
-                        roc_auc=evaluation_result.roc_auc,
-                        score=evaluation_result.score,
                         average_score=avg_score,
-
                         run_time_s=evaluation_result.run_time_s,
-                        dataset_filename=data_package.dataset_hf_filename
+                        dataset_filename=data_package.dataset_hf_filename,
+                        **evaluation_result.to_log_dict(),
                     )
                     wandb.log(model_log.model_dump())
                 except Exception as e:
