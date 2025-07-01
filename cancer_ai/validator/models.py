@@ -75,20 +75,6 @@ class WanDBLogModelBase(WanDBLogBase):
     
     score: float = 0.0
     average_score: float = 0.0
-
-class WandBLogModelEntry(WanDBLogModelBase):
-    """Individual model evaluation results"""
-    
-    tested_entries: int
-    model_url : str
-    
-    accuracy: float
-    precision: float
-    fbeta: float
-    recall: float
-    confusion_matrix: list
-    roc_curve: dict
-    roc_auc: float
     
 class WanDBLogModelErrorEntry(WanDBLogModelBase):
     pass    
