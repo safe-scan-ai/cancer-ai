@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, AsyncGenerator, Tuple, Optional, TypedDict, Literal
-from dataclasses import dataclass
+from pydantic import Field
 import numpy as np
 import os
 import pickle
@@ -141,7 +141,6 @@ BENIGN_WEIGHT = 1.0
 MEDIUM_RISK_WEIGHT = 2.0
 HIGH_RISK_WEIGHT = 3.0
 
-@dataclass
 class TricorderEvaluationResult(BaseModelEvaluationResult):
     """Results from evaluating a model on the tricorder competition."""
     accuracy: float = 0.0
@@ -149,21 +148,10 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
     recall: float = 0.0
     fbeta: float = 0.0
     weighted_f1: float = 0.0
-    f1_by_class: List[float] = None
-    class_weights: List[float] = None
-    confusion_matrix: List[List[int]] = None
-    risk_category_scores: Dict[RiskCategory, float] = None
-    
-    def __post_init__(self):
-        if self.f1_by_class is None:
-            self.f1_by_class = [0.0] * len(ClassInfo)
-        if self.class_weights is None:
-            self.class_weights = [info["weight"] for info in CLASS_INFO.values()]
-        if self.confusion_matrix is None:
-            self.confusion_matrix = [[0] * len(ClassInfo) for _ in range(len(ClassInfo))]
-        if self.risk_category_scores is None:
-            self.risk_category_scores = {cat: 0.0 for cat in RiskCategory}
-
+    f1_by_class: List[float] = Field(default_factory=lambda: [0.0] * len(CLASS_INFO))
+    class_weights: List[float] = Field(default_factory=lambda: [info["weight"] for info in CLASS_INFO.values()])
+    confusion_matrix: List[List[int]] = Field(default_factory=lambda: [[0] * len(CLASS_INFO) for _ in range(len(CLASS_INFO))])
+    risk_category_scores: Dict[RiskCategory, float] = Field(default_factory=lambda: {category: 0.0 for category in RiskCategory})
 
 class TricorderCompetitionHandler(BaseCompetitionHandler):
     """Handler for skin lesion classification competition with 10 classes.
@@ -321,14 +309,39 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
     def preprocess_data(self):
         """Legacy method - using preprocess_and_serialize_data instead"""
         pass
+        
+    def prepare_y_pred(self, y_pred):
+        """
+        Convert string labels to 0-based indices for evaluation.
+        
+        Args:
+            y_pred: List of prediction labels (either string short names or 1-based indices)
+            
+        Returns:
+            List of 0-based class indices
+        """
+        converted = []
+        for y in y_pred:
+            if isinstance(y, str):
+                # Find class ID by short name
+                class_id = next((cid for cid, info in CLASS_INFO.items() 
+                              if info["short_name"] == y), None)
+                if class_id is not None:
+                    converted.append(class_id - 1)  # Convert to 0-based
+                else:
+                    raise ValueError(f"Unknown class short name: {y}")
+            elif isinstance(y, (int, float)):
+                converted.append(int(y) - 1)  # Convert to 0-based if numeric
+            else:
+                raise ValueError(f"Invalid label type: {type(y).__name__}")
+        return converted
 
-    def _calculate_risk_category_scores(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict[RiskCategory, float]:
-        """Calculate F1 scores for each risk category."""
-        f1_scores = f1_score(y_true, y_pred, average=None, zero_division=0)
+    def _calculate_risk_category_scores(self, f1_scores: np.ndarray) -> Dict[RiskCategory, float]:
+        """Calculate F1 scores for each risk category based on pre-computed F1 scores per class."""
         category_scores = {}
         
         for category, class_indices in RISK_CATEGORIES.items():
-            if class_indices:  # Only calculate if there are classes in this category
+            if class_indices:
                 category_f1 = np.mean([f1_scores[i] for i in class_indices])
                 category_scores[category] = float(category_f1)
             else:
@@ -366,8 +379,8 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         Evaluate model predictions and return detailed results.
         
         Args:
-            y_test: List of true class indices (0-9)
-            y_pred: List of predicted probabilities (shape [n_samples, 10])
+            y_test: List of true class indices (0-10)
+            y_pred: List of predicted probabilities (shape [n_samples, 11])
             run_time_s: Inference time in seconds
             
         Returns:
@@ -377,41 +390,43 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             # Convert to numpy arrays
             y_test = np.array(y_test)
             y_pred = np.array(y_pred)
-            
-            # Convert string labels to indices if needed
-            if isinstance(y_test[0], str):
-                y_test = np.array([self.class_name_to_idx.get(y, -1) for y in y_test])
-                if -1 in y_test:
-                    raise ValueError("Invalid class name in y_test")
-            # Ensure y_test is 0-based if numeric
-            elif y_test.min() > 0:
-                y_test = y_test - 1
+
+            # Define all possible class labels (0 to 10)
+            labels = list(range(len(CLASS_INFO)))
             
             # Get predicted class indices
             y_pred_classes = np.argmax(y_pred, axis=1)
             
             # Calculate basic metrics
             accuracy = float(accuracy_score(y_test, y_pred_classes))
-            precision = float(precision_score(y_test, y_pred_classes, average='weighted', zero_division=0))
-            recall = float(recall_score(y_test, y_pred_classes, average='weighted', zero_division=0))
-            fbeta = float(f1_score(y_test, y_pred_classes, average='weighted', zero_division=0))
+            precision = float(precision_score(y_test, y_pred_classes, labels=labels, average='weighted', zero_division=0))
+            recall = float(recall_score(y_test, y_pred_classes, labels=labels, average='weighted', zero_division=0))
+            fbeta = float(f1_score(y_test, y_pred_classes, labels=labels, average='weighted', zero_division=0))
             
-            # Calculate F1 scores by class and risk category
-            f1_scores = f1_score(y_test, y_pred_classes, average=None, zero_division=0)
-            category_scores = self._calculate_risk_category_scores(y_test, y_pred_classes)
+            # Calculate F1 scores by class, ensuring all classes are included
+            f1_scores = f1_score(y_test, y_pred_classes, labels=labels, average=None, zero_division=0)
+            
+            # Calculate risk category scores and weighted F1
+            category_scores = self._calculate_risk_category_scores(f1_scores)
             weighted_f1 = self._calculate_weighted_f1(category_scores)
-            
-            # Update metrics
-            self.metrics.update({
-                'accuracy': accuracy,
-                'weighted_f1': weighted_f1,
-                'run_time_s': run_time_s
-            })
-            
+
+            # Log important metrics
+            bt.logging.info(f"Model evaluation results:")
+            bt.logging.info(f"- Accuracy: {accuracy:.4f}")
+            bt.logging.info(f"- Weighted F1: {weighted_f1:.4f}")
+            for category, score in category_scores.items():
+                bt.logging.info(f"- {category.value} F1: {score:.4f}")
+
+            # Calculate score
+            score = 0.0
+            if weighted_f1 > 0:
+                score = weighted_f1 * 100
+
             # Create result object
             result = TricorderEvaluationResult(
                 tested_entries=len(y_test),
                 run_time_s=run_time_s,
+                predictions_raw=y_pred.tolist(),
                 accuracy=accuracy,
                 precision=precision,
                 recall=recall,
@@ -419,17 +434,10 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                 weighted_f1=weighted_f1,
                 f1_by_class=f1_scores.tolist(),
                 class_weights=self.class_weights,
-                confusion_matrix=confusion_matrix(y_test, y_pred_classes).tolist(),
+                confusion_matrix=confusion_matrix(y_test, y_pred_classes, labels=labels).tolist(),
                 risk_category_scores=category_scores,
-                score=self.calculate_score(self.metrics)
+                score=score
             )
-            
-            # Log important metrics
-            bt.logging.info(f"Model evaluation results:")
-            bt.logging.info(f"- Accuracy: {accuracy:.4f}")
-            bt.logging.info(f"- Weighted F1: {weighted_f1:.4f}")
-            for category, score in category_scores.items():
-                bt.logging.info(f"- {category.value} F1: {score:.4f}")
             
             return result
             
@@ -441,3 +449,28 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                 run_time_s=run_time_s,
                 error=error_msg
             )
+
+    def get_comparable_result(self, result: TricorderEvaluationResult) -> tuple:
+        """
+        Create a comparable representation of the result for grouping duplicates.
+        
+        This method should be implemented by each competition handler to specify
+        which metrics are used for comparing results.
+        
+        Args:
+            result: The evaluation result object.
+            
+        Returns:
+            A tuple of key metrics that can be used for comparison.
+        """
+        if not isinstance(result, TricorderEvaluationResult):
+            return tuple()
+            
+        # Round floats to handle potential floating point inaccuracies
+        return (
+            round(result.accuracy, 6),
+            round(result.weighted_f1, 6),
+            # Sort risk category scores by key to ensure consistent order
+            tuple(sorted((k.value, round(v, 6)) for k, v in result.risk_category_scores.items())),
+            tuple(map(tuple, result.predictions_raw)),
+        )

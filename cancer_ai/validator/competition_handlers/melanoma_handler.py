@@ -215,4 +215,26 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
             tpr=tpr.tolist(),
             roc_auc=roc_auc,
             score=score,
+            predictions_raw=y_pred_flat.tolist(),
+        )
+
+    def get_comparable_result(self, result: MelanomaEvaluationResult) -> tuple:
+        """
+        Create a comparable representation of the result for grouping duplicates.
+        
+        Args:
+            result: The evaluation result object.
+            
+        Returns:
+            A tuple of key metrics that can be used for comparison.
+        """
+        if not isinstance(result, MelanomaEvaluationResult):
+            return tuple()
+
+        return (
+            round(result.accuracy, 6),
+            round(result.precision, 6),
+            round(result.recall, 6),
+            round(result.fbeta, 6),
+            tuple(result.predictions_raw),
         )

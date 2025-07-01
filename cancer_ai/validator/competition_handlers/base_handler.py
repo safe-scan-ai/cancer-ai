@@ -1,9 +1,7 @@
-from typing import Any
-from abc import abstractmethod
+from abc import ABC, abstractmethod
+from typing import List
 
-from numpy import ndarray
-import numpy as np
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel
 
 
 class BaseModelEvaluationResult(BaseModel):
@@ -18,7 +16,7 @@ class BaseModelEvaluationResult(BaseModel):
         arbitrary_types_allowed = True
 
 
-class BaseCompetitionHandler:
+class BaseCompetitionHandler(ABC):
     """
     Base class for handling different competition types.
 
@@ -77,9 +75,26 @@ class BaseCompetitionHandler:
         """
 
     @abstractmethod
-    def get_model_result(self) -> BaseModelEvaluationResult:
+    def get_model_result(self, y_test: List[int], y_pred: List[float], run_time_s: float) -> tuple:
         """
         Abstract method to evaluate the competition.
 
-        This method is responsible for evaluating the competition.
+        This method should be implemented by subclasses.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_comparable_result(self, result: BaseModelEvaluationResult) -> tuple:
+        """
+        Create a comparable representation of the result for grouping duplicates.
+        
+        This method should be implemented by each competition handler to specify
+        which metrics are used for comparing results.
+        
+        Args:
+            result: The evaluation result object.
+            
+        Returns:
+            A tuple of key metrics that can be used for comparison.
+        """
+        raise NotImplementedError
