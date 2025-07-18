@@ -2,7 +2,7 @@ from pydantic import BaseModel
 import bittensor as bt
 from datetime import datetime, timezone
 
-from cancer_ai.validator.competition_handlers.base_handler import ModelEvaluationResult
+from cancer_ai.validator.competition_handlers.base_handler import BaseModelEvaluationResult
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.utils import get_competition_weights
 
@@ -173,7 +173,8 @@ class CompetitionResultsStore(BaseModel):
             if competition_id in self.current_top_hotkeys:
                 del self.current_top_hotkeys[competition_id]
 
-    async def update_competition_results(self, competition_id: str, model_results: list[tuple[str, ModelEvaluationResult]], config: bt.config, metagraph_hotkeys:list[Hotkey], hf_api, db_controller: ModelDBController):
+
+    async def update_competition_results(self, competition_id: str, model_results: list[tuple[str, BaseModelEvaluationResult]], config: bt.config, metagraph_hotkeys:list[Hotkey], hf_api, db_controller: ModelDBController):
         """Update competition results for a specific competition."""
 
         # Delete hotkeys from competition result score which don't exist anymore
