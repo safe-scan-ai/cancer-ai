@@ -113,15 +113,36 @@ class DatasetManager(SerializableManager):
             raise DatasetManagerException(
                 f"Dataset '{self.config.competition_id}' not downloaded"
             )
-        # is csv in directory
-        if os.path.exists(Path(self.local_extracted_dir, "labels.csv")):
+        
+        # Look for labels.csv in the extracted directory or its subdirectories
+        labels_csv_path = None
+        dataset_root_dir = None
+        
+        # Check directly in extracted dir
+        direct_csv_path = Path(self.local_extracted_dir, "labels.csv")
+        if direct_csv_path.exists():
+            labels_csv_path = direct_csv_path
+            dataset_root_dir = self.local_extracted_dir
+        else:
+            # Check in subdirectories (for datasets that extract to subfolder)
+            for item in os.listdir(self.local_extracted_dir):
+                subdir_path = Path(self.local_extracted_dir, item)
+                if subdir_path.is_dir() and not item.startswith('__'):  # Skip __MACOSX etc
+                    potential_csv = Path(subdir_path, "labels.csv")
+                    if potential_csv.exists():
+                        labels_csv_path = potential_csv
+                        dataset_root_dir = subdir_path
+                        bt.logging.info(f"Found labels.csv in subdirectory: {subdir_path}")
+                        break
+        
+        if labels_csv_path and dataset_root_dir:
             self.handler = DatasetImagesCSV(
                 self.config,
-                self.local_extracted_dir,
-                Path(self.local_extracted_dir, "labels.csv"),
+                dataset_root_dir,
+                labels_csv_path,
             )
         else:
-            raise NotImplementedError("Dataset handler not implemented")
+            raise NotImplementedError("Dataset handler not implemented - no labels.csv found")
 
     async def prepare_dataset(self) -> None:
         """Download dataset, unzip and set dataset handler"""
