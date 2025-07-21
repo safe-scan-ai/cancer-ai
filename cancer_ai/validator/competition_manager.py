@@ -163,11 +163,17 @@ class CompetitionManager(SerializableManager):
 
         
         await self.dataset_manager.prepare_dataset()
-        X_test, y_test = await self.dataset_manager.get_data()
+        X_test, y_test, metadata = await self.dataset_manager.get_data()
 
-        self.competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
-            X_test=X_test, y_test=y_test, config=self.config
-        )
+        # Pass metadata to tricorder handler, otherwise use default parameters
+        if self.competition_id == "tricorder-1":
+            self.competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
+                X_test=X_test, y_test=y_test, metadata=metadata, config=self.config
+            )
+        else:
+            self.competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
+                X_test=X_test, y_test=y_test, config=self.config
+            )
         
         # Set preprocessing directory and preprocess data once
         self.competition_handler.set_preprocessed_data_dir(self.config.models.dataset_dir)

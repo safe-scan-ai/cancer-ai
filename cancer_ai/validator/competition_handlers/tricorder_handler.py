@@ -203,9 +203,10 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
     - Scoring based on competition rules
     """
 
-    def __init__(self, X_test: List[str], y_test: List[int], config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, X_test: List[str], y_test: List[int], metadata: Optional[List[Dict[str, Any]]] = None, config: Optional[Dict[str, Any]] = None) -> None:
         super().__init__(X_test, y_test)
         self.config = config or {}
+        self.metadata = metadata or [{'age': None, 'gender': None} for _ in X_test]
         self.preprocessed_data_dir = None
         self.preprocessed_chunks = []
         
@@ -246,7 +247,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
 
     async def preprocess_and_serialize_data(self, X_test: List[str]) -> List[str]:
         """
-        Preprocess all images and serialize them to disk in chunks.
+        Preprocess all images with metadata and serialize them to disk in chunks.
         Returns list of paths to serialized chunk files.
         """
         if not self.preprocessed_data_dir:
@@ -259,8 +260,9 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         for i in range(0, len(X_test), CHUNK_SIZE):
             bt.logging.debug(f"Processing chunk {i} to {i + CHUNK_SIZE}")
             chunk_data = []
+            chunk_metadata = []
             
-            for img_path in X_test[i: i + CHUNK_SIZE]:
+            for idx, img_path in enumerate(X_test[i: i + CHUNK_SIZE]):
                 try:
                     if not os.path.isfile(img_path):
                         raise FileNotFoundError(f"File does not exist: {img_path}")
@@ -269,6 +271,13 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                         img = img.convert('RGB')
                         preprocessed_img = self._preprocess_single_image(img)
                         chunk_data.append(preprocessed_img)
+                        
+                        # Add corresponding metadata
+                        global_idx = i + idx
+                        if global_idx < len(self.metadata):
+                            chunk_metadata.append(self.metadata[global_idx])
+                        else:
+                            chunk_metadata.append({'age': None, 'gender': None})
                         
                 except FileNotFoundError:
                     error_counter['FileNotFoundError'] += 1
@@ -285,12 +294,16 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                 try:
                     chunk_array = np.array(chunk_data, dtype=np.float32)
                     chunk_file = self.preprocessed_data_dir / f"chunk_{len(chunk_paths)}.pkl"
+                    metadata_file = self.preprocessed_data_dir / f"metadata_{len(chunk_paths)}.pkl"
                     
                     with open(chunk_file, 'wb') as f:
                         pickle.dump(chunk_array, f)
                     
+                    with open(metadata_file, 'wb') as f:
+                        pickle.dump(chunk_metadata, f)
+                    
                     chunk_paths.append(str(chunk_file))
-                    bt.logging.debug(f"Saved chunk with {len(chunk_data)} images to {chunk_file}")
+                    bt.logging.debug(f"Saved chunk with {len(chunk_data)} images and metadata to {chunk_file}")
                     
                 except Exception as e:
                     bt.logging.error(f"Failed to serialize chunk: {e}")
@@ -323,14 +336,26 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         img_array = np.transpose(img_array, (2, 0, 1))
         return img_array
 
-    async def get_preprocessed_data_generator(self) -> AsyncGenerator[np.ndarray, None]:
-        """Generator that yields preprocessed data chunks"""
-        for chunk_file in self.preprocessed_chunks:
+    async def get_preprocessed_data_generator(self) -> AsyncGenerator[Tuple[np.ndarray, List[Dict[str, Any]]], None]:
+        """Generator that yields preprocessed data chunks with metadata"""
+        for i, chunk_file in enumerate(self.preprocessed_chunks):
             if os.path.exists(chunk_file):
                 try:
+                    # Load image data
                     with open(chunk_file, 'rb') as f:
                         chunk_data = pickle.load(f)
-                        yield chunk_data
+                    
+                    # Load corresponding metadata
+                    metadata_file = str(Path(chunk_file).parent / f"metadata_{i}.pkl")
+                    chunk_metadata = []
+                    if os.path.exists(metadata_file):
+                        with open(metadata_file, 'rb') as f:
+                            chunk_metadata = pickle.load(f)
+                    else:
+                        # Default metadata if file doesn't exist
+                        chunk_metadata = [{'age': None, 'gender': None} for _ in range(len(chunk_data))]
+                    
+                    yield chunk_data, chunk_metadata
                 except Exception as e:
                     bt.logging.error(f"Error loading preprocessed chunk {chunk_file}: {e}")
                     continue

@@ -137,10 +137,15 @@ class DatasetManager(SerializableManager):
         bt.logging.info(f"Preprocessing dataset '{self.competition_id}'")
         self.data = await self.handler.get_training_data()
 
-    async def get_data(self) -> Tuple[List, List]:
+    async def get_data(self) -> Tuple[List, List, List]:
         """Get data from dataset handler"""
         if not self.data:
             raise DatasetManagerException(
                 f"Dataset '{self.competition_id}' not initalized "
             )
+        # Handle backward compatibility - if data has 2 elements, add empty metadata
+        if len(self.data) == 2:
+            x_data, y_data = self.data
+            metadata = [{'age': None, 'gender': None} for _ in x_data]
+            return x_data, y_data, metadata
         return self.data
