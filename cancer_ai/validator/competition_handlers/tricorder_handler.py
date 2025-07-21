@@ -174,6 +174,7 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
 
     def to_log_dict(self) -> dict:
         return {
+            "tested_entries": self.tested_entries,
             "accuracy": self.accuracy,
             "precision": self.precision,
             "fbeta": self.fbeta,
