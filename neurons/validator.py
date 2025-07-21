@@ -124,7 +124,15 @@ class Validator(BaseValidatorNeuron):
             try:
                 self.db_controller.add_model(chain_model_metadata, hotkey)
             except Exception as e:
-                bt.logging.error(f"An error occured while trying to persist the model info: {e}", exc_info=True)
+                # Check if it's a model_hash length constraint error
+                if "CHECK constraint failed: LENGTH(model_hash) <= 8" in str(e):
+                    bt.logging.error(
+                        f"Invalid model hash for hotkey {hotkey}: "
+                        f"Hash '{chain_model_metadata.model_hash}' exceeds 8-character limit. "
+                        f"Model info will not be persisted to database."
+                    )
+                else:
+                    bt.logging.error(f"An error occured while trying to persist the model info: {e}", exc_info=True)
 
         self.db_controller.clean_old_records(self.hotkeys)
         self.last_miners_refresh = time.time()
