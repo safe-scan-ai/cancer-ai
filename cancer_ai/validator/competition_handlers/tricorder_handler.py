@@ -167,6 +167,7 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
     recall: float = 0.0
     fbeta: float = 0.0
     weighted_f1: float = 0.0
+    efficiency_score: float = 1.0
     f1_by_class: List[float] = Field(default_factory=lambda: [0.0] * len(CLASS_INFO))
     class_weights: List[float] = Field(default_factory=lambda: [info["weight"] for info in CLASS_INFO.values()])
     confusion_matrix: List[List[int]] = Field(default_factory=lambda: [[0] * len(CLASS_INFO) for _ in range(len(CLASS_INFO))])
@@ -179,6 +180,7 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
             "precision": self.precision,
             "fbeta": self.fbeta,
             "recall": self.recall,
+            "efficiency_score": self.efficiency_score,
             "confusion_matrix": self.confusion_matrix,
             "roc_curve": getattr(self, "roc_curve", None),
             "roc_auc": getattr(self, "roc_auc", None),
@@ -402,18 +404,17 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         return weighted_sum / total_weight if total_weight > 0 else 0.0
 
     def calculate_score(self, metrics: Dict[str, float]) -> float:
-        """Calculate final competition score (0-100)."""
+        """Calculate final competition score (0-1)."""
         # 90% prediction quality (50% accuracy, 50% weighted F1)
         prediction_score = 0.5 * metrics['accuracy'] + 0.5 * metrics['weighted_f1']
         
         # 10% efficiency (placeholder - will be calculated based on model size and speed)
         efficiency_score = metrics.get('efficiency', 1.0)  # Default to max if not set
         
-        # Final score (0-100 scale)
         final_score = 0.9 * prediction_score + 0.1 * efficiency_score
-        return final_score * 100  # Convert to 0-100 scale
+        return final_score
 
-    def get_model_result(self, y_test: List[int], y_pred: List[float], run_time_s: float) -> TricorderEvaluationResult:
+    def get_model_result(self, y_test: List[int], y_pred: List[float], run_time_s: float, model_size_mb: float = None) -> TricorderEvaluationResult:
         """
         Evaluate model predictions and return detailed results.
         
@@ -456,10 +457,28 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             for category, score in category_scores.items():
                 bt.logging.info(f"- {category.value} F1: {score:.4f}")
 
-            # Calculate score
-            score = 0.0
-            if weighted_f1 > 0:
-                score = weighted_f1 * 100
+            # Calculate efficiency score based on model size
+            efficiency_score = 1.0  # Default to max if size not provided
+            if model_size_mb is not None:
+                if model_size_mb <= 50:
+                    efficiency_score = 1.0  # Full efficiency score
+                elif model_size_mb <= 150:
+                    # Linear decay from 1.0 to 0.0 between 50MB and 150MB
+                    efficiency_score = (150 - model_size_mb) / 100
+                else:
+                    efficiency_score = 0.0  # No efficiency score above 150MB
+                
+                bt.logging.info(f"- Model size: {model_size_mb:.1f}MB, Efficiency score: {efficiency_score:.2f}")
+            
+            # Calculate final score using calculate_score method
+            metrics = {
+                'accuracy': accuracy,
+                'weighted_f1': weighted_f1,
+                'efficiency': efficiency_score
+            }
+            score = self.calculate_score(metrics)
+            
+            bt.logging.info(f"- FINAL COMPETITION SCORE: {score:.4f} (90% prediction: {0.9 * (0.5 * accuracy + 0.5 * weighted_f1):.3f}, 10% efficiency: {0.1 * efficiency_score:.3f})")
 
             # Create result object
             result = TricorderEvaluationResult(
@@ -471,6 +490,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                 recall=recall,
                 fbeta=fbeta,
                 weighted_f1=weighted_f1,
+                efficiency_score=efficiency_score,
                 f1_by_class=f1_scores.tolist(),
                 class_weights=self.class_weights,
                 confusion_matrix=confusion_matrix(y_test, y_pred_classes, labels=labels).tolist(),

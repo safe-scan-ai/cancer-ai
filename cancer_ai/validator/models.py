@@ -103,3 +103,4 @@ class ModelInfo:
     model_type: str | None = None
     block: int | None = None
     model_hash: str | None = None
+    model_size_mb: float | None = None

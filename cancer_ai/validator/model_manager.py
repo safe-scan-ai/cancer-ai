@@ -177,6 +177,28 @@ class ModelManager():
             self.parent.error_results.append((hotkey, f"Downloaded file does not exist at {model_info.file_path}"))
             return False
         
+        # Check model size for efficiency scoring
+        model_size_bytes = os.path.getsize(model_info.file_path)
+        model_size_mb = model_size_bytes / (1024 * 1024)
+        
+        # Store model size for efficiency scoring
+        model_info.model_size_mb = model_size_mb
+        
+        # Log model size with efficiency implications
+        if model_size_mb <= 50:
+            bt.logging.info(
+                f"Model size: {model_size_mb:.1f}MB - Full efficiency score"
+            )
+        elif model_size_mb <= 150:
+            efficiency_percent = ((150 - model_size_mb) / 100) * 100
+            bt.logging.info(
+                f"Model size: {model_size_mb:.1f}MB - {efficiency_percent:.0f}% efficiency score"
+            )
+        else:
+            bt.logging.warning(
+                f"Model size: {model_size_mb:.1f}MB - 0% efficiency score (exceeds 150MB)"
+            )
+        
         bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
         return True
 

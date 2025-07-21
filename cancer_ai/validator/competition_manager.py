@@ -218,7 +218,7 @@ class CompetitionManager(SerializableManager):
 
             try:
                 model_result = self.competition_handler.get_model_result(
-                    y_test, y_pred, time.time() - start_time
+                    y_test, y_pred, time.time() - start_time, model_info.model_size_mb
                 )
                 self.results.append((miner_hotkey, model_result))
             except Exception as e:

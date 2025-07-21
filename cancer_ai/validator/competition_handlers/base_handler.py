@@ -75,11 +75,17 @@ class BaseCompetitionHandler(ABC):
         """
 
     @abstractmethod
-    def get_model_result(self, y_test: List[int], y_pred: List[float], run_time_s: float) -> tuple:
+    def get_model_result(self, y_test: List[int], y_pred: List[float], run_time_s: float, model_size_mb: float = None) -> tuple:
         """
         Abstract method to evaluate the competition.
 
         This method should be implemented by subclasses.
+        
+        Args:
+            y_test: Ground truth labels
+            y_pred: Model predictions
+            run_time_s: Inference time in seconds
+            model_size_mb: Model size in megabytes (optional, for efficiency scoring)
         """
         raise NotImplementedError
 
