@@ -488,15 +488,19 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
 
     def _calculate_weighted_f1(self, category_scores: Dict[RiskCategory, float]) -> float:
         """Calculate weighted F1 score based on risk categories."""
-        total_weight = sum(info["weight"] for info in CLASS_INFO.values())
+        # Use category-level weights: HIGH_RISK=3.0, MEDIUM_RISK=2.0, BENIGN=1.0
+        category_weights = {
+            RiskCategory.HIGH_RISK: 3.0,
+            RiskCategory.MEDIUM_RISK: 2.0,
+            RiskCategory.BENIGN: 1.0
+        }
+        
+        total_weight = sum(category_weights.values())  # 3.0 + 2.0 + 1.0 = 6.0
         weighted_sum = sum(
-            score * CLASS_INFO[ClassId(HIGH_RISK_CLASSES[0] + 1)]["weight"] 
-            if category == RiskCategory.HIGH_RISK else
-            score * CLASS_INFO[ClassId(MEDIUM_RISK_CLASSES[0] + 1)]["weight"] 
-            if category == RiskCategory.MEDIUM_RISK else
-            score * CLASS_INFO[ClassId(BENIGN_CLASSES[0] + 1)]["weight"]
-            for category, score in category_scores.items()
+            category_scores.get(category, 0.0) * weight
+            for category, weight in category_weights.items()
         )
+        
         return weighted_sum / total_weight if total_weight > 0 else 0.0
 
     def calculate_score(self, metrics: Dict[str, float]) -> float:
