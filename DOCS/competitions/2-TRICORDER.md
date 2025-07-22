@@ -1,62 +1,153 @@
-# Description of Tricorder Skin Lesion Classification Competition
+# 🏆 Competition: Skin Lesion Classification Based on Images
 
-## Overview
-This competition challenges participants to develop a **lightweight and accurate** machine learning model for **multi-class skin lesion classification**. The model will analyze skin lesion images along with patient demographic data to classify them into one of 11 diagnostic categories.
+## 🎯 Competition Goal
 
-### Objective
-The primary goal is to create a model that can assist in the early detection and classification of various skin conditions, from benign lesions to malignant melanomas. The model should provide reliable predictions while being efficient enough to run on mobile devices, making it accessible for preliminary screening.
+The goal of the competition is to build a lightweight and effective ML model that classifies skin lesions into one of 10 predefined disease classes based on lesion images and demographic data.
 
-## Evaluation Criteria
-Models will be evaluated based on a combination of **prediction quality** and **efficiency metrics**.
+## 📥 Input and Output Data
 
-### Performance Metrics (90% weight)
+### Input
 
-| **Metric**       | **Description**                                                                 | **Weight** |
-|------------------|---------------------------------------------------------------------------------|------------|
-| **Accuracy**     | Overall correctness of predictions across all classes                           | 45%        |
-| **Weighted F1**  | F1 score weighted by risk categories (higher weight for more serious conditions) | 45%        |
-| **Efficiency**   | Model size and inference speed metrics (see below)                               | 10%        |
+#### 1. Skin Lesion Image
+- **Format**: JPEG or PNG
+- **Channels**: RGB (3 channels), no alpha channel
+- **Minimum side length**: ≥ 512 px
+- **Pixel values**: range [0, 512], dtype=np.uint8
 
+#### 2. Patient Demographic Data
+- **Age**: integer in years (e.g., 42)
+- **Gender**: "m" (male) / "f" (female)
+- **Body location**: integer according to the table below
 
-### Efficiency Metrics (10% weight)
+> **Note**: The model must utilize both image and demographic data.
 
-| **Metric**            | **Description**                                                                 | **Weight** |
-|-----------------------|---------------------------------------------------------------------------------|------------|
-| **Model Size**       | Smaller models score higher (target < 50MB for full score)                      | 5%         |
-| **Inference Speed**  | Faster inference times score higher (relative to other submissions)           | 5%         |
+### Output
+- **List of 10 class probabilities**: List[float]
+- **Probabilities must sum to 1.0** (softmax)
+- **Value range**: [0.0, 1.0]
 
-### Risk-Based Weighting
+## 🧬 Class List (order in model output)
 
-Predictions are weighted by clinical significance:
+| No. | Class | Clinical Type | Symbol |
+|-----|-------|---------------|--------|
+| 1 | Actinic keratosis (AK) | Benign | AK |
+| 2 | Basal cell carcinoma (BCC) | Malignant | BCC |
+| 3 | Seborrheic keratosis (SK) | Medium risk | SK |
+| 4 | Squamous cell carcinoma (SCC) | Malignant | SCC |
+| 5 | Vascular lesion | Medium risk | VASC |
+| 6 | Dermatofibroma | Benign | DF |
+| 7 | Benign nevus | Benign | NV |
+| 8 | Other non-neoplastic | Benign | NON |
+| 9 | Melanoma | Malignant | MEL |
+| 10 | Other neoplastic / Benign | Benign | ON |
 
-- **High Risk (3× weight)**: Basal Cell Carcinoma, Squamous Cell Carcinoma, Melanoma
-- **Medium Risk (2× weight)**: Seborrheic Keratosis, Vascular Lesion
-- **Low Risk (1× weight)**: Actinic Keratosis, Dermatofibroma, Benign Nevus, Other Non-Neoplastic, Other Neoplastic, Benign
+## ⚖️ Class Weights
 
-## Output Format
-Models should output a probability distribution over the 10 classes that sums to 1.0, with each value in the range [0.0, 1.0].
+| Class Type | Classes (No.) | Color | Weight |
+|------------|---------------|-------|--------|
+| Malignant | 2, 4, 9 | 🔴 | 3× (BCC, SCC, MEL) |
+| Medium risk | 3, 5 | 🟠 | 2× (SK, VASC) |
+| Benign | 1, 6, 7, 8, 10 | 🟢 | 1× (AK, DF, NV, NON, ON) |
 
-## Class Definitions
+## 📍 Body Location List
 
-| ID | Class Name | Short Name | Risk Category | Weight |
-|----|--------------------------------|------------|----------------|--------|
-| 1  | Actinic Keratosis (AK)         | AK         | Low Risk       | 1.0    |
-| 2  | Basal Cell Carcinoma (BCC)     | BCC        | High Risk      | 3.0    |
-| 3  | Seborrheic Keratosis (SK)      | SK         | Medium Risk    | 2.0    |
-| 4  | Squamous Cell Carcinoma (SCC)  | SCC        | High Risk      | 3.0    |
-| 5  | Vascular Lesion               | VASC       | Medium Risk    | 2.0    |
-| 6  | Dermatofibroma                | DF         | Low Risk       | 1.0    |
-| 7  | Benign Nevus                  | NEVUS      | Low Risk       | 1.0    |
-| 8  | Other Non-Neoplastic          | ONN        | Low Risk       | 1.0    |
-| 9  | Melanoma                      | MEL        | High Risk      | 3.0    |
-| 10 | Other Neoplastic              | ON         | Low Risk       | 1.0    |
-| 11 | Benign                       | BENIGN     | Low Risk       | 0.5    |
+| No. | Location |
+|-----|----------|
+| 1 | Arm |
+| 2 | Feet |
+| 3 | Genitalia |
+| 4 | Hand |
+| 5 | Head |
+| 6 | Leg |
+| 7 | Torso |
 
-## Technical Requirements
-- Input: RGB image (min 512px on shortest side) + patient age and gender
-- Output: 10-class probability distribution
-- Model size: Target < 150MB (50MB for full efficiency points)
-- Framework: Any (ONNX, TensorFlow, PyTorch, etc.)
+## 🧮 Evaluation Criteria (100 pts)
 
-## Intended Use
-The winning model will be integrated into a mobile application to assist healthcare professionals in preliminary skin lesion assessment, particularly in resource-constrained settings.
+| Category | Weight | Max pts | Notes |
+|----------|--------|---------|-------|
+| Prediction Quality | 90% | 90 pts | Weighted average: 50% Accuracy, 50% Weighted-F1 |
+| Efficiency | 10% | 10 pts | Model size (50%) + inference speed (50%) |
+
+## 📊 Score Calculation
+
+### F1-score for class types
+
+```
+F1_malignant = (F1_2 + F1_4 + F1_9) / 3  
+F1_medium    = (F1_3 + F1_5) / 2  
+F1_benign    = (F1_1 + F1_6 + F1_7 + F1_8 + F1_10) / 5
+```
+
+### Weighted-F1
+
+```
+Weighted-F1 = (3 × F1_malignant + 2 × F1_medium + 1 × F1_benign) / 6
+```
+
+### Accuracy
+Standard top-1 classification accuracy (percentage of correct classifications)
+
+### Prediction Score (90%)
+
+```
+Prediction Score = 0.5 × Accuracy + 0.5 × Weighted-F1
+```
+
+### Efficiency Score
+
+```
+Efficiency Score = 0.5 × (1 - (S - S_min) / (S_max - S_min)) +
+                   0.5 × (1 - (T - T_min) / (T_max - T_min))
+```
+
+**Where:**
+- **S** – model size in MB
+- **T** – inference time for single image (in ms)
+- **S_min = 20 MB, S_max = 150 MB**
+- **T_min = shortest time in competition, T_max = longest time in competition**
+- **Efficiency Score ∈ [0.0, 1.0]**
+
+> **Note**: Inference time will be measured on uniform CPU hardware (no GPU).
+
+### Final Score
+
+```
+Final Score = 0.9 × Prediction Score + 0.1 × Efficiency Score
+```
+
+## 💡 Additional Notes
+
+- Models may return high probabilities for multiple classes – this will not be penalized as long as softmax is correct.
+- Calibration is not required but may improve prediction usefulness.
+- Models with size < 50 MB receive maximum points for size in efficiency scoring.
+
+## 🔧 Example Implementation
+
+Example scripts and pipeline available in: `DOCS/competitions/tricorder_samples/`
+
+### Running the example:
+```bash
+cd DOCS/competitions/tricorder_samples
+./run_pipeline.sh
+```
+
+### Example structure:
+- `generate_tricorder_model.py` - 10-class model generation
+- `run_tricorder_inference.py` - Inference script with demographic data
+- `example_dataset/` - Sample dataset with images and labels
+- `README_EXAMPLE_TRICORDER.md` - Detailed documentation
+
+## 🚀 Getting Started
+
+1. **Review the example implementation** in `tricorder_samples/`
+2. **Understand the input format**: 512×512 images + demographics (age, gender, location)
+3. **Implement your model** to output 10 class probabilities
+4. **Optimize for both accuracy and efficiency** (model size + inference speed)
+5. **Test with the provided pipeline** before submission
+
+## 📋 Submission Requirements
+
+- Model must accept both image and demographic inputs
+- Output exactly 10 probabilities that sum to 1.0
+- Model size should be optimized (< 150 MB, ideally < 50 MB)
+- Include inference script compatible with the evaluation framework
