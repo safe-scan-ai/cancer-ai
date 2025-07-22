@@ -72,6 +72,14 @@ class PytorchRunnerHandler(BaseRunnerHandler):
             else:
                 gender = -1  # Unknown/missing gender
             
-            metadata_array.append([age, gender])
+            # Convert location to numerical: arm=1, feet=2, genitalia=3, hand=4, head=5, leg=6, torso=7, unknown=-1
+            location_str = entry.get('location', '').lower() if entry.get('location') else ''
+            location_mapping = {
+                'arm': 1, 'feet': 2, 'genitalia': 3, 'hand': 4, 
+                'head': 5, 'leg': 6, 'torso': 7
+            }
+            location = location_mapping.get(location_str, -1)  # Unknown/missing location
+            
+            metadata_array.append([age, gender, location])
         
         return torch.tensor(metadata_array, dtype=torch.float32)

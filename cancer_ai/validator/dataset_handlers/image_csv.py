@@ -15,6 +15,7 @@ class ImageEntry:
     label: str | int | bool  # Generic label - could be is_melanoma (bool) or disease_type (str)
     age: int | None = None
     gender: str | None = None
+    location: str | None = None
 
 
 class DatasetImagesCSV(BaseDatasetHandler):
@@ -32,7 +33,7 @@ class DatasetImagesCSV(BaseDatasetHandler):
         self.config = config
         self.dataset_path = dataset_path
         self.label_path = label_path
-        self.metadata_columns = ["filepath", "label", "age", "gender"]
+        self.metadata_columns = ["filepath", "label", "age", "gender", "location"]
 
     @log_time
     async def sync_training_data(self):
@@ -49,6 +50,8 @@ class DatasetImagesCSV(BaseDatasetHandler):
                 # Parse optional metadata fields
                 age = None
                 gender = None
+                location = None
+                
                 if len(row) > 2 and row[2]:  # age column exists and not empty
                     try:
                         age = int(row[2])
@@ -59,12 +62,20 @@ class DatasetImagesCSV(BaseDatasetHandler):
                     gender = row[3].strip().lower()
                     if gender not in ['male', 'female', 'm', 'f']:
                         gender = None  # Keep as None if invalid
+                        
+                if len(row) > 4 and row[4]:  # location column exists and not empty
+                    location = row[4].strip().lower()
+                    # Validate against expected location values
+                    valid_locations = ['arm', 'feet', 'genitalia', 'hand', 'head', 'leg', 'torso']
+                    if location not in valid_locations:
+                        location = None  # Keep as None if invalid
                 
                 self.entries.append(ImageEntry(
                     relative_path=filepath,
                     label=label,
                     age=age,
-                    gender=gender
+                    gender=gender,
+                    location=location
                 ))
 
     @log_time
@@ -83,7 +94,7 @@ class DatasetImagesCSV(BaseDatasetHandler):
         ]
         pred_y = [entry.label for entry in self.entries]
         pred_metadata = [
-            {'age': entry.age, 'gender': entry.gender} 
+            {'age': entry.age, 'gender': entry.gender, 'location': entry.location} 
             for entry in self.entries
         ]
         await self.process_training_data()

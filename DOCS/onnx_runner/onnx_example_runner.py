@@ -4,7 +4,7 @@ from PIL import Image
 
 model_path = "best_model.onnx"
 image_path = "image.jpg"
-target_size = (224, 224)
+target_size = (512, 512)
 
 try:
     session = onnxruntime.InferenceSession(model_path)

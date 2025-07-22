@@ -63,7 +63,7 @@ WEIGHT_ACCURACY = 0.3
 WEIGHT_AUC = 0.1
 
 # Melanoma-specific preprocessing constants
-MELANOMA_TARGET_SIZE = (224, 224)
+MELANOMA_TARGET_SIZE = (512, 512)
 MELANOMA_CHUNK_SIZE = 200
 
 

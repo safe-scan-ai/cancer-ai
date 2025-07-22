@@ -19,7 +19,7 @@ from enum import Enum, IntEnum
 from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 
 # --- Constants ---
-TARGET_SIZE = (224, 224)
+TARGET_SIZE = (512, 512)
 CHUNK_SIZE = 200
 
 # --- Data Structures ---
@@ -49,6 +49,15 @@ class ClassId(IntEnum):
     MELANOMA = 9
     OTHER_NEOPLASTIC = 10
     BENIGN = 11  # General benign class
+
+class LocationId(IntEnum):
+    ARM = 1
+    FEET = 2
+    GENITALIA = 3
+    HAND = 4
+    HEAD = 5
+    LEG = 6
+    TORSO = 7
 
 # Class metadata mapping
 CLASS_INFO: Dict[ClassId, ClassInfo] = {
@@ -206,7 +215,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
     def __init__(self, X_test: List[str], y_test: List[int], metadata: Optional[List[Dict[str, Any]]] = None, config: Optional[Dict[str, Any]] = None) -> None:
         super().__init__(X_test, y_test)
         self.config = config or {}
-        self.metadata = metadata or [{'age': None, 'gender': None} for _ in X_test]
+        self.metadata = metadata or [{'age': None, 'gender': None, 'location': None} for _ in X_test]
         self.preprocessed_data_dir = None
         self.preprocessed_chunks = []
         
@@ -277,7 +286,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                         if global_idx < len(self.metadata):
                             chunk_metadata.append(self.metadata[global_idx])
                         else:
-                            chunk_metadata.append({'age': None, 'gender': None})
+                            chunk_metadata.append({'age': None, 'gender': None, 'location': None})
                         
                 except FileNotFoundError:
                     error_counter['FileNotFoundError'] += 1
@@ -353,7 +362,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                             chunk_metadata = pickle.load(f)
                     else:
                         # Default metadata if file doesn't exist
-                        chunk_metadata = [{'age': None, 'gender': None} for _ in range(len(chunk_data))]
+                        chunk_metadata = [{'age': None, 'gender': None, 'location': None} for _ in range(len(chunk_data))]
                     
                     yield chunk_data, chunk_metadata
                 except Exception as e:
