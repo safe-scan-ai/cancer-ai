@@ -177,3 +177,4 @@ keys
 
 local_datasets/
 *.csv
+tmp/images
