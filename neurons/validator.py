@@ -72,7 +72,7 @@ class Validator(BaseValidatorNeuron):
     async def concurrent_forward(self):
 
         coroutines = [
-            # self.refresh_miners(),
+            self.refresh_miners(),
         ]
         if self.config.filesystem_evaluation:
             coroutines.append(self.filesystem_test_evaluation())
@@ -293,9 +293,9 @@ class Validator(BaseValidatorNeuron):
                 dataset_filename=data_package.dataset_hf_filename,
                 run_time_s=(datetime.datetime.now() - competition_start_time).seconds
             )
-            # wandb.init(project=competition_id, group="competition_evaluation")
-            # wandb.log(winner_log.model_dump())
-            # wandb.finish()
+            wandb.init(project=competition_id, group="competition_evaluation")
+            wandb.log(winner_log.model_dump())
+            wandb.finish()
 
             # log results to CSV
             csv_filename = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{competition_id}.csv"
@@ -333,7 +333,7 @@ class Validator(BaseValidatorNeuron):
                         dataset_filename=data_package.dataset_hf_filename,
                         **evaluation_result.to_log_dict(),
                     )
-                    # wandb.log(model_log.model_dump())
+                    wandb.log(model_log.model_dump())
                 except Exception as e:
                     bt.logging.error(f"Error logging model results for hotkey {miner_hotkey}: {e}")
                     continue
@@ -349,9 +349,9 @@ class Validator(BaseValidatorNeuron):
                     dataset_filename=data_package.dataset_hf_filename,
                     errors=error_message,
                 )
-                # wandb.log(model_log.model_dump())
+                wandb.log(model_log.model_dump())
             
-            # wandb.finish()
+            wandb.finish()
     
 
     def update_scores(
