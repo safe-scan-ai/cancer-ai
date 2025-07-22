@@ -22,6 +22,30 @@ from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 TARGET_SIZE = (512, 512)
 CHUNK_SIZE = 200
 
+# Image preprocessing constants
+NORMALIZATION_FACTOR = 255.0
+
+# Risk category weights for scoring
+CATEGORY_WEIGHTS = {
+    'HIGH_RISK': 3.0,
+    'MEDIUM_RISK': 2.0,
+    'BENIGN': 1.0
+}
+
+# Efficiency scoring constants
+MIN_MODEL_SIZE_MB = 50
+MAX_MODEL_SIZE_MB = 150
+EFFICIENCY_RANGE_MB = 100  # MAX - MIN
+
+# Final scoring weights
+PREDICTION_WEIGHT = 0.9
+EFFICIENCY_WEIGHT = 0.1
+ACCURACY_WEIGHT = 0.5
+WEIGHTED_F1_WEIGHT = 0.5
+
+# Age validation
+MAX_AGE = 120
+
 # --- Data Structures ---
 class RiskCategory(str, Enum):
     BENIGN = "benign"
@@ -219,7 +243,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             age = meta_entry.get('age')
             if age is None:
                 validation_errors.append(f"Missing age at index {i}")
-            elif not isinstance(age, (int, float)) or age < 0 or age > 120:
+            elif not isinstance(age, (int, float)) or age < 0 or age > MAX_AGE:
                 validation_errors.append(f"Invalid age at index {i}: {age} (must be 0-120)")
             
             # Validate gender
@@ -386,7 +410,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         img = img.resize(TARGET_SIZE)
         
         # Convert to numpy array and normalize
-        img_array = np.array(img, dtype=np.float32) / 255.0
+        img_array = np.array(img, dtype=np.float32) / NORMALIZATION_FACTOR
         
         # Handle grayscale images
         if img_array.ndim == 2:
@@ -488,14 +512,14 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
 
     def _calculate_weighted_f1(self, category_scores: Dict[RiskCategory, float]) -> float:
         """Calculate weighted F1 score based on risk categories."""
-        # Use category-level weights: HIGH_RISK=3.0, MEDIUM_RISK=2.0, BENIGN=1.0
+        # Use category-level weights from constants
         category_weights = {
-            RiskCategory.HIGH_RISK: 3.0,
-            RiskCategory.MEDIUM_RISK: 2.0,
-            RiskCategory.BENIGN: 1.0
+            RiskCategory.HIGH_RISK: CATEGORY_WEIGHTS['HIGH_RISK'],
+            RiskCategory.MEDIUM_RISK: CATEGORY_WEIGHTS['MEDIUM_RISK'],
+            RiskCategory.BENIGN: CATEGORY_WEIGHTS['BENIGN']
         }
         
-        total_weight = sum(category_weights.values())  # 3.0 + 2.0 + 1.0 = 6.0
+        total_weight = sum(category_weights.values())
         weighted_sum = sum(
             category_scores.get(category, 0.0) * weight
             for category, weight in category_weights.items()
@@ -505,13 +529,13 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
 
     def calculate_score(self, metrics: Dict[str, float]) -> float:
         """Calculate final competition score (0-1)."""
-        # 90% prediction quality (50% accuracy, 50% weighted F1)
-        prediction_score = 0.5 * metrics['accuracy'] + 0.5 * metrics['weighted_f1']
+        # Prediction quality (accuracy + weighted F1)
+        prediction_score = ACCURACY_WEIGHT * metrics['accuracy'] + WEIGHTED_F1_WEIGHT * metrics['weighted_f1']
         
-        # 10% efficiency (placeholder - will be calculated based on model size and speed)
+        # Efficiency score
         efficiency_score = metrics.get('efficiency', 1.0)  # Default to max if not set
         
-        final_score = 0.9 * prediction_score + 0.1 * efficiency_score
+        final_score = PREDICTION_WEIGHT * prediction_score + EFFICIENCY_WEIGHT * efficiency_score
         return final_score
 
     def get_model_result(self, y_test: List[int], y_pred: List[float], run_time_s: float, model_size_mb: float = None) -> TricorderEvaluationResult:
@@ -522,6 +546,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             y_test: List of true class indices (0-9)
             y_pred: List of predicted probabilities (shape [n_samples, 10])
             run_time_s: Inference time in seconds
+            model_size_mb: Model size in MB for efficiency calculation
             
         Returns:
             TricorderEvaluationResult with comprehensive evaluation metrics
@@ -560,13 +585,13 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             # Calculate efficiency score based on model size
             efficiency_score = 1.0  # Default to max if size not provided
             if model_size_mb is not None:
-                if model_size_mb <= 50:
+                if model_size_mb <= MIN_MODEL_SIZE_MB:
                     efficiency_score = 1.0  # Full efficiency score
-                elif model_size_mb <= 150:
-                    # Linear decay from 1.0 to 0.0 between 50MB and 150MB
-                    efficiency_score = (150 - model_size_mb) / 100
+                elif model_size_mb <= MAX_MODEL_SIZE_MB:
+                    # Linear decay from 1.0 to 0.0 between MIN and MAX MB
+                    efficiency_score = (MAX_MODEL_SIZE_MB - model_size_mb) / EFFICIENCY_RANGE_MB
                 else:
-                    efficiency_score = 0.0  # No efficiency score above 150MB
+                    efficiency_score = 0.0  # No efficiency score above MAX MB
                 
                 bt.logging.info(f"- Model size: {model_size_mb:.1f}MB, Efficiency score: {efficiency_score:.2f}")
             
