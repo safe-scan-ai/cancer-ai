@@ -3,6 +3,7 @@ import numpy as np
 import bittensor as bt
 from collections import defaultdict
 from ..exceptions import ModelRunException
+from ..competition_handlers.tricorder_handler import LocationId
 
 from . import BaseRunnerHandler
 
@@ -33,12 +34,11 @@ class OnnxRunnerHandler(BaseRunnerHandler):
         results = []
 
         async for data in preprocessed_data_generator:
-            try:
+            try:                
                 # Handle both formats: plain numpy array or tuple with metadata
                 if isinstance(data, tuple):
                     # Tricorder format: (image_data, metadata)
                     chunk, metadata = data
-                    bt.logging.debug(f"Processing chunk with metadata: {len(metadata)} entries")
                     
                     # Prepare inputs for ONNX model
                     inputs = session.get_inputs()
@@ -56,7 +56,6 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                         }
                     else:
                         # Model only expects image input (fallback)
-                        bt.logging.warning("Tricorder model only has one input - metadata will be ignored")
                         input_data = {inputs[0].name: chunk}
                 else:
                     # Melanoma format: plain numpy array (no metadata)
@@ -66,8 +65,9 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                 
                 chunk_results = session.run(None, input_data)[0]
                 results.extend(chunk_results)
+                
             except Exception as e:
-                bt.logging.debug(f"Inference error on chunk: {e}")
+                import traceback
                 error_counter['InferenceError'] += 1
                 continue
 
@@ -97,14 +97,23 @@ class OnnxRunnerHandler(BaseRunnerHandler):
             else:
                 gender = -1  # Unknown/missing gender
             
-            # Convert location to numerical: arm=1, feet=2, genitalia=3, hand=4, head=5, leg=6, torso=7, unknown=-1
+            # Convert location to numerical using LocationId enum
             location_str = entry.get('location', '').lower() if entry.get('location') else ''
-            location_mapping = {
-                'arm': 1, 'feet': 2, 'genitalia': 3, 'hand': 4, 
-                'head': 5, 'leg': 6, 'torso': 7
-            }
-            location = location_mapping.get(location_str, -1)  # Unknown/missing location
+            location = self._get_location_value(location_str)
             
             metadata_array.append([age, gender, location])
         
         return np.array(metadata_array, dtype=np.float32)
+    
+    def _get_location_value(self, location_str: str) -> int:
+        """Convert location string to numerical value using LocationId enum."""
+        if not location_str:
+            return -1
+        
+        try:
+            # Convert to uppercase to match enum names
+            location_enum = LocationId[location_str.upper()]
+            return location_enum.value
+        except KeyError:
+            # Unknown/invalid location
+            return -1

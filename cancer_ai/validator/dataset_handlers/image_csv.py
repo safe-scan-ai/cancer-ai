@@ -33,50 +33,59 @@ class DatasetImagesCSV(BaseDatasetHandler):
         self.config = config
         self.dataset_path = dataset_path
         self.label_path = label_path
-        self.metadata_columns = ["filepath", "label", "age", "gender", "location"]
+        self.metadata_columns = ["filepath", "label", "age", "location", "gender"]
 
     @log_time
     async def sync_training_data(self):
         self.entries: List[ImageEntry] = []
         # go over csv file
         async with aiofiles.open(self.label_path, "r") as f:
-            reader = csv.reader(await f.readlines())
-            next(reader)  # skip first line
-            for row in reader:
-                # Parse basic fields
-                filepath = row[0]
-                label = row[1]  # Could be is_melanoma (0/1) or disease_type ("AK", "BCC", etc.)
-                
-                # Parse optional metadata fields
-                age = None
-                gender = None
-                location = None
-                
-                if len(row) > 2 and row[2]:  # age column exists and not empty
-                    try:
-                        age = int(row[2])
-                    except ValueError:
-                        pass  # Keep as None if invalid
-                        
-                if len(row) > 3 and row[3]:  # gender column exists and not empty
-                    gender = row[3].strip().lower()
-                    if gender not in ['male', 'female', 'm', 'f']:
-                        gender = None  # Keep as None if invalid
-                        
-                if len(row) > 4 and row[4]:  # location column exists and not empty
-                    location = row[4].strip().lower()
-                    # Validate against expected location values
-                    valid_locations = ['arm', 'feet', 'genitalia', 'hand', 'head', 'leg', 'torso']
-                    if location not in valid_locations:
-                        location = None  # Keep as None if invalid
-                
-                self.entries.append(ImageEntry(
-                    relative_path=filepath,
-                    label=label,
-                    age=age,
-                    gender=gender,
-                    location=location
-                ))
+            content = await f.read()
+            
+        # Parse CSV with DictReader for column-agnostic access
+        import io
+        reader = csv.DictReader(io.StringIO(content))
+        
+        for row in reader:
+            # Get filepath - support different column names
+            filepath = row.get('NewFileName') or row.get('filepath') or row.get('filename') or ''
+            
+            # Get label - support different column names
+            label = row.get('Class') or row.get('label') or ''
+            
+            # Parse age
+            age = None
+            age_str = row.get('Age') or row.get('age') or ''
+            if age_str:
+                try:
+                    age = int(age_str)
+                except ValueError:
+                    pass  # Keep as None if invalid
+            
+            # Parse location
+            location = None
+            location_str = row.get('Location') or row.get('location') or ''
+            if location_str:
+                location = location_str.strip().lower()
+                # Validate against expected location values
+                valid_locations = ['arm', 'feet', 'genitalia', 'hand', 'head', 'leg', 'torso']
+                if location not in valid_locations:
+                    location = None  # Keep as None if invalid
+            
+            # Parse gender
+            gender = None
+            gender_str = row.get('Gender') or row.get('gender') or ''
+            if gender_str:
+                gender = gender_str.strip().lower()
+                # Keep the raw value - validation will happen in tricorder handler
+            
+            self.entries.append(ImageEntry(
+                relative_path=filepath,
+                label=label,
+                age=age,
+                gender=gender,
+                location=location
+            ))
 
     @log_time
     async def get_training_data(self) -> Tuple[List, List, List]:

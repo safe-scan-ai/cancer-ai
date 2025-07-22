@@ -48,7 +48,6 @@ class ClassId(IntEnum):
     OTHER_NON_NEOPLASTIC = 8
     MELANOMA = 9
     OTHER_NEOPLASTIC = 10
-    BENIGN = 11  # General benign class
 
 class LocationId(IntEnum):
     ARM = 1
@@ -99,13 +98,13 @@ CLASS_INFO: Dict[ClassId, ClassInfo] = {
     },
     ClassId.BENIGN_NEVUS: {
         "name": "Benign Nevus",
-        "short_name": "NEVUS",
+        "short_name": "NV",
         "risk_category": RiskCategory.BENIGN,
         "weight": 1.0
     },
     ClassId.OTHER_NON_NEOPLASTIC: {
         "name": "Other Non-Neoplastic",
-        "short_name": "ONN",
+        "short_name": "NON",
         "risk_category": RiskCategory.BENIGN,
         "weight": 1.0
     },
@@ -121,12 +120,6 @@ CLASS_INFO: Dict[ClassId, ClassInfo] = {
         "risk_category": RiskCategory.BENIGN,
         "weight": 1.0
     },
-    ClassId.BENIGN: {
-        "name": "Benign",
-        "short_name": "BENIGN",
-        "risk_category": RiskCategory.BENIGN,
-        "weight": 0.5  # Lower weight since it's a catch-all benign class
-    }
 }
 
 # Convert to 0-based indices for model output
@@ -219,6 +212,63 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         self.preprocessed_data_dir = None
         self.preprocessed_chunks = []
         
+        validation_errors = []
+        
+        for i, meta_entry in enumerate(self.metadata):
+            # Validate age
+            age = meta_entry.get('age')
+            if age is None:
+                validation_errors.append(f"Missing age at index {i}")
+            elif not isinstance(age, (int, float)) or age < 0 or age > 120:
+                validation_errors.append(f"Invalid age at index {i}: {age} (must be 0-120)")
+            
+            # Validate gender
+            gender = meta_entry.get('gender')
+            if gender is None:
+                validation_errors.append(f"Missing gender at index {i}")
+            else:
+                gender_lower = str(gender).lower()
+                if gender_lower not in ['m', 'f', 'male', 'female']:
+                    validation_errors.append(f"Invalid gender at index {i}: {gender} (must be 'm', 'f', 'male', 'female')")
+                else:
+                    meta_entry['gender'] = gender_lower
+            
+            # Validate location
+            location = meta_entry.get('location')
+            if location is None:
+                validation_errors.append(f"Missing location at index {i}")
+            else:
+                location_lower = str(location).lower()
+                valid_locations = ['arm', 'feet', 'genitalia', 'hand', 'head', 'leg', 'torso']
+                if location_lower not in valid_locations:
+                    validation_errors.append(f"Invalid location at index {i}: {location} (must be one of {valid_locations})")
+                else:
+                    meta_entry['location'] = location_lower
+        
+        # Validate labels
+        valid_label_names = [info["short_name"] for info in CLASS_INFO.values()]
+        for i, label in enumerate(y_test):
+            if isinstance(label, str):
+                if label not in valid_label_names:
+                    validation_errors.append(f"Invalid label at index {i}: {label} (must be one of {valid_label_names})")
+            elif isinstance(label, int):
+                if label < 1 or label > len(CLASS_INFO):
+                    validation_errors.append(f"Invalid label at index {i}: {label} (must be 1-{len(CLASS_INFO)})")
+            else:
+                validation_errors.append(f"Invalid label type at index {i}: {type(label)} (must be string or int)")
+        
+        # If any validation errors, fail the competition
+        if validation_errors:
+            error_summary = "\n".join(validation_errors[:10])
+            if len(validation_errors) > 10:
+                error_summary += f"\n... and {len(validation_errors) - 10} more errors"
+            
+            bt.logging.error(f"TRICORDER COMPETITION CANCELLED: Dataset validation failed")
+            bt.logging.error(f"Found {len(validation_errors)} validation errors:")
+            bt.logging.error(error_summary)
+            
+            raise ValueError(f"Tricorder competition requires complete metadata. Found {len(validation_errors)} validation errors:\n{error_summary}")
+        
         # Convert string labels to 0-based indices
         self.y_test = []
         for y in y_test:
@@ -262,12 +312,14 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         if not self.preprocessed_data_dir:
             raise ValueError("Preprocessed data directory not set")
             
-        bt.logging.info(f"Preprocessing {len(X_test)} images for tricorder competition")
+        bt.logging.debug(f"TRICORDER: Preprocessing {len(X_test)} images for tricorder competition")
+        bt.logging.debug(f"TRICORDER: Using chunk size: {CHUNK_SIZE}")
+        bt.logging.debug(f"TRICORDER: Available metadata entries: {len(self.metadata)}")
         error_counter = defaultdict(int)
         chunk_paths = []
         
         for i in range(0, len(X_test), CHUNK_SIZE):
-            bt.logging.debug(f"Processing chunk {i} to {i + CHUNK_SIZE}")
+            bt.logging.debug(f"TRICORDER: Processing chunk {len(chunk_paths)} - images {i} to {min(i + CHUNK_SIZE, len(X_test))}")
             chunk_data = []
             chunk_metadata = []
             
@@ -312,18 +364,19 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                         pickle.dump(chunk_metadata, f)
                     
                     chunk_paths.append(str(chunk_file))
-                    bt.logging.debug(f"Saved chunk with {len(chunk_data)} images and metadata to {chunk_file}")
+                    bt.logging.debug(f"TRICORDER: Saved chunk with {len(chunk_data)} images and metadata to {chunk_file}")
                     
                 except Exception as e:
-                    bt.logging.error(f"Failed to serialize chunk: {e}")
+                    bt.logging.error(f"TRICORDER: Failed to serialize chunk: {e}")
                     error_counter['SerializationError'] += 1
 
         if error_counter:
             error_summary = "; ".join([f"{count} {error_type.replace('_', ' ')}" 
                                      for error_type, count in error_counter.items()])
-            bt.logging.info(f"Preprocessing completed with issues: {error_summary}")
+            bt.logging.debug(f"TRICORDER: Preprocessing completed with issues: {error_summary}")
             
-        bt.logging.info(f"Preprocessed data saved in {len(chunk_paths)} chunks")
+        bt.logging.debug(f"TRICORDER: Preprocessed data saved in {len(chunk_paths)} chunks")
+        bt.logging.debug(f"TRICORDER: Chunk paths: {chunk_paths}")
         self.preprocessed_chunks = chunk_paths
         return chunk_paths
 
@@ -347,23 +400,32 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
 
     async def get_preprocessed_data_generator(self) -> AsyncGenerator[Tuple[np.ndarray, List[Dict[str, Any]]], None]:
         """Generator that yields preprocessed data chunks with metadata"""
+        bt.logging.debug(f"TRICORDER: Starting data generator with {len(self.preprocessed_chunks)} chunks")
+        
         for i, chunk_file in enumerate(self.preprocessed_chunks):
+            bt.logging.debug(f"TRICORDER: Processing chunk {i}: {chunk_file}")
             if os.path.exists(chunk_file):
                 try:
                     # Load image data
+                    bt.logging.debug(f"TRICORDER: Loading image data from {chunk_file}")
                     with open(chunk_file, 'rb') as f:
                         chunk_data = pickle.load(f)
+                    bt.logging.debug(f"TRICORDER: Loaded chunk data shape: {chunk_data.shape}")
                     
                     # Load corresponding metadata
                     metadata_file = str(Path(chunk_file).parent / f"metadata_{i}.pkl")
+                    bt.logging.debug(f"TRICORDER: Loading metadata from {metadata_file}")
                     chunk_metadata = []
                     if os.path.exists(metadata_file):
                         with open(metadata_file, 'rb') as f:
                             chunk_metadata = pickle.load(f)
+                        bt.logging.debug(f"TRICORDER: Loaded {len(chunk_metadata)} metadata entries")
                     else:
                         # Default metadata if file doesn't exist
+                        bt.logging.warning(f"TRICORDER: Metadata file not found, using defaults")
                         chunk_metadata = [{'age': None, 'gender': None, 'location': None} for _ in range(len(chunk_data))]
                     
+                    bt.logging.debug(f"TRICORDER: Yielding chunk {i} with {len(chunk_data)} samples and {len(chunk_metadata)} metadata")
                     yield chunk_data, chunk_metadata
                 except Exception as e:
                     bt.logging.error(f"Error loading preprocessed chunk {chunk_file}: {e}")
@@ -453,8 +515,8 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         Evaluate model predictions and return detailed results.
         
         Args:
-            y_test: List of true class indices (0-10)
-            y_pred: List of predicted probabilities (shape [n_samples, 11])
+            y_test: List of true class indices (0-9)
+            y_pred: List of predicted probabilities (shape [n_samples, 10])
             run_time_s: Inference time in seconds
             
         Returns:
@@ -465,7 +527,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             y_test = np.array(y_test)
             y_pred = np.array(y_pred)
 
-            # Define all possible class labels (0 to 10)
+            # Define all possible class labels (0 to 9)
             labels = list(range(len(CLASS_INFO)))
             
             # Get predicted class indices
@@ -511,9 +573,6 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                 'efficiency': efficiency_score
             }
             score = self.calculate_score(metrics)
-            
-            bt.logging.info(f"- FINAL COMPETITION SCORE: {score:.4f} (90% prediction: {0.9 * (0.5 * accuracy + 0.5 * weighted_f1):.3f}, 10% efficiency: {0.1 * efficiency_score:.3f})")
-
             # Create result object
             result = TricorderEvaluationResult(
                 tested_entries=len(y_test),
