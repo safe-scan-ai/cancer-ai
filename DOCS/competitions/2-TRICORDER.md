@@ -103,7 +103,7 @@ Efficiency Score = 0.5 × (1 - (S - S_min) / (S_max - S_min)) +
 **Where:**
 - **S** – model size in MB
 - **T** – inference time for single image (in ms)
-- **S_min = 20 MB, S_max = 150 MB**
+- **S_min = 50 MB, S_max = 150 MB**
 - **T_min = shortest time in competition, T_max = longest time in competition**
 - **Efficiency Score ∈ [0.0, 1.0]**
 
@@ -136,14 +136,6 @@ cd DOCS/competitions/tricorder_samples
 - `run_tricorder_inference.py` - Inference script with demographic data
 - `example_dataset/` - Sample dataset with images and labels
 - `README_EXAMPLE_TRICORDER.md` - Detailed documentation
-
-## 🚀 Getting Started
-
-1. **Review the example implementation** in `tricorder_samples/`
-2. **Understand the input format**: 512×512 images + demographics (age, gender, location)
-3. **Implement your model** to output 10 class probabilities
-4. **Optimize for both accuracy and efficiency** (model size + inference speed)
-5. **Test with the provided pipeline** before submission
 
 ## 📋 Submission Requirements
 
