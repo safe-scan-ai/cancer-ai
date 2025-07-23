@@ -210,5 +210,67 @@ class TestCompetitionResultsStore(unittest.TestCase):
         self.assertEqual(len(self.store.score_map[self.competition_id_1]), 0)
 
 
+    def test_score_history_reset(self):
+        # Import the module to access module-level variables
+        import cancer_ai.validator.rewarder as rewarder
+
+        # Save original values
+        original_history = rewarder.HISTORY_LENGTH
+        original_ma = rewarder.MOVING_AVERAGE_LENGTH
+
+        try:
+            # Test 1: Check with longer history
+            rewarder.HISTORY_LENGTH = 10
+            rewarder.MOVING_AVERAGE_LENGTH = 5
+
+            store = self.store
+            store.score_map = {} # Clear state
+            test_scores = [0.1 * i for i in range(1, 11)]
+
+            for i, score in enumerate(test_scores, 1):
+                store.add_score(
+                    self.competition_id, self.hotkey, score, datetime(2023, 1, i, tzinfo=timezone.utc)
+                )
+
+            scores = store.get_scores(self.competition_id, self.hotkey)
+            self.assertEqual(len(scores), 10)
+
+            expected_avg = sum(test_scores[-5:]) / 5
+            actual_avg = store.get_average_score(self.competition_id, self.hotkey)
+            self.assertIsNotNone(actual_avg)
+            self.assertAlmostEqual(actual_avg, expected_avg)
+
+            # Test 2: Reset history to 1 and verify behavior
+            rewarder.HISTORY_LENGTH = 1
+            rewarder.MOVING_AVERAGE_LENGTH = 1
+
+            store.add_score(self.competition_id, self.hotkey, 1.1, datetime(2023, 1, 11, tzinfo=timezone.utc))
+
+            scores = store.get_scores(self.competition_id, self.hotkey)
+            self.assertEqual(len(scores), 1)
+            self.assertEqual(scores[0], 1.1)
+
+            actual_avg = store.get_average_score(self.competition_id, self.hotkey)
+            self.assertIsNotNone(actual_avg)
+            self.assertAlmostEqual(actual_avg, 1.1)
+
+            # Test 3: Restore original history and verify
+            rewarder.HISTORY_LENGTH = original_history
+            rewarder.MOVING_AVERAGE_LENGTH = original_ma
+
+            store.add_score(self.competition_id, self.hotkey, 1.2, datetime(2023, 1, 12, tzinfo=timezone.utc))
+            
+            # History was 1, now it is original_history. The list should grow again.
+            # It had [1.1], we add 1.2. It becomes [1.1, 1.2]
+            # The length check for > HISTORY_LENGTH will only trigger when len is > original_history
+            scores = store.get_scores(self.competition_id, self.hotkey)
+            self.assertEqual(len(scores), 2)
+
+        finally:
+            # Always restore original values
+            rewarder.HISTORY_LENGTH = original_history
+            rewarder.MOVING_AVERAGE_LENGTH = original_ma
+
+
 if __name__ == "__main__":
     unittest.main()
