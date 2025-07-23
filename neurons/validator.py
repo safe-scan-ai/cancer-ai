@@ -45,7 +45,7 @@ from cancer_ai.validator.utils import (
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
-from cancer_ai.validator.models import WandBLogModelEntry, WanDBLogCompetitionWinners, WanDBLogBase, WanDBLogModelErrorEntry
+from cancer_ai.validator.models import WanDBLogCompetitionWinners, WanDBLogBase, WanDBLogModelErrorEntry
 from huggingface_hub import HfApi
 
 BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"
@@ -124,7 +124,15 @@ class Validator(BaseValidatorNeuron):
             try:
                 self.db_controller.add_model(chain_model_metadata, hotkey)
             except Exception as e:
-                bt.logging.error(f"An error occured while trying to persist the model info: {e}", exc_info=True)
+                # Check if it's a model_hash length constraint error
+                if "CHECK constraint failed: LENGTH(model_hash) <= 8" in str(e):
+                    bt.logging.error(
+                        f"Invalid model hash for hotkey {hotkey}: "
+                        f"Hash '{chain_model_metadata.model_hash}' exceeds 8-character limit. "
+                        f"Model info will not be persisted to database."
+                    )
+                else:
+                    bt.logging.error(f"An error occured while trying to persist the model info: {e}", exc_info=True)
 
         self.db_controller.clean_old_records(self.hotkeys)
         self.last_miners_refresh = time.time()
@@ -172,11 +180,12 @@ class Validator(BaseValidatorNeuron):
         if winning_hotkey:
             bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
 
-        bt.logging.warning("Competition results store before update")
-        bt.logging.warning(self.competition_results_store.model_dump_json())
+
+        # bt.logging.warning("Competition results store before update")
+        # bt.logging.warning(self.competition_results_store.model_dump_json())
         competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller)
-        bt.logging.warning("Competition results store after update")
-        bt.logging.warning(self.competition_results_store.model_dump_json())
+        # bt.logging.warning("Competition results store after update")
+        # bt.logging.warning(self.competition_results_store.model_dump_json())
         self.update_scores(competition_weights, 0.0001, 0.0002)
 
 
@@ -311,29 +320,18 @@ class Validator(BaseValidatorNeuron):
                     ):
                         avg_score = self.competition_results_store.average_scores[competition_id][miner_hotkey]
                     
-                    model_log = WandBLogModelEntry(
+                    ActualWanDBLogModelEntryClass = competition_manager.competition_handler.WanDBLogModelClass
+                    model_log = ActualWanDBLogModelEntryClass(
                         uuid=competition_uuid,
                         competition_id=competition_id,
                         miner_hotkey=miner_hotkey,
                         uid=self.metagraph.hotkeys.index(miner_hotkey),
                         validator_hotkey=self.wallet.hotkey.ss58_address,
-                        tested_entries=evaluation_result.tested_entries,
-                        accuracy=evaluation_result.accuracy,
-                        precision=evaluation_result.precision,
-                        fbeta=evaluation_result.fbeta,
-                        recall=evaluation_result.recall,
-                        confusion_matrix=evaluation_result.confusion_matrix,
-                        roc_curve={
-                            "fpr": evaluation_result.fpr,
-                            "tpr": evaluation_result.tpr,
-                        },
                         model_url=model.hf_link,
-                        roc_auc=evaluation_result.roc_auc,
-                        score=evaluation_result.score,
                         average_score=avg_score,
-
                         run_time_s=evaluation_result.run_time_s,
-                        dataset_filename=data_package.dataset_hf_filename
+                        dataset_filename=data_package.dataset_hf_filename,
+                        **evaluation_result.to_log_dict(),
                     )
                     wandb.log(model_log.model_dump())
                 except Exception as e:

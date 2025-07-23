@@ -44,13 +44,16 @@ class ModelRunManager(SerializableManager):
         
         self.handler = model_handler(self.config, self.model.file_path)
 
-    async def run(self, pred_x: List) -> List:
+    async def run(self, preprocessed_data_generator) -> List:
         """
-        Run the model with the given input.
+        Run the model with the given preprocessed data generator.
+
+        Args:
+            preprocessed_data_generator: Generator yielding preprocessed data chunks
 
         Returns:
             List: model predictions
         """
 
-        model_predictions = await self.handler.run(pred_x)
+        model_predictions = await self.handler.run(preprocessed_data_generator)
         return model_predictions

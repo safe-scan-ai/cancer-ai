@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from .rewarder import CompetitionLeader, Score, CompetitionWinnersStore, Rewarder
-from cancer_ai.validator.competition_handlers.base_handler import ModelEvaluationResult
+from cancer_ai.validator.competition_handlers.base_handler import BaseModelEvaluationResult
 import numpy as np
 
 
@@ -10,11 +10,11 @@ async def test_winner_results_model_improved():
     """
     Set new leader if winner's model has better scores
     """
-    current_model_results = ModelEvaluationResult(
+    current_model_results = BaseModelEvaluationResult(
         score=0.90,
     )
 
-    new_model_results = ModelEvaluationResult(
+    new_model_results = BaseModelEvaluationResult(
         score=0.99,
     )
 

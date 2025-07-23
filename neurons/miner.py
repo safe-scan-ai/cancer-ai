@@ -125,13 +125,19 @@ class MinerManagerCLI:
             X_test, y_test = await dataset_manager.get_data()
 
             competition_handler = COMPETITION_HANDLER_MAPPING[self.config.competition_id](
-                X_test=X_test, y_test=y_test
+                X_test=X_test, y_test=y_test, config=self.config
             )
+
+            # Set preprocessing directory and preprocess data once
+            competition_handler.set_preprocessed_data_dir(self.config.models.dataset_dir)
+            await competition_handler.preprocess_and_serialize_data(X_test)
 
             y_test = competition_handler.prepare_y_pred(y_test)
 
             start_time = time.time()
-            y_pred = await run_manager.run(X_test)
+            # Pass the preprocessed data generator instead of raw paths
+            preprocessed_data_gen = competition_handler.get_preprocessed_data_generator()
+            y_pred = await run_manager.run(preprocessed_data_gen)
             run_time_s = time.time() - start_time
 
             # print(y_pred)
@@ -139,6 +145,10 @@ class MinerManagerCLI:
             bt.logging.info(
                 f"Evalutaion results:\n{model_result.model_dump_json(indent=4)}"
             )
+            
+            # Cleanup preprocessed data
+            competition_handler.cleanup_preprocessed_data()
+            
             if self.config.clean_after_run:
                 dataset_manager.delete_dataset()
 
