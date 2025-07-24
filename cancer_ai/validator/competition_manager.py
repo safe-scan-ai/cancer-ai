@@ -35,6 +35,7 @@ COMPETITION_HANDLER_MAPPING = {
     "melanoma-2": MelanomaCompetitionHandler,
     "melanoma-3": MelanomaCompetitionHandler,
     "tricorder-1": TricorderCompetitionHandler,
+    "tricorder-2": TricorderCompetitionHandler,
 }
 
 
@@ -166,7 +167,7 @@ class CompetitionManager(SerializableManager):
         X_test, y_test, metadata = await self.dataset_manager.get_data()
 
         # Pass metadata to tricorder handler, otherwise use default parameters
-        if self.competition_id == "tricorder-1":
+        if self.competition_id == "tricorder-2":
             self.competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
                 X_test=X_test, y_test=y_test, metadata=metadata, config=self.config
             )
