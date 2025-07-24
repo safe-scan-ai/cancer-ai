@@ -328,6 +328,7 @@ class Validator(BaseValidatorNeuron):
                         uid=self.metagraph.hotkeys.index(miner_hotkey),
                         validator_hotkey=self.wallet.hotkey.ss58_address,
                         model_url=model.hf_link,
+                        score=evaluation_result.score,
                         average_score=avg_score,
                         run_time_s=evaluation_result.run_time_s,
                         dataset_filename=data_package.dataset_hf_filename,
