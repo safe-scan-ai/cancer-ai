@@ -40,8 +40,10 @@ EFFICIENCY_RANGE_MB = 100  # MAX - MIN
 # Final scoring weights
 PREDICTION_WEIGHT = 0.9
 EFFICIENCY_WEIGHT = 0.1
-ACCURACY_WEIGHT = 0.5
-WEIGHTED_F1_WEIGHT = 0.5
+
+# Within prediction score
+ACCURACY_WEIGHT = 0.4
+WEIGHTED_F1_WEIGHT = 0.6
 
 # Age validation
 MAX_AGE = 120
@@ -51,6 +53,26 @@ class RiskCategory(str, Enum):
     BENIGN = "benign"
     MEDIUM_RISK = "medium_risk"
     HIGH_RISK = "high_risk"
+
+# Cost matrix for misclassifications based on risk categories
+# The higher the cost, the more severe the error.
+COST_MATRIX = {
+    RiskCategory.HIGH_RISK: {
+        RiskCategory.HIGH_RISK: 0,
+        RiskCategory.MEDIUM_RISK: 5,  # High-risk lesion classified as medium-risk
+        RiskCategory.BENIGN: 10,      # High-risk lesion classified as benign (most severe error)
+    },
+    RiskCategory.MEDIUM_RISK: {
+        RiskCategory.HIGH_RISK: 2,  # Medium-risk lesion classified as high-risk (false alarm)
+        RiskCategory.MEDIUM_RISK: 0,
+        RiskCategory.BENIGN: 4,       # Medium-risk lesion classified as benign (severe error)
+    },
+    RiskCategory.BENIGN: {
+        RiskCategory.HIGH_RISK: 3,  # Benign lesion classified as high-risk (unnecessary alarm)
+        RiskCategory.MEDIUM_RISK: 1,  # Benign lesion classified as medium-risk (minor alarm)
+        RiskCategory.BENIGN: 0,
+    },
+}
 
 class ClassInfo(TypedDict):
     """Metadata for each skin lesion class"""
@@ -198,25 +220,29 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
     class_weights: List[float] = Field(default_factory=lambda: [info["weight"] for info in CLASS_INFO.values()])
     confusion_matrix: List[List[int]] = Field(default_factory=lambda: [[0] * len(CLASS_INFO) for _ in range(len(CLASS_INFO))])
     risk_category_scores: Dict[RiskCategory, float] = Field(default_factory=lambda: {category: 0.0 for category in RiskCategory})
+    misclassification_cost: float = 0.0
 
     def to_log_dict(self) -> dict:
         return {
             "tested_entries": self.tested_entries,
+            "model_url": self.model_url,
+            "run_time_s": self.run_time_s,
+            "score": self.score,
             "accuracy": self.accuracy,
             "precision": self.precision,
             "fbeta": self.fbeta,
             "recall": self.recall,
+            "weighted_f1": self.weighted_f1,
             "efficiency_score": self.efficiency_score,
+            "f1_by_class": self.f1_by_class,
+            "class_weights": self.class_weights,
             "confusion_matrix": self.confusion_matrix,
-            "roc_curve": getattr(self, "roc_curve", None),
-            "roc_auc": getattr(self, "roc_auc", None),
-            "weighted_f1": getattr(self, "weighted_f1", None),
-            "f1_by_class": getattr(self, "f1_by_class", None),
-            "class_weights": getattr(self, "class_weights", None),
-            "risk_category_scores": getattr(self, "risk_category_scores", None),
-            "predictions_raw": getattr(self, "predictions_raw", None),
-            "score": getattr(self, "score", None),
-            "error": getattr(self, "error", None),
+            "risk_category_scores": {k.value: v for k, v in self.risk_category_scores.items()},
+            "misclassification_cost": self.misclassification_cost,
+            "roc_curve": self.roc_curve,
+            "roc_auc": self.roc_auc,
+            "predictions_raw": self.predictions_raw,
+            "error": self.error,
         }
 
 class TricorderCompetitionHandler(BaseCompetitionHandler):
@@ -528,16 +554,53 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         
         return weighted_sum / total_weight if total_weight > 0 else 0.0
 
+    def _calculate_misclassification_cost(self, confusion_matrix: np.ndarray) -> float:
+        """
+        Calculates the total misclassification cost based on the confusion matrix.
+        """
+        total_cost = 0.0
+        num_classes = len(CLASS_INFO)
+
+        # Create a mapping from class index (0-based) to risk category
+        class_index_to_risk = {
+            cid.value - 1: info["risk_category"] for cid, info in CLASS_INFO.items()
+        }
+
+        for true_idx in range(num_classes):
+            for pred_idx in range(num_classes):
+                count = confusion_matrix[true_idx][pred_idx]
+                if count > 0:
+                    true_risk = class_index_to_risk[true_idx]
+                    pred_risk = class_index_to_risk[pred_idx]
+                    cost = COST_MATRIX[true_risk][pred_risk]
+                    total_cost += count * cost
+        return total_cost
+
     def calculate_score(self, metrics: Dict[str, float]) -> float:
-        """Calculate final competition score (0-1)."""
-        # Prediction quality (accuracy + weighted F1)
-        prediction_score = ACCURACY_WEIGHT * metrics['accuracy'] + WEIGHTED_F1_WEIGHT * metrics['weighted_f1']
-        
-        # Efficiency score
-        efficiency_score = metrics.get('efficiency', 1.0)  # Default to max if not set
-        
-        final_score = PREDICTION_WEIGHT * prediction_score + EFFICIENCY_WEIGHT * efficiency_score
-        return final_score
+        """
+        Calculates the final score based on a combination of metrics.
+        Args:
+            metrics: A dictionary containing 'accuracy', 'weighted_f1', 'efficiency', and 'misclassification_cost'.
+        Returns:
+            The final calculated score.
+        """
+        prediction_score = (metrics['accuracy'] * ACCURACY_WEIGHT) + \
+                           (metrics['weighted_f1'] * WEIGHTED_F1_WEIGHT)
+
+        # Normalize cost: lower is better. We want to subtract it.
+        # The maximum possible cost occurs if all predictions are the most severe error.
+        # This provides a rough normalization. A better approach might involve a baseline.
+        num_misclassified = len(self.y_test) - np.trace(metrics['confusion_matrix'])
+        max_possible_cost = num_misclassified * max(c for v in COST_MATRIX.values() for c in v.values())
+        normalized_cost = metrics['misclassification_cost'] / max_possible_cost if max_possible_cost > 0 else 0
+        base_score = (prediction_score * PREDICTION_WEIGHT) + \
+                     (metrics['efficiency'] * EFFICIENCY_WEIGHT)
+
+        # Apply cost as a multiplicative penalty. A higher cost reduces the score proportionally.
+        # A normalized_cost of 0 means no penalty. A cost of 1 means a 100% penalty (score -> 0).
+        final_score = base_score * (1 - normalized_cost)
+
+        return max(0, final_score)  
 
     def get_model_result(self, y_test: List[int], y_pred: List[float], run_time_s: float, model_size_mb: float = None) -> TricorderEvaluationResult:
         """
@@ -596,11 +659,18 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                 
                 bt.logging.info(f"- Model size: {model_size_mb:.1f}MB, Efficiency score: {efficiency_score:.2f}")
             
+            # Calculate confusion matrix and misclassification cost
+            cm = confusion_matrix(y_test, y_pred_classes, labels=labels)
+            misclassification_cost = self._calculate_misclassification_cost(cm)
+            bt.logging.info(f"- Misclassification Cost: {misclassification_cost:.2f}")
+
             # Calculate final score using calculate_score method
             metrics = {
                 'accuracy': accuracy,
                 'weighted_f1': weighted_f1,
-                'efficiency': efficiency_score
+                'efficiency': efficiency_score,
+                'confusion_matrix': cm,
+                'misclassification_cost': misclassification_cost,
             }
             score = self.calculate_score(metrics)
             # Create result object
@@ -616,8 +686,9 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                 efficiency_score=efficiency_score,
                 f1_by_class=f1_scores.tolist(),
                 class_weights=self.class_weights,
-                confusion_matrix=confusion_matrix(y_test, y_pred_classes, labels=labels).tolist(),
+                confusion_matrix=cm.tolist(),
                 risk_category_scores=category_scores,
+                misclassification_cost=misclassification_cost,
                 score=score
             )
             
@@ -661,7 +732,8 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         return (
             round(result.accuracy, 6),
             round(result.weighted_f1, 6),
+            round(result.misclassification_cost, 6),
             # Sort risk category scores by key to ensure consistent order
             tuple(sorted((k.value, round(v, 6)) for k, v in result.risk_category_scores.items())),
-            tuple(map(tuple, result.predictions_raw)),
+            tuple(result.predictions_raw),
         )
