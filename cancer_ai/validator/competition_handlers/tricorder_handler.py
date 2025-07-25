@@ -215,6 +215,7 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
             "class_weights": getattr(self, "class_weights", None),
             "risk_category_scores": getattr(self, "risk_category_scores", None),
             "predictions_raw": getattr(self, "predictions_raw", None),
+            "score": getattr(self, "score", None),
             "error": getattr(self, "error", None),
         }
 
