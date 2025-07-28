@@ -26,9 +26,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
 
         try:
             session = onnxruntime.InferenceSession(self.model_path)
-        except onnxruntime.OnnxRuntimeException:
-            raise ModelRunException("Failed to create ONNX inference session")
-        except Exception:
+        except Exception: # don't know what exception it throws
             raise ModelRunException("Failed to create ONNX inference session")
 
         results = []
