@@ -55,5 +55,9 @@ class ModelRunManager(SerializableManager):
             List: model predictions
         """
 
-        model_predictions = await self.handler.run(preprocessed_data_generator)
-        return model_predictions
+        try:
+            model_predictions = await self.handler.run(preprocessed_data_generator)
+            return model_predictions
+        except ModelRunException as e:
+            bt.logging.error(f"Error running model {self.model.hf_repo_id}: {e}")
+            return [] # Return empty list to indicate failure

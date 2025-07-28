@@ -74,6 +74,9 @@ class BaseValidatorNeuron(BaseNeuron):
         self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
         self.competition_results_store = CompetitionResultsStore()
         self.org_latest_updates = {}
+        # add log with file path for loading state 
+        state_file_path = self.config.neuron.full_path + "/state.json"
+        bt.logging.info(f"Loading state from {state_file_path}")
         self.load_state()
         # Init sync with the network. Updates the metagraph.
         self.sync(force_sync=True)

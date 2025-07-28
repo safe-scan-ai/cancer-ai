@@ -26,8 +26,9 @@ class OnnxRunnerHandler(BaseRunnerHandler):
 
         try:
             session = onnxruntime.InferenceSession(self.model_path)
-        except Exception: # don't know what exception it throws
-            raise ModelRunException("Failed to create ONNX inference session")
+        except Exception as e:
+            bt.logging.error(f"An unexpected error occurred when loading ONNX model: {e}")
+            raise ModelRunException(f"An unexpected error occurred when loading ONNX model: {e}") from e
 
         results = []
 
@@ -65,7 +66,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                 results.extend(chunk_results)
                 
             except Exception as e:
-                import traceback
+                bt.logging.warning(f"An error occurred during inference on chunk {data}: {e}")
                 error_counter['InferenceError'] += 1
                 continue
 
