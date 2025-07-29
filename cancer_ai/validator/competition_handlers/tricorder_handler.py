@@ -638,7 +638,6 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             "accuracy",
             "weighted_f1",
             "risk_category_scores",
-            "predictions_raw",
         )
 
     def get_comparable_result(self, result: TricorderEvaluationResult) -> tuple:
@@ -663,5 +662,4 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             round(result.weighted_f1, 6),
             # Sort risk category scores by key to ensure consistent order
             tuple(sorted((k.value, round(v, 6)) for k, v in result.risk_category_scores.items())),
-            tuple(map(tuple, result.predictions_raw)),
         )

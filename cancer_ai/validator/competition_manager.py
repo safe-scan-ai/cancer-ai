@@ -279,6 +279,10 @@ class CompetitionManager(SerializableManager):
             if hotkey in hotkeys_to_slash:
                 continue
             
+            # Skip models with score 0.0 from duplicate detection
+            if result.score == 0.0:
+                continue
+            
             comparable_result = self.competition_handler.get_comparable_result(result)
             metrics_to_hotkeys.setdefault(comparable_result, []).append(hotkey)
 
