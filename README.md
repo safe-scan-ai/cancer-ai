@@ -1,6 +1,7 @@
 # SAFE SCAN
 
-*Bittensor Subnet for improving cancer detection algorithms*
+
+*Bittensor Subnet 76 for improving cancer detection algorithms*
 
 ![header.png](https://github.com/safe-scan-ai/cancer-ai-3/blob/LEMSTUDI0-patch-1/DOCS/header.png)
 
