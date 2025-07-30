@@ -298,22 +298,22 @@ class BaseValidatorNeuron(BaseNeuron):
         # Compute raw_weights safely
         raw_weights = self.scores / norm
 
-        # Ensure UID 0 gets 30% of weights for burning
-        # Store the original weight for UID 0 for logging
-        original_uid0_weight = raw_weights[0]
+        # # Ensure UID 0 gets 30% of weights for burning
+        # # Store the original weight for UID 0 for logging
+        # original_uid0_weight = raw_weights[0]
         
-        # Set UID 0 to 30%
-        raw_weights[0] = 0.3
+        # # Set UID 0 to 30%
+        # raw_weights[0] = 0.3
         
-        # Normalize the rest (UIDs 1-255) to sum to 70%
-        other_weights_sum = np.sum(raw_weights[1:])
-        if other_weights_sum > 0:
-            raw_weights[1:] = (raw_weights[1:] / other_weights_sum) * 0.7
-        else:
-            # If all other weights are 0, distribute the 70% equally among UIDs 1-255
-            raw_weights[1:] = 0.7 / 255
+        # # Normalize the rest (UIDs 1-255) to sum to 70%
+        # other_weights_sum = np.sum(raw_weights[1:])
+        # if other_weights_sum > 0:
+        #     raw_weights[1:] = (raw_weights[1:] / other_weights_sum) * 0.7
+        # else:
+        #     # If all other weights are 0, distribute the 70% equally among UIDs 1-255
+        #     raw_weights[1:] = 0.7 / 255
         
-        bt.logging.info(f"Set UID 0 weight from {original_uid0_weight:.4f} to {raw_weights[0]:.4f} (30%)")
+        # bt.logging.info(f"Set UID 0 weight from {original_uid0_weight:.4f} to {raw_weights[0]:.4f} (30%)")
 
         bt.logging.debug("raw_weights", raw_weights)
         bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
@@ -331,13 +331,13 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.debug("processed_weights", processed_weights)
         bt.logging.debug("processed_weight_uids", processed_weight_uids)
 
-        # Verify UID 0 weight after processing
-        if 0 in processed_weight_uids:
-            uid0_index = np.where(processed_weight_uids == 0)[0][0]
-            uid0_processed_weight = processed_weights[uid0_index]
-            total_processed_weight = np.sum(processed_weights)
-            uid0_percentage = (uid0_processed_weight / total_processed_weight) * 100 if total_processed_weight > 0 else 0
-            bt.logging.info(f"UID 0 weight after processing: {uid0_processed_weight:.4f} ({uid0_percentage:.1f}% of total)")
+        # # Verify UID 0 weight after processing
+        # if 0 in processed_weight_uids:
+        #     uid0_index = np.where(processed_weight_uids == 0)[0][0]
+        #     uid0_processed_weight = processed_weights[uid0_index]
+        #     total_processed_weight = np.sum(processed_weights)
+        #     uid0_percentage = (uid0_processed_weight / total_processed_weight) * 100 if total_processed_weight > 0 else 0
+        #     bt.logging.info(f"UID 0 weight after processing: {uid0_processed_weight:.4f} ({uid0_percentage:.1f}% of total)")
 
         # Convert to uint16 weights and uids.
         (
