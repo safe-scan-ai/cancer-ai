@@ -59,7 +59,7 @@ btcli wallet new_hotkey --wallet.name miner --wallet.hotkey default
 
 Register miner on the CancerAI subnet:
 ```
-btcli subnet recycle_register --netuid <Cancer AI subnet id> --subtensor.network finney --wallet.name miner --wallet.hotkey default
+btcli subnet register --netuid 76 --subtensor.network finney --wallet.name miner --wallet.hotkey default
 ```
 
 Check that your key was registered:
@@ -144,14 +144,14 @@ To submit a model to validators, use the following command:
 ```bash
 python neurons/miner.py \
     --action submit \
-    --competition_id melanoma-1\
-    --hf_code_filename skin_melanoma_small.zip\
-    --hf_model_name best_model.onnx \
-    --hf_repo_id safescanai/test_dataset \
-    --wallet.name miner2 \
-    --wallet.hotkey default \
-    --netuid 163 \
-    --subtensor.network test
+    --competition_id <COMPETITION ID>\
+    --hf_code_filename <HF MODEL CODE FILE NAME>\
+    --hf_model_name <HF MODEL FILE NAME>\
+    --hf_repo_id <HF REPO ID> \
+    --wallet.name <WALLET NAME> \
+    --wallet.hotkey <HOTKEY NAME> \
+    --netuid 76 \
+    --subtensor.network finney
 ```
 
 Command line argument explanation
@@ -162,6 +162,23 @@ Command line argument explanation
 - `--wallet.hotkey` - name of wallet hotkey used for authentication with Bittensor network
 - `--netuid` - subnet number
 - `--subtensor.network` - Bittensor network to connect to - <test|finney>
+
+#### Post Submit activities
+Submitting models to validators is executing blockchain extrinsic which must be documented in the miners HF repo for a reference to prevent model copiers from stealing miners model.
+After submitting the model miner must create file named 'extrinsic_record.json' in the miners HF model repo with the following content:
+
+```
+{
+    "hotkey": <hotkey used for submission>
+    "extrinsic": <extrinsic id of the submission>
+}
+```
+
+The extrinsic id can be found via any Bittensor block explorer. It can be done using Taostats. Example:
+1. https://taostats.io/accounts
+2. Search for participant account by the hotkey SS58 address
+3. Enter the account dashboard, search for 'Extrinsics'
+4. In 'Extrinsics' look for the 'Commitments.set_commitment' extrinsic. Copy the corresponding Extrinsic ID into the 'extrinsic_record.json'.
 
 ## Notes
 
