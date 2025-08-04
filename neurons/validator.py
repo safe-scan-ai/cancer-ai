@@ -186,7 +186,7 @@ class Validator(BaseValidatorNeuron):
         competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller)
         # bt.logging.warning("Competition results store after update")
         # bt.logging.warning(self.competition_results_store.model_dump_json())
-        self.update_scores(competition_weights, 0.0001, 0.0002)
+        self.update_scores(competition_weights, 0.000001, 0.000002)
 
 
     async def monitor_datasets(self):
