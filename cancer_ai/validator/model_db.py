@@ -33,7 +33,7 @@ class ChainMinerModelDB(Base):
     )
 
 class ModelDBController:
-    def __init__(self, db_path: str = "models.db", subtensor: bt.subtensor = None):
+    def __init__(self, db_path: str, subtensor: bt.subtensor = None):
         db_url = f"sqlite:///{os.path.abspath(db_path)}"
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
