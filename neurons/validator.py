@@ -225,7 +225,6 @@ class Validator(BaseValidatorNeuron):
             return
         
         bt.logging.info(f"Found {len(data_packages)} new data packages")
-        self.save_state()
         
         for data_package in data_packages:
             competition_id = data_package.competition_id
@@ -352,6 +351,10 @@ class Validator(BaseValidatorNeuron):
                 wandb.log(model_log.model_dump())
             
             wandb.finish()
+            
+            # Save state only after successful competition evaluation
+            # This ensures that org_latest_updates are persisted only for successfully processed packages
+            self.save_state()
     
 
     def update_scores(
