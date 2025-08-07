@@ -25,11 +25,10 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
 
 ## Model Submission Requirements
 
-- **Model Submission**: Participants, referred to as miners, must submit their trained models at the end of each competition.
 - **Format**: All models must be in ONNX format. This ensures uniform testing and allows for broad deployment options, including on mobile and web platforms.
 - **License**: All models must be licensed under the MIT License to ensure the open nature of the competition and to allow unrestricted use worldwide.
 - **Training Code**: Each submission should include the code used for training the model to ensure transparency and reproducibility.
-- **Upload Process**: Models are uploaded to Hugging Face at the end of each test. Miners then submit the Hugging Face repository link on the blockchain for evaluation by validators.
+- **Upload Process**: Models are to be uploaded to Hugging Face. Miners then submit the Hugging Face repository link on the blockchain for evaluation by validators.
 - **Timing Constraint**: Only models submitted at least 30 minutes before the competition start time are eligible for evaluation. This requirement ensures that models have not been retrained with the new data batch, maintaining fairness and integrity across the competition.
 
 ## Evaluation and Scoring
@@ -38,19 +37,17 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
 - **Scoring Mechanism**: Detailed scoring mechanisms are outlined in the [DOCS](/DOCS/competitions) directory. Validators run scheduled competitions and assess the models based on these criteria.
 - **Winning Criteria**: The best-performing model, according to the evaluation metrics, is declared the winner of the competition.
 - **Rewards**: The winner receives the full emission for that competition, divided by the number of competitions held.
-- **Rewards Time Decay**: If a miner stays in the top position for more than 30 days, their rewards start to decrease gradually. Every 7 days after the initial 30 days, their share of the rewards decreases by 10%. This reduction continues until their share reaches a minimum of 10% of the original reward.
-  
+
 ## Command-Line Interface (CLI) Tools
 
 - **Local Testing**: Miners are provided with an easy-to-use command-line interface (CLI) for local testing of their models. This tool helps streamline the process of testing models, uploading to Hugging Face, and submitting to the competition.
-- **Automated Data Retrieval**: Code for automating the retrieval of training data for each competition is available to integrate with the model training process. The script is defined in [scripts/get_dataset.py](/scripts/get_dataset.py).
 
 ## Communication Channels
 
 Stay connected and up-to-date with the latest news, discussions, and support:
 
 - **Discord**: Join our [Safe Scan Discord channel](https://discord.gg/rbBu7WuZ) and the Bittensor Discord in the #safescan channel for real-time updates and community interaction.
-- **Dashboard**: Access the competition dashboard on [Hugging Face](https://huggingface.co/spaces/safescanai/dashboard).
+- **Dashboard**: Access the competition dashboard on https://dashboard.safe-scan.ai/ 
 - **Blog**: Visit our [blog](https://safe-scan.ai/news/) for news and updates.
 - **Twitter/X**: Follow us on [Twitter/X](https://x.com/SAFESCAN_AI) for announcements and highlights.
 - **Email**: Contact us directly at [info@safescanai.ai](mailto:info@safescanai.ai) for any inquiries or support.

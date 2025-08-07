@@ -123,8 +123,6 @@ You can find comprehensive details about competition scheduling, dataset release
 
 **Incentives**: The winner of each competition receives the entire reward pool for that specific competition. The reward pool is determined by the total emission allocated for miners, divided by the number of competitions being held.
 
-If a miner stays at the top position for more than 30 days, their rewards start to decrease gradually. Every 7 days after the initial 30 days, their share of the rewards decreases by 10%. This reduction continues until their share reaches a minimum of 10% of the original reward.
-
 **📈 SELF-SUSTAINING ECONOMY**
 
 Although our primary focus is on using our subnet to save lives with state-of-the-art algorithms and custom-made software while promoting the power of Bittensor computing worldwide, our long-term goal is to establish a self-sustaining economy.
@@ -144,9 +142,9 @@ Our team is deeply committed to supporting and improving the Bittensor network w
 
 Team members:
 
-- **@Q. -** Business development
-- **@czlowiek** - Project manager & HEAD DEV
-- **@Konrad -** Subnet developer
+- **@Q. -** Business development (slyboots)
+- **@czlowiek** - Project manager & HEAD DEV (old prick)
+- **@Konrad -** Bittensor Engineer
 - **@bulubula -** Machine learning engineer
 - **@Izuael -** Mobile software Engineer
 
