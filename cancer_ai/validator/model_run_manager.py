@@ -4,6 +4,7 @@ from typing import List
 from .manager import SerializableManager
 from .model_manager import ModelInfo
 from .utils import detect_model_format, ModelType
+from .model_runners import BaseRunnerHandler
 from .model_runners.pytorch_runner import PytorchRunnerHandler
 from .model_runners.tensorflow_runner import TensorflowRunnerHandler
 from .model_runners.onnx_runner import OnnxRunnerHandler
@@ -42,7 +43,7 @@ class ModelRunManager(SerializableManager):
             raise ModelRunException("Unknown model format")
 
         
-        self.handler = model_handler(self.config, self.model.file_path)
+        self.handler: BaseRunnerHandler = model_handler(self.config, self.model.file_path)
 
     async def run(self, preprocessed_data_generator) -> List:
         """
@@ -61,3 +62,6 @@ class ModelRunManager(SerializableManager):
         except ModelRunException as e:
             bt.logging.error(f"Error running model {self.model.hf_repo_id}: {e}")
             return [] # Return empty list to indicate failure
+        except Exception as e:
+            bt.logging.error(f"Unexpected error running model {self.model.hf_repo_id}: {e}", exc_info=True)
+            return [] 

@@ -20,6 +20,7 @@ import sys
 import random
 import time
 import sys
+import os
 
 import bittensor as bt
 
@@ -159,7 +160,7 @@ class BaseNeuron(ABC):
             bt.logging.error(
                 f"Failed to sync metagraph after {len(delays)} retries (≈10 minutes); exiting.", exc_info=True
             )
-            sys.exit(1)
+            os._exit(1) # French-style leave 
 
     def check_registered(self):
         retries = 3
