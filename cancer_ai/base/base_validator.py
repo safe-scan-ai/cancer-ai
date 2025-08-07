@@ -302,13 +302,13 @@ class BaseValidatorNeuron(BaseNeuron):
         # Store the original weight for UID 0 for logging
         original_uid0_weight = raw_weights[0]
         
-        # Set UID 0 to 100%
-        raw_weights[0] = 1.0
+        # # Set UID 0 to 100%
+        # raw_weights[0] = 1.0
         
-        # Set all other UIDs to 0
-        raw_weights[1:] = 0.0
+        # # Set all other UIDs to 0
+        # raw_weights[1:] = 0.0
         
-        bt.logging.info(f"Set UID 0 weight from {original_uid0_weight:.4f} to {raw_weights[0]:.4f} (100%)")
+        # bt.logging.info(f"Set UID 0 weight from {original_uid0_weight:.4f} to {raw_weights[0]:.4f} (100%)")
 
         bt.logging.debug("raw_weights", raw_weights)
         bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
@@ -327,12 +327,12 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.debug("processed_weight_uids", processed_weight_uids)
 
         # Verify UID 0 weight after processing
-        if 0 in processed_weight_uids:
-            uid0_index = np.where(processed_weight_uids == 0)[0][0]
-            uid0_processed_weight = processed_weights[uid0_index]
-            total_processed_weight = np.sum(processed_weights)
-            uid0_percentage = (uid0_processed_weight / total_processed_weight) * 100 if total_processed_weight > 0 else 0
-            bt.logging.info(f"UID 0 weight after processing: {uid0_processed_weight:.4f} ({uid0_percentage:.1f}% of total)")
+        # if 0 in processed_weight_uids:
+        #     uid0_index = np.where(processed_weight_uids == 0)[0][0]
+        #     uid0_processed_weight = processed_weights[uid0_index]
+        #     total_processed_weight = np.sum(processed_weights)
+        #     uid0_percentage = (uid0_processed_weight / total_processed_weight) * 100 if total_processed_weight > 0 else 0
+        #     bt.logging.info(f"UID 0 weight after processing: {uid0_processed_weight:.4f} ({uid0_percentage:.1f}% of total)")
 
         # Convert to uint16 weights and uids.
         (
