@@ -1,4 +1,4 @@
-## 🧬 Subtype Mapping (Expanded Reference)
+## 🧬 Tricorder detailed disease classes mapping
 
 ### 1. **Actinic keratosis (AK)**
 - bowenoid actinic keratosis  
