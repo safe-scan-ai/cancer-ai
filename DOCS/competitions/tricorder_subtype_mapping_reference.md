@@ -1,6 +1,7 @@
 ## 🧬 Tricorder detailed disease classes mapping
 
 ### 1. **Actinic keratosis (AK)**
+- actinic keratosis
 - bowenoid actinic keratosis  
 - pagetoid actinic keratosis  
 - AK  
@@ -10,6 +11,7 @@
 - BCC  
 
 ### 3. **Seborrheic keratosis (SK)**
+- seborrheic keratosis
 - solar lentigo  
 - lentigo  
 - lentigo simplex  
@@ -31,6 +33,7 @@
 - SCC  
 
 ### 5. **Vascular lesion (VASC)**
+- vascular lesion
 - pyogenic granuloma  
 - angioma  
   - hemangioma  
@@ -39,6 +42,7 @@
 - VASC  
 
 ### 6. **Dermatofibroma (DF)**
+- dermatofibroma
 - histiocytoma  
 - DF  
 
@@ -63,12 +67,11 @@
 - mastocytoma  
 - comedo  
 - nevus sebaceous  
-- znamię łojowe  
+- sebaceous nevus  
 - epidermal nevus  
 - viral wart  
 - verruca  
 - molluscum  
-- molluscum contagiosum  
 - MCV  
 - fibroepithelial polyp  
 - skin tag  
@@ -96,6 +99,7 @@
 - NON  
 
 ### 9. **Melanoma (MEL)**
+- Melanoma
 - MELTUMP (melanocytic tumor of uncertain malignant potential)  
 - SAMPUS (superficial melanocytic proliferation of unknown significance)  
 - IAMPUS (intraepidermal melanocytic proliferation of unknown significance)  
