@@ -41,7 +41,7 @@ The goal of the competition is to build a lightweight and effective ML model tha
 | 9 | Melanoma | Malignant | MEL |
 | 10 | Other neoplastic / Benign | Benign | ON |
 
-[🧬 Full Subtype Mapping Reference](https://github.com/safe-scan-ai/cancer-ai/blob/main/DOCS/competitions/tricorder_subtype_mapping_reference.md)
+[🧬 Full detailed disease classes mapping](https://github.com/safe-scan-ai/cancer-ai/blob/main/DOCS/competitions/tricorder_subtype_mapping_reference.md)
 
 ## ⚖️ Class Weights
 
