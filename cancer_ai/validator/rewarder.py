@@ -61,7 +61,7 @@ class CompetitionResultsStore(BaseModel):
         self.score_map[competition_id][hotkey].sort(key=lambda x: x.date)
         if len(self.score_map[competition_id][hotkey]) > HISTORY_LENGTH:
             # remove the oldest one
-            self.score_map[competition_id][hotkey] = self.score_map[competition_id][hotkey][1:]
+            self.score_map[competition_id][hotkey] = self.score_map[competition_id][hotkey][-HISTORY_LENGTH:]
 
         self.update_average_score(competition_id, hotkey)
 
@@ -154,6 +154,12 @@ class CompetitionResultsStore(BaseModel):
             reverse=True
         )
 
+
+    def get_average_score(self, competition_id: str, hotkey: Hotkey) -> float | None:
+        """Return the average score for a given competition/hotkey, or None if not found."""
+        if competition_id not in self.average_scores:
+            return None
+        return self.average_scores[competition_id].get(hotkey)
 
     def get_competitions(self) -> list[str]:
         return list(self.score_map.keys())
