@@ -251,18 +251,21 @@ class Validator(BaseValidatorNeuron):
             except Exception:
                 stack_trace = traceback.format_exc()
                 bt.logging.error(f"Cannot run {competition_id}: {stack_trace}")
-                wandb.init(project=competition_id, group="competition_evaluation")
-                error_log = WanDBLogBase(
-                    uuid=competition_uuid,
-                    log_type="competition_error",
-                    competition_id=competition_id,
-                    run_time_s=(datetime.datetime.now() - competition_start_time).seconds,
-                    validator_hotkey=self.wallet.hotkey.ss58_address,
-                    errors=str(stack_trace),
-                    dataset_filename=data_package.dataset_hf_filename
-                )
-                wandb.log(error_log.model_dump())
-                wandb.finish()
+                try:
+                    wandb.init(project=competition_id, group="competition_evaluation")
+                    error_log = WanDBLogBase(
+                        uuid=competition_uuid,
+                        log_type="competition_error",
+                        competition_id=competition_id,
+                        run_time_s=(datetime.datetime.now() - competition_start_time).seconds,
+                        validator_hotkey=self.wallet.hotkey.ss58_address,
+                        errors=str(stack_trace),
+                        dataset_filename=data_package.dataset_hf_filename
+                    )
+                    wandb.log(error_log.model_dump())
+                    wandb.finish()
+                except Exception as wandb_error:
+                    bt.logging.warning(f"Failed to log to wandb: {wandb_error}")
                 continue
 
             if not winning_hotkey:
@@ -277,33 +280,41 @@ class Validator(BaseValidatorNeuron):
             self.update_scores(competition_weights, 0.0001, 0.0002)
 
             average_winning_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
-            winner_log = WanDBLogCompetitionWinners(
-                uuid=competition_uuid,
-                competition_id=competition_id,
+            try:
+                winner_log = WanDBLogCompetitionWinners(
+                    uuid=competition_uuid,
+                    competition_id=competition_id,
 
-                competition_winning_hotkey=winning_hotkey,
-                competition_winning_uid=self.metagraph.hotkeys.index(winning_hotkey),
+                    competition_winning_hotkey=winning_hotkey,
+                    competition_winning_uid=self.metagraph.hotkeys.index(winning_hotkey),
 
-                average_winning_hotkey=average_winning_hotkey,
-                average_winning_uid=self.metagraph.hotkeys.index(average_winning_hotkey),
+                    average_winning_hotkey=average_winning_hotkey,
+                    average_winning_uid=self.metagraph.hotkeys.index(average_winning_hotkey),
 
-                validator_hotkey=self.wallet.hotkey.ss58_address,
-                model_link=winning_model_link,
-                dataset_filename=data_package.dataset_hf_filename,
-                run_time_s=(datetime.datetime.now() - competition_start_time).seconds
-            )
-            wandb.init(project=competition_id, group="competition_evaluation")
-            wandb.log(winner_log.model_dump())
-            wandb.finish()
+                    validator_hotkey=self.wallet.hotkey.ss58_address,
+                    model_link=winning_model_link,
+                    dataset_filename=data_package.dataset_hf_filename,
+                    run_time_s=(datetime.datetime.now() - competition_start_time).seconds
+                )
+                wandb.init(project=competition_id, group="competition_evaluation")
+                wandb.log(winner_log.model_dump())
+                wandb.finish()
+            except Exception as wandb_error:
+                bt.logging.warning(f"Failed to log competition winners to wandb: {wandb_error}")
 
             # log results to CSV
             csv_filename = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{competition_id}.csv"
             await self.log_results_to_csv(csv_filename, data_package, winning_hotkey, competition_manager.results)
 
             # Logging results
-            wandb.init(project=competition_id, group="model_evaluation")
+            try:
+                wandb.init(project=competition_id, group="model_evaluation")
+                wandb_initialized = True
+            except Exception as wandb_error:
+                bt.logging.warning(f"Failed to initialize wandb for model evaluation: {wandb_error}")
+                wandb_initialized = False
+                
             for miner_hotkey, evaluation_result in competition_manager.results:
-
                 if miner_hotkey in competition_manager.error_results:
                     continue
 
@@ -319,38 +330,51 @@ class Validator(BaseValidatorNeuron):
                     ):
                         avg_score = self.competition_results_store.average_scores[competition_id][miner_hotkey]
                     
-                    ActualWanDBLogModelEntryClass = competition_manager.competition_handler.WanDBLogModelClass
-                    model_log = ActualWanDBLogModelEntryClass(
-                        uuid=competition_uuid,
-                        competition_id=competition_id,
-                        miner_hotkey=miner_hotkey,
-                        uid=self.metagraph.hotkeys.index(miner_hotkey),
-                        validator_hotkey=self.wallet.hotkey.ss58_address,
-                        model_url=model.hf_link,
-                        average_score=avg_score,
-                        run_time_s=evaluation_result.run_time_s,
-                        dataset_filename=data_package.dataset_hf_filename,
-                        **evaluation_result.to_log_dict(),
-                    )
-                    wandb.log(model_log.model_dump())
+                    if wandb_initialized:
+                        try:
+                            ActualWanDBLogModelEntryClass = competition_manager.competition_handler.WanDBLogModelClass
+                            model_log = ActualWanDBLogModelEntryClass(
+                                uuid=competition_uuid,
+                                competition_id=competition_id,
+                                miner_hotkey=miner_hotkey,
+                                uid=self.metagraph.hotkeys.index(miner_hotkey),
+                                validator_hotkey=self.wallet.hotkey.ss58_address,
+                                model_url=model.hf_link,
+                                average_score=avg_score,
+                                run_time_s=evaluation_result.run_time_s,
+                                dataset_filename=data_package.dataset_hf_filename,
+                                **evaluation_result.to_log_dict(),
+                            )
+                            wandb.log(model_log.model_dump())
+                        except Exception as wandb_error:
+                            bt.logging.warning(f"Failed to log model results to wandb for hotkey {miner_hotkey}: {wandb_error}")
                 except Exception as e:
-                    bt.logging.error(f"Error logging model results for hotkey {miner_hotkey}: {e}")
+                    bt.logging.error(f"Error processing model results for hotkey {miner_hotkey}: {e}")
                     continue
 
-            #logging errors
-            for miner_hotkey, error_message  in competition_manager.error_results:
-                model_log = WanDBLogModelErrorEntry(
-                    uuid=competition_uuid,
-                    competition_id=competition_id,
-                    miner_hotkey=miner_hotkey,
-                    uid=self.metagraph.hotkeys.index(miner_hotkey),
-                    validator_hotkey=self.wallet.hotkey.ss58_address,
-                    dataset_filename=data_package.dataset_hf_filename,
-                    errors=error_message,
-                )
-                wandb.log(model_log.model_dump())
+            # Logging errors
+            if wandb_initialized:
+                try:
+                    for miner_hotkey, error_message in competition_manager.error_results:
+                        model_log = WanDBLogModelErrorEntry(
+                            uuid=competition_uuid,
+                            competition_id=competition_id,
+                            miner_hotkey=miner_hotkey,
+                            uid=self.metagraph.hotkeys.index(miner_hotkey),
+                            validator_hotkey=self.wallet.hotkey.ss58_address,
+                            dataset_filename=data_package.dataset_hf_filename,
+                            errors=error_message,
+                        )
+                        wandb.log(model_log.model_dump())
+                except Exception as wandb_error:
+                    bt.logging.warning(f"Failed to log error results to wandb: {wandb_error}")
             
-            wandb.finish()
+            # Finish wandb run if it was initialized
+            if wandb_initialized:
+                try:
+                    wandb.finish()
+                except Exception as wandb_error:
+                    bt.logging.warning(f"Failed to finish wandb run: {wandb_error}")
             
             # Save state only after successful competition evaluation
             # This ensures that org_latest_updates are persisted only for successfully processed packages

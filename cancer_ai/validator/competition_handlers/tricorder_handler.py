@@ -282,17 +282,24 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             else:
                 validation_errors.append(f"Invalid label type at index {i}: {type(label)} (must be string or int)")
         
-        # If any validation errors, fail the competition
+        # If any validation errors, log them but continue with the competition only if there's enough valid data
         if validation_errors:
             error_summary = "\n".join(validation_errors[:10])
             if len(validation_errors) > 10:
                 error_summary += f"\n... and {len(validation_errors) - 10} more errors"
             
-            bt.logging.error(f"TRICORDER COMPETITION CANCELLED: Dataset validation failed")
-            bt.logging.error(f"Found {len(validation_errors)} validation errors:")
-            bt.logging.error(error_summary)
+            bt.logging.warning(f"TRICORDER COMPETITION WARNING: Dataset validation has issues")
+            bt.logging.warning(f"Found {len(validation_errors)} validation errors:")
+            bt.logging.warning(error_summary)
             
-            raise ValueError(f"Tricorder competition requires complete metadata. Found {len(validation_errors)} validation errors:\n{error_summary}")
+            # Check if we have enough valid entries to continue
+            valid_entries = len(X_test) - len(validation_errors)
+            min_required_entries = max(10, int(len(X_test) * 0.5))  # At least 10 entries or 50% of dataset
+            
+            if valid_entries < min_required_entries:
+                bt.logging.error(f"TRICORDER COMPETITION CANCELLED: Not enough valid data to evaluate")
+                bt.logging.error(f"Only {valid_entries}/{len(X_test)} entries are valid, minimum required: {min_required_entries}")
+                raise ValueError(f"Not enough valid data to evaluate. Only {valid_entries}/{len(X_test)} entries are valid, minimum required: {min_required_entries}")
         
         # Convert string labels to 0-based indices
         self.y_test = []
