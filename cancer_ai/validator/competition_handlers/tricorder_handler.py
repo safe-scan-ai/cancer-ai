@@ -18,6 +18,8 @@ from enum import Enum, IntEnum
 
 from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 
+MAX_INVALID_ENTRIES = 2  # Maximum number of invalid entries allowed in the dataset
+
 # --- Constants ---
 TARGET_SIZE = (512, 512)
 CHUNK_SIZE = 200
@@ -294,12 +296,11 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             
             # Check if we have enough valid entries to continue
             valid_entries = len(X_test) - len(validation_errors)
-            min_required_entries = max(10, int(len(X_test) * 0.5))  # At least 10 entries or 50% of dataset
             
-            if valid_entries < min_required_entries:
+            if len(validation_errors) > MAX_INVALID_ENTRIES:
                 bt.logging.error(f"TRICORDER COMPETITION CANCELLED: Not enough valid data to evaluate")
-                bt.logging.error(f"Only {valid_entries}/{len(X_test)} entries are valid, minimum required: {min_required_entries}")
-                raise ValueError(f"Not enough valid data to evaluate. Only {valid_entries}/{len(X_test)} entries are valid, minimum required: {min_required_entries}")
+                bt.logging.error(f" {len(validation_errors)} entries are invalid, maximum invalid: {MAX_INVALID_ENTRIES}")
+                raise ValueError(f"Not enough valid data to evaluate.")
         
         # Convert string labels to 0-based indices
         self.y_test = []
