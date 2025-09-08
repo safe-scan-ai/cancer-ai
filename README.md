@@ -142,8 +142,8 @@ Our team is deeply committed to supporting and improving the Bittensor network w
 
 Team members:
 
-- **@Q. -** Business development (slyboots)
-- **@czlowiek** - Project manager & HEAD DEV (old prick)
+- **@Q. -** Business development
+- **@czlowiek** - Project manager & HEAD DEV
 - **@Konrad -** Bittensor Engineer
 - **@bulubula -** Machine learning engineer
 - **@Izuael -** Mobile software Engineer
