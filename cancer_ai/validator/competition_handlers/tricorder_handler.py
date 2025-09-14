@@ -238,39 +238,51 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         self.metadata = metadata or [{'age': None, 'gender': None, 'location': None} for _ in X_test]
         self.preprocessed_data_dir = None
         self.preprocessed_chunks = []
+        self.valid_indices = []  # Track indices of successfully processed entries
+        self.y_test_filtered = []  # Filtered test labels matching valid entries
         
         validation_errors = []
         
-        for i, meta_entry in enumerate(self.metadata):
-            # Validate age
-            age = meta_entry.get('age')
-            if age is None:
-                validation_errors.append(f"Missing age at index {i}")
-            elif not isinstance(age, (int, float)) or age < 0 or age > MAX_AGE:
-                validation_errors.append(f"Invalid age at index {i}: {age} (must be 0-120)")
+        # Only validate metadata if it was actually provided (not default None values)
+        metadata_provided = metadata is not None and len(metadata) > 0
+        if metadata_provided:
+            # Check if first entry has non-None values to determine if real metadata was provided
+            first_meta = self.metadata[0] if self.metadata else {}
+            has_real_metadata = any(v is not None for v in first_meta.values())
             
-            # Validate gender
-            gender = meta_entry.get('gender')
-            if gender is None:
-                validation_errors.append(f"Missing gender at index {i}")
+            if has_real_metadata:
+                for i, meta_entry in enumerate(self.metadata):
+                    # Validate age
+                    age = meta_entry.get('age')
+                    if age is None:
+                        validation_errors.append(f"Missing age at index {i}")
+                    elif not isinstance(age, (int, float)) or age < 0 or age > MAX_AGE:
+                        validation_errors.append(f"Invalid age at index {i}: {age} (must be 0-120)")
+                    
+                    # Validate gender
+                    gender = meta_entry.get('gender')
+                    if gender is None:
+                        validation_errors.append(f"Missing gender at index {i}")
+                    else:
+                        gender_lower = str(gender).lower()
+                        if gender_lower not in ['m', 'f', 'male', 'female']:
+                            validation_errors.append(f"Invalid gender at index {i}: {gender} (must be 'm', 'f', 'male', 'female')")
+                        else:
+                            meta_entry['gender'] = gender_lower
+                    
+                    # Validate location
+                    location = meta_entry.get('location')
+                    if location is None:
+                        validation_errors.append(f"Missing location at index {i}")
+                    else:
+                        location_lower = str(location).lower()
+                        valid_locations = ['arm', 'feet', 'genitalia', 'hand', 'head', 'leg', 'torso']
+                        if location_lower not in valid_locations:
+                            validation_errors.append(f"Invalid location at index {i}: {location} (must be one of {valid_locations})")
+                        else:
+                            meta_entry['location'] = location_lower
             else:
-                gender_lower = str(gender).lower()
-                if gender_lower not in ['m', 'f', 'male', 'female']:
-                    validation_errors.append(f"Invalid gender at index {i}: {gender} (must be 'm', 'f', 'male', 'female')")
-                else:
-                    meta_entry['gender'] = gender_lower
-            
-            # Validate location
-            location = meta_entry.get('location')
-            if location is None:
-                validation_errors.append(f"Missing location at index {i}")
-            else:
-                location_lower = str(location).lower()
-                valid_locations = ['arm', 'feet', 'genitalia', 'hand', 'head', 'leg', 'torso']
-                if location_lower not in valid_locations:
-                    validation_errors.append(f"Invalid location at index {i}: {location} (must be one of {valid_locations})")
-                else:
-                    meta_entry['location'] = location_lower
+                bt.logging.info("No metadata provided for tricorder competition - using defaults")
         
         # Validate labels
         valid_label_names = [info["short_name"] for info in CLASS_INFO.values()]
@@ -284,23 +296,17 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             else:
                 validation_errors.append(f"Invalid label type at index {i}: {type(label)} (must be string or int)")
         
-        # If any validation errors, log them but continue with the competition only if there's enough valid data
+        # If any validation errors, log them but continue with the competition
+        # These are metadata/label validation errors, not image loading errors
         if validation_errors:
             error_summary = "\n".join(validation_errors[:10])
             if len(validation_errors) > 10:
                 error_summary += f"\n... and {len(validation_errors) - 10} more errors"
             
-            bt.logging.warning(f"TRICORDER COMPETITION WARNING: Dataset validation has issues")
+            bt.logging.warning(f"TRICORDER COMPETITION WARNING: Dataset validation has metadata/label issues")
             bt.logging.warning(f"Found {len(validation_errors)} validation errors:")
             bt.logging.warning(error_summary)
-            
-            # Check if we have enough valid entries to continue
-            valid_entries = len(X_test) - len(validation_errors)
-            
-            if len(validation_errors) > MAX_INVALID_ENTRIES:
-                bt.logging.error(f"TRICORDER COMPETITION CANCELLED: Not enough valid data to evaluate")
-                bt.logging.error(f" {len(validation_errors)} entries are invalid, maximum invalid: {MAX_INVALID_ENTRIES}")
-                raise ValueError(f"Not enough valid data to evaluate.")
+            bt.logging.info("Competition will continue - these validation issues don't prevent evaluation")
         
         # Convert string labels to 0-based indices
         self.y_test = []
@@ -350,13 +356,16 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         bt.logging.debug(f"TRICORDER: Available metadata entries: {len(self.metadata)}")
         error_counter = defaultdict(int)
         chunk_paths = []
+        self.valid_indices = []  # Track indices of successfully processed entries
         
         for i in range(0, len(X_test), CHUNK_SIZE):
             bt.logging.debug(f"TRICORDER: Processing chunk {len(chunk_paths)} - images {i} to {min(i + CHUNK_SIZE, len(X_test))}")
             chunk_data = []
             chunk_metadata = []
+            chunk_valid_indices = []
             
             for idx, img_path in enumerate(X_test[i: i + CHUNK_SIZE]):
+                global_idx = i + idx
                 try:
                     if not os.path.isfile(img_path):
                         raise FileNotFoundError(f"File does not exist: {img_path}")
@@ -367,20 +376,25 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                         chunk_data.append(preprocessed_img)
                         
                         # Add corresponding metadata
-                        global_idx = i + idx
                         if global_idx < len(self.metadata):
                             chunk_metadata.append(self.metadata[global_idx])
                         else:
                             chunk_metadata.append({'age': None, 'gender': None, 'location': None})
                         
+                        # Track valid indices for later filtering
+                        chunk_valid_indices.append(global_idx)
+                        self.valid_indices.append(global_idx)
+                        
                 except FileNotFoundError:
                     error_counter['FileNotFoundError'] += 1
+                    bt.logging.warning(f"File not found: {img_path} (index {global_idx})")
                     continue
-                except IOError:
+                except IOError as e:
                     error_counter['IOError'] += 1
+                    bt.logging.warning(f"IO error processing {img_path} (index {global_idx}): {e}")
                     continue
                 except Exception as e:
-                    bt.logging.debug(f"Unexpected error processing {img_path}: {e}")
+                    bt.logging.warning(f"Unexpected error processing {img_path} (index {global_idx}): {e}")
                     error_counter['UnexpectedError'] += 1
                     continue
 
@@ -403,11 +417,26 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
                     bt.logging.error(f"TRICORDER: Failed to serialize chunk: {e}")
                     error_counter['SerializationError'] += 1
 
-        if error_counter:
+        # Check if we have too many invalid entries
+        total_errors = sum(error_counter.values())
+        valid_entries = len(self.valid_indices)
+        total_entries = len(X_test)
+        
+        if total_errors > 0:
             error_summary = "; ".join([f"{count} {error_type.replace('_', ' ')}" 
                                      for error_type, count in error_counter.items()])
-            bt.logging.debug(f"TRICORDER: Preprocessing completed with issues: {error_summary}")
+            bt.logging.warning(f"TRICORDER: Preprocessing completed with issues: {error_summary}")
+            bt.logging.warning(f"TRICORDER: {total_errors}/{total_entries} entries failed to process")
             
+            if total_errors > MAX_INVALID_ENTRIES:
+                bt.logging.error(f"TRICORDER COMPETITION CANCELLED: Too many invalid entries")
+                bt.logging.error(f"Found {total_errors} invalid entries, maximum allowed: {MAX_INVALID_ENTRIES}")
+                raise ValueError(f"Too many invalid entries ({total_errors}), maximum allowed: {MAX_INVALID_ENTRIES}")
+        
+        # Filter y_test to match valid indices
+        self.y_test_filtered = [self.y_test[i] for i in self.valid_indices]
+        
+        bt.logging.info(f"TRICORDER: Successfully processed {valid_entries}/{total_entries} entries")
         bt.logging.debug(f"TRICORDER: Preprocessed data saved in {len(chunk_paths)} chunks")
         bt.logging.debug(f"TRICORDER: Chunk paths: {chunk_paths}")
         self.preprocessed_chunks = chunk_paths
@@ -552,7 +581,7 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
         Evaluate model predictions and return detailed results.
         
         Args:
-            y_test: List of true class indices (0-9)
+            y_test: List of true class indices (0-9) - will be filtered to match valid entries
             y_pred: List of predicted probabilities (shape [n_samples, 10])
             run_time_s: Inference time in seconds
             model_size_mb: Model size in MB for efficiency calculation
@@ -561,9 +590,22 @@ class TricorderCompetitionHandler(BaseCompetitionHandler):
             TricorderEvaluationResult with comprehensive evaluation metrics
         """
         try:
+            # Use filtered test labels if available (after preprocessing), otherwise use provided y_test
+            if hasattr(self, 'y_test_filtered') and self.y_test_filtered:
+                y_test_to_use = self.y_test_filtered
+                bt.logging.info(f"Using filtered test labels: {len(y_test_to_use)} entries")
+            else:
+                y_test_to_use = y_test
+                bt.logging.warning("No filtered test labels available, using original y_test")
+            
             # Convert to numpy arrays
-            y_test = np.array(y_test)
+            y_test = np.array(y_test_to_use)
             y_pred = np.array(y_pred)
+            
+            # Validate array shapes match
+            if len(y_test) != len(y_pred):
+                bt.logging.error(f"Array length mismatch: y_test={len(y_test)}, y_pred={len(y_pred)}")
+                raise ValueError(f"Array length mismatch: y_test has {len(y_test)} samples, y_pred has {len(y_pred)} samples")
 
             # Define all possible class labels (0 to 9)
             labels = list(range(len(CLASS_INFO)))

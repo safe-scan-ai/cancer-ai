@@ -20,6 +20,8 @@ from sklearn.metrics import (
 from cancer_ai.validator.models import WanDBLogModelBase
 from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 
+MAX_INVALID_ENTRIES = 2  # Maximum number of invalid entries allowed in the dataset
+
 class MelanomaWanDBLogModelEntry(WanDBLogModelBase):
     model_url: str
     accuracy: float
@@ -77,6 +79,8 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
         self.config = config
         self.preprocessed_data_dir = None
         self.preprocessed_chunks = []
+        self.valid_indices = []  # Track indices of successfully processed entries
+        self.y_test_filtered = []  # Filtered test labels matching valid entries
         
     def set_preprocessed_data_dir(self, data_dir: str) -> None:
         """Set directory for storing preprocessed data"""
@@ -94,12 +98,14 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
         bt.logging.info(f"Preprocessing {len(X_test)} images for melanoma competition")
         error_counter = defaultdict(int)
         chunk_paths = []
+        self.valid_indices = []  # Track indices of successfully processed entries
         
         for i in range(0, len(X_test), MELANOMA_CHUNK_SIZE):
             bt.logging.debug(f"Processing chunk {i} to {i + MELANOMA_CHUNK_SIZE}")
             chunk_data = []
             
-            for img_path in X_test[i: i + MELANOMA_CHUNK_SIZE]:
+            for idx, img_path in enumerate(X_test[i: i + MELANOMA_CHUNK_SIZE]):
+                global_idx = i + idx
                 try:
                     if not os.path.isfile(img_path):
                         raise FileNotFoundError(f"File does not exist: {img_path}")
@@ -109,14 +115,19 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
                         preprocessed_img = self._preprocess_single_image(img)
                         chunk_data.append(preprocessed_img)
                         
+                        # Track valid indices
+                        self.valid_indices.append(global_idx)
+                        
                 except FileNotFoundError:
                     error_counter['FileNotFoundError'] += 1
+                    bt.logging.warning(f"File not found: {img_path} (index {global_idx})")
                     continue
-                except IOError:
+                except IOError as e:
                     error_counter['IOError'] += 1
+                    bt.logging.warning(f"IO error processing {img_path} (index {global_idx}): {e}")
                     continue
                 except Exception as e:
-                    bt.logging.debug(f"Unexpected error processing {img_path}: {e}")
+                    bt.logging.warning(f"Unexpected error processing {img_path} (index {global_idx}): {e}")
                     error_counter['UnexpectedError'] += 1
                     continue
 
@@ -135,11 +146,26 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
                     bt.logging.error(f"Failed to serialize chunk: {e}")
                     error_counter['SerializationError'] += 1
 
-        if error_counter:
-            error_summary = "; ".join([f"{count} {error_type.replace('_', ' ')}(s)" 
+        # Check if we have too many invalid entries
+        total_errors = sum(error_counter.values())
+        valid_entries = len(self.valid_indices)
+        total_entries = len(X_test)
+        
+        if total_errors > 0:
+            error_summary = "; ".join([f"{count} {error_type.replace('_', ' ')}" 
                                      for error_type, count in error_counter.items()])
-            bt.logging.info(f"Preprocessing completed with issues: {error_summary}")
+            bt.logging.warning(f"MELANOMA: Preprocessing completed with issues: {error_summary}")
+            bt.logging.warning(f"MELANOMA: {total_errors}/{total_entries} entries failed to process")
             
+            if total_errors > MAX_INVALID_ENTRIES:
+                bt.logging.error(f"MELANOMA COMPETITION CANCELLED: Too many invalid entries")
+                bt.logging.error(f"Found {total_errors} invalid entries, maximum allowed: {MAX_INVALID_ENTRIES}")
+                raise ValueError(f"Too many invalid entries ({total_errors}), maximum allowed: {MAX_INVALID_ENTRIES}")
+        
+        # Filter y_test to match valid indices
+        self.y_test_filtered = [self.y_test[i] for i in self.valid_indices]
+        
+        bt.logging.info(f"MELANOMA: Successfully processed {valid_entries}/{total_entries} entries")
         bt.logging.info(f"Preprocessed data saved in {len(chunk_paths)} chunks")
         self.preprocessed_chunks = chunk_paths
         return chunk_paths
@@ -199,9 +225,22 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
     def get_model_result(
         self, y_test: List[float], y_pred, run_time_s: float
     ) -> MelanomaEvaluationResult:
+        # Use filtered test labels if available (after preprocessing), otherwise use provided y_test
+        if hasattr(self, 'y_test_filtered') and self.y_test_filtered:
+            y_test_to_use = self.y_test_filtered
+            bt.logging.info(f"Using filtered test labels: {len(y_test_to_use)} entries")
+        else:
+            y_test_to_use = y_test
+            bt.logging.warning("No filtered test labels available, using original y_test")
+            
         # Convert y_pred to numpy array if it's a list
         if isinstance(y_pred, list):
             y_pred = np.array(y_pred)
+            
+        # Validate array shapes match
+        if len(y_test_to_use) != len(y_pred):
+            bt.logging.error(f"Array length mismatch: y_test={len(y_test_to_use)}, y_pred={len(y_pred)}")
+            raise ValueError(f"Array length mismatch: y_test has {len(y_test_to_use)} samples, y_pred has {len(y_pred)} samples")
         
         # Handle the case where y_pred contains arrays instead of scalars
         try:
@@ -217,13 +256,13 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
             y_pred_flat = y_pred
             
         y_pred_binary = [1 if y > 0.5 else 0 for y in y_pred_flat]
-        tested_entries = len(y_test)
-        accuracy = accuracy_score(y_test, y_pred_binary)
-        precision = precision_score(y_test, y_pred_binary, zero_division=0)
-        fbeta = fbeta_score(y_test, y_pred_binary, beta=2, zero_division=0)
-        recall = recall_score(y_test, y_pred_binary, zero_division=0)
-        conf_matrix = confusion_matrix(y_test, y_pred_binary)
-        fpr, tpr, _ = roc_curve(y_test, y_pred_flat)
+        tested_entries = len(y_test_to_use)
+        accuracy = accuracy_score(y_test_to_use, y_pred_binary)
+        precision = precision_score(y_test_to_use, y_pred_binary, zero_division=0)
+        fbeta = fbeta_score(y_test_to_use, y_pred_binary, beta=2, zero_division=0)
+        recall = recall_score(y_test_to_use, y_pred_binary, zero_division=0)
+        conf_matrix = confusion_matrix(y_test_to_use, y_pred_binary)
+        fpr, tpr, _ = roc_curve(y_test_to_use, y_pred_flat)
         roc_auc = auc(fpr, tpr)
 
         score = self.calculate_score(fbeta, accuracy, roc_auc)
