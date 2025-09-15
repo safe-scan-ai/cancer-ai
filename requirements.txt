@@ -156,7 +156,7 @@ threadpoolctl==3.5.0
 toml==0.10.0
 tomli==2.0.1
 toolz==0.12.1
-torch==2.4.0
+torch==2.7.0
 tqdm==4.66.5
 typer==0.15.1
 typing_extensions==4.12.2
