@@ -4,6 +4,7 @@ import time
 import os
 from pathlib import Path
 
+
 import bittensor as bt
 from dotenv import load_dotenv
 from huggingface_hub import HfApi, login as hf_login
@@ -110,7 +111,7 @@ class MinerManagerCLI:
         except Exception as e:
             bt.logging.error(f"Error retrieving competition packages: {e}")
             return
-        
+
         for package in dataset_packages:
             dataset_manager = DatasetManager(
                 self.config,
@@ -122,10 +123,10 @@ class MinerManagerCLI:
             )
             await dataset_manager.prepare_dataset()
 
-            X_test, y_test = await dataset_manager.get_data()
+            X_test, y_test, metadata = await dataset_manager.get_data()
 
             competition_handler = COMPETITION_HANDLER_MAPPING[self.config.competition_id](
-                X_test=X_test, y_test=y_test, config=self.config
+                X_test=X_test, y_test=y_test, metadata=metadata, config=self.config
             )
 
             # Set preprocessing directory and preprocess data once
@@ -145,20 +146,20 @@ class MinerManagerCLI:
             bt.logging.info(
                 f"Evalutaion results:\n{model_result.model_dump_json(indent=4)}"
             )
-            
+
             # Cleanup preprocessed data
             competition_handler.cleanup_preprocessed_data()
-            
+
             if self.config.clean_after_run:
                 dataset_manager.delete_dataset()
 
     async def compress_code(self) -> None:
         bt.logging.info("Compressing code")
         bt.logging.info(f"Code directory: {self.config.code_directory}")
-        
+
         code_dir = Path(self.config.code_directory)
         self.code_zip_path = str(code_dir.parent / f"{code_dir.name}.zip")
-        
+
         out, err = await run_command(
             f"zip -r {self.code_zip_path} {self.config.code_directory}/*"
         )
@@ -217,11 +218,11 @@ class MinerManagerCLI:
         if len(self.config.hf_repo_id.encode('utf-8')) > 32:
             bt.logging.error("hf_repo_id must be 32 bytes or less")
             return
-        
+
         if len(self.config.hf_model_name.encode('utf-8')) > 32:
             bt.logging.error("hf_model_filename must be 32 bytes or less")
             return
-        
+
         if len(self.config.hf_code_filename.encode('utf-8')) > 31:
             bt.logging.error("hf_code_filename must be 31 bytes or less")
             return
