@@ -144,9 +144,6 @@ class BaseNeuron(ABC):
                         bt.logging.success("Successfully set weights and updated state")
                     except Exception as e:
                         bt.logging.error(f"Error setting weights: {e}", exc_info=True)
-                else:
-                    bt.logging.debug("Skipping weight set: conditions not met")
-
                 break
 
             except BrokenPipeError as e:
