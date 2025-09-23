@@ -136,10 +136,14 @@ class BaseNeuron(ABC):
 
                 # Set weights if needed.
                 if self.should_set_weights():
-                    self.set_weights()
-                    self._last_updated_block = self.block
-                    self.save_state()
-
+                    bt.logging.info(f"Setting weights in progress. Current block: {self.block}, Last updated block: {self._last_updated_block}")
+                    try:
+                        self.set_weights()
+                        self._last_updated_block = self.block
+                        self.save_state()
+                        bt.logging.success("Successfully set weights and updated state")
+                    except Exception as e:
+                        bt.logging.error(f"Error setting weights: {e}", exc_info=True)
                 break
 
             except BrokenPipeError as e:
@@ -200,15 +204,20 @@ class BaseNeuron(ABC):
         return elapsed > self.config.neuron.epoch_length
     
     def should_set_weights(self) -> bool:
-        # Don't set weights on initialization.
+        # Don't set weights on initialization
         if self.step == 0:
             return False
 
-        # Check if enough epoch blocks have elapsed since the last epoch.
+        # Check if weight setting is disabled
         if self.config.neuron.disable_set_weights:
             return False
 
+        # Calculate blocks since last update
         elapsed = self.block - self._last_updated_block
 
-        # Only set weights if epoch has passed and this isn't a MinerNeuron.
-        return elapsed > self.config.neuron.epoch_length and self.neuron_type != "MinerNeuron"
+        # Only set weights if epoch has passed and this isn't a MinerNeuron
+        should_set = elapsed > self.config.neuron.epoch_length and self.neuron_type != "MinerNeuron"
+        if should_set:
+            bt.logging.info(f"Setting weights - elapsed: {elapsed} > epoch_length: {self.config.neuron.epoch_length}")
+        
+        return should_set
