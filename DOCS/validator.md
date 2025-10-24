@@ -19,7 +19,6 @@ Key features of the script include:
 
 - 16GB of RAM
 - storage: 50GB, extendable
-- GPU - nVidia RTX, 6GB VRAM (will work without GPU, but slower)
 
 ### System requirements
 
