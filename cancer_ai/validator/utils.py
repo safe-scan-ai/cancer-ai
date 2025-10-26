@@ -395,7 +395,7 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
                 shutil.move(filepath, os.path.join(already_released_dir, filename))
                 bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
                 return NewDatasetFile(
-                    competition_id=random.choice(["melanoma-3"]), 
+                    competition_id=random.choice(["tricorder-1"]), 
                     dataset_hf_repo="local",
                     dataset_hf_filename=os.path.join(already_released_dir, filename),
                 )
