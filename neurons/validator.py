@@ -388,70 +388,83 @@ class Validator(BaseValidatorNeuron):
         max_min_score: float
     ):
         """
-        For each competition:
-        1) Award the winner its full `weight`.
-        2) Linearly spread concrete minimal values in [min_min_score … max_min_score]
-            across the other non‐winner hotkeys (highest raw → max_min_score, lowest → min_min_score).
-        3) Do NOT multiply those minimal values by the weight—just add them directly.
+        Distribute rewards to top 10 miners according to SCORE_DISTRIBUTION.
+        All other miners get minimal scores.
         """
+        SCORE_DISTRIBUTION = {
+            1: 0.50,   # 50%
+            2: 0.17,   # 17% 
+            3: 0.10,   # 10%
+            4: 0.07,   # 7%
+            5: 0.05,   # 5%
+            6: 0.04,   # 4%
+            7: 0.03,   # 3%
+            8: 0.02,   # 2%
+            9: 0.01,   # 1%
+            10: 0.01   # 1%
+        }
+        
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
 
         for comp_id, weight in competition_weights.items():
-            try:
-                winner_hotkey = self.competition_results_store.get_top_hotkey(comp_id)
-            except ValueError as e:
-                bt.logging.warning(f"[{comp_id}] cannot determine winner: {e}")
-                continue
-
-            if winner_hotkey in self.metagraph.hotkeys:
-                winner_idx = self.metagraph.hotkeys.index(winner_hotkey)
-                self.scores[winner_idx] += weight
-                bt.logging.info(
-                    f"[{comp_id}] +{weight:.6f} to winner {winner_hotkey}"
-                )
-            else:
-                bt.logging.warning(
-                    f"[{comp_id}] winner {winner_hotkey!r} not in metagraph"
-                )
-
             try:
                 all_hotkeys = self.competition_results_store.get_hotkeys_with_non_zero_scores(comp_id)
             except ValueError as e:
                 bt.logging.warning(f"[{comp_id}] {e}")
                 continue
 
-            # remove the winner from the list
-            non_winners = [hk for hk in all_hotkeys if hk != winner_hotkey]
-            k = len(non_winners)
-            if k == 0:
+            if not all_hotkeys:
+                bt.logging.warning(f"[{comp_id}] No hotkeys with non-zero scores")
                 continue
 
-            # compute the minimal-value sequence:
-            # index 0 (highest score) → max_min_score,
-            # index k-1 (lowest) → min_min_score
-            if k > 1:
-                span = max_min_score - min_min_score
-                step = span / (k - 1)
-                minimal_values = [
-                    max_min_score - i * step
-                    for i in range(k)
-                ]
-            else:
-                # single runner-up gets the top of the band
-                minimal_values = [max_min_score]
-
-            # apply those concrete minimal values (not scaled by weight)
-            for minimal, hk in zip(minimal_values, non_winners):
-                if hk in self.metagraph.hotkeys:
-                    idx = self.metagraph.hotkeys.index(hk)
-                    self.scores[idx] += minimal
+            # Sort hotkeys by average score (descending)
+            sorted_hotkeys = all_hotkeys
+            
+            # Distribute rewards to top 10 miners
+            for rank, hotkey in enumerate(sorted_hotkeys[:10], 1):
+                if hotkey in self.metagraph.hotkeys:
+                    idx = self.metagraph.hotkeys.index(hotkey)
+                    reward_fraction = SCORE_DISTRIBUTION.get(rank, 0.0)
+                    reward_amount = weight * reward_fraction
+                    self.scores[idx] += reward_amount
                     bt.logging.info(
-                        f"[{comp_id}] +{minimal:.6f} to non-winner {hk}"
+                        f"[{comp_id}] Rank {rank}: +{reward_amount:.6f} ({reward_fraction*100:.1f}%) to {hotkey}"
                     )
                 else:
                     bt.logging.warning(
-                        f"[{comp_id}] non-winner {hk!r} not in metagraph"
+                        f"[{comp_id}] Rank {rank} hotkey {hotkey!r} not in metagraph"
                     )
+
+            # Award minimal scores to remaining miners (beyond top 10)
+            remaining_hotkeys = sorted_hotkeys[10:]
+            k = len(remaining_hotkeys)
+            if k > 0:
+                # compute the minimal-value sequence:
+                # index 0 (highest score) → max_min_score,
+                # index k-1 (lowest) → min_min_score
+                if k > 1:
+                    span = max_min_score - min_min_score
+                    step = span / (k - 1)
+                    minimal_values = [
+                        max_min_score - i * step
+                        for i in range(k)
+                    ]
+                else:
+                    # single runner-up gets the top of the band
+                    minimal_values = [max_min_score]
+
+                # apply those concrete minimal values (not scaled by weight)
+                for minimal, hotkey in zip(minimal_values, remaining_hotkeys):
+                    if hotkey in self.metagraph.hotkeys:
+                        idx = self.metagraph.hotkeys.index(hotkey)
+                        self.scores[idx] += minimal
+                        bt.logging.info(
+                            f"[{comp_id}] Beyond top 10: +{minimal:.6f} to {hotkey}"
+                        )
+                    else:
+                        bt.logging.warning(
+                            f"[{comp_id}] Non-top-10 hotkey {hotkey!r} not in metagraph"
+                        )
 
         bt.logging.debug(
             "Scores from update_scores:\n"

@@ -35,8 +35,20 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
 
 - **Independent Evaluation**: Each validator independently evaluates the submitted models according to predefined criteria.
 - **Scoring Mechanism**: Detailed scoring mechanisms are outlined in the [DOCS](/DOCS/competitions) directory. Validators run scheduled competitions and assess the models based on these criteria.
-- **Winning Criteria**: The best-performing model, according to the evaluation metrics, is declared the winner of the competition.
-- **Rewards**: The winner receives the full emission for that competition, divided by the number of competitions held.
+- **Winning Criteria**: Models are ranked according to the evaluation metrics, with the top 10 performers receiving rewards.
+- **Rewards**: Rewards are distributed among the top 10 performing miners according to the following distribution:
+  - 1st place: 50%
+  - 2nd place: 17%
+  - 3rd place: 10%
+  - 4th place: 7%
+  - 5th place: 5%
+  - 6th place: 4%
+  - 7th place: 3%
+  - 8th place: 2%
+  - 9th place: 1%
+  - 10th place: 1%
+  
+  The total reward pool for each competition is the emission allocated for miners divided by the number of competitions held. Miners beyond the top 10 receive minimal participation rewards.
 
 ## Command-Line Interface (CLI) Tools
 
