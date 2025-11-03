@@ -121,7 +121,19 @@ Our tokenomics are uniquely designed to drive research and development of new al
 
 You can find comprehensive details about competition scheduling, dataset release, model submission, evaluation, configuration, and development tools here: [COMPETITION README](DOCS/COMPETITIONS.md)
 
-**Incentives**: The winner of each competition receives the entire reward pool for that specific competition. The reward pool is determined by the total emission allocated for miners, divided by the number of competitions being held.
+**Incentives**: Rewards are distributed among the top 10 performing miners in each competition according to the following distribution:
+- 1st place: 40%
+- 2nd place: 20%
+- 3rd place: 12%
+- 4th place: 8%
+- 5th place: 6%
+- 6th place: 5%
+- 7th place: 4%
+- 8th place: 3%
+- 9th place: 1%
+- 10th place: 1%
+
+The reward pool is determined by the total emission allocated for miners, divided by the number of competitions being held. Miners beyond the top 10 receive minimal participation rewards.
 
 **📈 SELF-SUSTAINING ECONOMY**
 
