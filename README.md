@@ -122,14 +122,14 @@ Our tokenomics are uniquely designed to drive research and development of new al
 You can find comprehensive details about competition scheduling, dataset release, model submission, evaluation, configuration, and development tools here: [COMPETITION README](DOCS/COMPETITIONS.md)
 
 **Incentives**: Rewards are distributed among the top 10 performing miners in each competition according to the following distribution:
-- 1st place: 40%
-- 2nd place: 20%
-- 3rd place: 12%
-- 4th place: 8%
-- 5th place: 6%
-- 6th place: 5%
-- 7th place: 4%
-- 8th place: 3%
+- 1st place: 50%
+- 2nd place: 17%
+- 3rd place: 10%
+- 4th place: 7%
+- 5th place: 5%
+- 6th place: 4%
+- 7th place: 3%
+- 8th place: 2%
 - 9th place: 1%
 - 10th place: 1%
 

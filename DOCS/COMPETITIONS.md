@@ -37,14 +37,14 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
 - **Scoring Mechanism**: Detailed scoring mechanisms are outlined in the [DOCS](/DOCS/competitions) directory. Validators run scheduled competitions and assess the models based on these criteria.
 - **Winning Criteria**: Models are ranked according to the evaluation metrics, with the top 10 performers receiving rewards.
 - **Rewards**: Rewards are distributed among the top 10 performing miners according to the following distribution:
-  - 1st place: 40%
-  - 2nd place: 20%
-  - 3rd place: 12%
-  - 4th place: 8%
-  - 5th place: 6%
-  - 6th place: 5%
-  - 7th place: 4%
-  - 8th place: 3%
+  - 1st place: 50%
+  - 2nd place: 17%
+  - 3rd place: 10%
+  - 4th place: 7%
+  - 5th place: 5%
+  - 6th place: 4%
+  - 7th place: 3%
+  - 8th place: 2%
   - 9th place: 1%
   - 10th place: 1%
   
