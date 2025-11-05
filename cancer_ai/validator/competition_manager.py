@@ -3,22 +3,23 @@ from typing import List, Tuple, Optional
 
 import bittensor as bt
 import wandb
-import hashlib
 
 from dotenv import load_dotenv
 
 from .manager import SerializableManager
-from .model_manager import ModelManager, ModelInfo
+from .model_manager import ModelManager
+from .mock_model_manager import MockModelManager
 from .dataset_manager import DatasetManager
 from .model_run_manager import ModelRunManager
 from .exceptions import ModelRunException
 from .model_db import ModelDBController
 from .utils import chain_miner_to_model_info
+from .models import ModelInfo
 
 from .competition_handlers.base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 from .competition_handlers.melanoma_handler import MelanomaCompetitionHandler
-from .competition_handlers.tricorder_handler import TricorderCompetitionHandler
-
+from .competition_handlers.tricorder_2_handler import Tricorder2CompetitionHandler
+from .competition_handlers.tricorder_3_handler import Tricorder3CompetitionHandler
 from .tests.mock_data import get_mock_hotkeys_with_models
 from cancer_ai.chain_models_store import (
     ChainModelMetadata,
@@ -34,9 +35,10 @@ COMPETITION_HANDLER_MAPPING = {
     "melanoma-7": MelanomaCompetitionHandler,
     "melanoma-2": MelanomaCompetitionHandler,
     "melanoma-3": MelanomaCompetitionHandler,
-    "tricorder-1": TricorderCompetitionHandler,
-    "tricorder-2": TricorderCompetitionHandler,
+    "tricorder-2": Tricorder2CompetitionHandler,
+    "tricorder-3": Tricorder3CompetitionHandler,
 }
+
 
 
 class ImagePredictionCompetition:
@@ -80,7 +82,11 @@ class CompetitionManager(SerializableManager):
         self.competition_id = competition_id
         self.results: list[tuple[str, BaseModelEvaluationResult]] = []
         self.error_results: list[tuple[str, str]] = []
-        self.model_manager = ModelManager(self.config, db_controller, parent=self, subtensor=subtensor)
+        # Initialize model manager based on config
+        if hasattr(config, 'mock_models') and config.mock_models:
+            self.model_manager = MockModelManager(config, db_controller, subtensor, self)
+        else:
+            self.model_manager = ModelManager(config, db_controller, subtensor, self)
         self.dataset_manager = DatasetManager(
             config=self.config,
             competition_id=competition_id,
@@ -138,6 +144,13 @@ class CompetitionManager(SerializableManager):
         latest_models = self.db_controller.get_latest_models(
             self.hotkeys, self.competition_id, self.config.models_query_cutoff
         )
+        if hasattr(self.config, 'mock_models') and self.config.mock_models:
+            for hotkey, model_info in latest_models.items():
+                self.model_manager.hotkey_store[hotkey] = model_info
+            bt.logging.info(
+                f"Amount of hotkeys with valid mock models: {len(self.model_manager.hotkey_store)}"
+            )
+            return
         for hotkey, model in latest_models.items():
             model_info = chain_miner_to_model_info(model)
             if model_info.competition_id != self.competition_id:
@@ -166,8 +179,8 @@ class CompetitionManager(SerializableManager):
         await self.dataset_manager.prepare_dataset()
         X_test, y_test, metadata = await self.dataset_manager.get_data()
 
-        # Pass metadata to tricorder handler, otherwise use default parameters
-        if self.competition_id == "tricorder-2":
+        # Pass metadata to tricorder handlers, otherwise use default parameters
+        if self.competition_id in ["tricorder-3", "tricorder-2"]:
             self.competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
                 X_test=X_test, y_test=y_test, metadata=metadata, config=self.config
             )
@@ -209,7 +222,7 @@ class CompetitionManager(SerializableManager):
             model_manager = ModelRunManager(
                 self.config, self.model_manager.hotkey_store[miner_hotkey]
             )
-            start_time = time.time()
+            inference_start_time = time.time()
 
             try:
                 # Pass the preprocessed data generator instead of raw paths
@@ -223,9 +236,17 @@ class CompetitionManager(SerializableManager):
                 self.error_results.append((miner_hotkey, f"Failed to run model: {e}"))
                 continue
 
+            # Calculate total inference time
+            total_time = time.time() - inference_start_time
+            inference_time_ms = (total_time / len(y_test)) * 1000  # Average time per image in ms
+            
+            # Record speed for tricorder-3 competition only
+            if self.competition_id == "tricorder-3":
+                self.competition_handler.record_speed_result(miner_hotkey, inference_time_ms)
+
             try:
                 model_result = self.competition_handler.get_model_result(
-                    y_test, y_pred, time.time() - start_time, model_info.model_size_mb
+                    y_test, y_pred, total_time, model_info.model_size_mb
                 )
                 self.results.append((miner_hotkey, model_result))
             except Exception as e:
@@ -238,6 +259,23 @@ class CompetitionManager(SerializableManager):
         if len(self.results) == 0:
             bt.logging.error("No models were able to run")
             return None, None
+        
+        # Update results with efficiency scores for tricorder-3 competition only
+        if self.competition_id == "tricorder-3" and len(self.results) > 0:
+            # Extract model IDs and sizes for efficiency calculation
+            model_ids = [result[0] for result in self.results]
+            model_sizes_mb = {result[0]: result[1].model_size_mb for result in self.results}
+            
+            # Update results with efficiency scores
+            original_results = [result[1] for result in self.results]
+            updated_results = self.competition_handler.update_results_with_efficiency(
+                original_results, model_ids, model_sizes_mb
+            )
+            
+            # Replace results with updated ones
+            self.results = list(zip(model_ids, updated_results))
+            
+            bt.logging.info("Updated all results with efficiency scores (50% size + 50% speed)")
         
         # see if there are any duplicate scores, slash the copied models owners
         grouped_duplicated_hotkeys = self.group_duplicate_scores(hotkeys_to_slash)

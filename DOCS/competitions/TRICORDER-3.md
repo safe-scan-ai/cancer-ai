@@ -2,19 +2,23 @@
 
 ## 🎯 Competition Goal
 
-The goal of the competition is to build a lightweight and effective ML model that classifies skin lesions into one of 10 predefined disease classes based on lesion images and demographic data.
+The goal of the competition is to build a lightweight and effective ML model that classifies skin lesions into one of 11 predefined disease classes based on lesion images and demographic data.
+
+(Note that it's the same as [TRICORDER-2](TRICORDER-2.md), but with 11 classes aligned from ISIC-2025 competition, instead of 10.)
 
 ## 📥 Input and Output Data
 
 ### Input
 
 #### 1. Skin Lesion Image
+
 - **Format**: JPEG or PNG
 - **Channels**: RGB (3 channels), no alpha channel
 - **Minimum side length**: ≥ 512 px
 - **Pixel values**: range [0, 512], dtype=np.uint8
 
 #### 2. Patient Demographic Data
+
 - **Age**: integer in years (e.g., 42)
 - **Gender**: "m" (male) / "f" (female)
 - **Body location**: integer according to the table below
@@ -22,7 +26,8 @@ The goal of the competition is to build a lightweight and effective ML model tha
 > **Note**: The model must utilize both image and demographic data.
 
 ### Output
-- **List of 10 class probabilities**: List[float]
+
+- **List of 11 class probabilities**: List[float]
 - **Probabilities must sum to 1.0** (softmax)
 - **Value range**: [0.0, 1.0]
 
@@ -30,26 +35,27 @@ The goal of the competition is to build a lightweight and effective ML model tha
 
 | No. | Class | Clinical Type | Symbol |
 |-----|-------|---------------|--------|
-| 1 | Actinic keratosis (AK) | Benign | AK |
-| 2 | Basal cell carcinoma (BCC) | Malignant | BCC |
-| 3 | Seborrheic keratosis (SK) | Medium risk | SK |
-| 4 | Squamous cell carcinoma (SCC) | Malignant | SCC |
-| 5 | Vascular lesion | Medium risk | VASC |
-| 6 | Dermatofibroma | Benign | DF |
-| 7 | Benign nevus | Benign | NV |
-| 8 | Other non-neoplastic | Benign | NON |
-| 9 | Melanoma | Malignant | MEL |
-| 10 | Other neoplastic / Benign | Benign | ON |
+| 1 | Actinic keratosis/intraepidermal carcinoma | Medium risk | AKIEC |
+| 2 | Basal cell carcinoma | Malignant | BCC |
+| 3 | Other benign proliferations including collisions | Benign | BEN_OTH |
+| 4 | Benign keratinocytic lesion | Medium risk | BKL |
+| 5 | Dermatofibroma | Benign | DF |
+| 6 | Inflammatory and infectious | Benign | INF |
+| 7 | Other malignant proliferations including collisions | Malignant | MAL_OTH |
+| 8 | Melanoma | Malignant | MEL |
+| 9 | Melanocytic Nevus, any type | Benign | NV |
+| 10 | Squamous cell carcinoma/keratoacanthoma | Malignant | SCCKA |
+| 11 | Vascular lesions and hemorrhage | Medium risk | VASC |
 
-[🧬 Full detailed disease classes mapping](https://github.com/safe-scan-ai/cancer-ai/blob/main/DOCS/competitions/tricorder_subtype_mapping_reference.md)
+[🧬 Full detailed disease classes mapping](https://github.com/safe-scan-ai/cancer-ai/blob/main/DOCS/competitions/TRICORDER-3-DISEASE-MAPPING.md)
 
 ## ⚖️ Class Weights
 
 | Class Type | Classes (No.) | Color | Weight |
 |------------|---------------|-------|--------|
-| Malignant | 2, 4, 9 | 🔴 | 3× (BCC, SCC, MEL) |
-| Medium risk | 3, 5 | 🟠 | 2× (SK, VASC) |
-| Benign | 1, 6, 7, 8, 10 | 🟢 | 1× (AK, DF, NV, NON, ON) |
+| Malignant | 2, 7, 8, 10 | 🔴 | 3× (BCC, MAL_OTH, MEL, SCCKA) |
+| Medium risk | 1, 4, 11 | 🟠 | 2× (AKIEC, BKL, VASC) |
+| Benign | 3, 5, 6, 9 | 🟢 | 1× (BEN_OTH, DF, INF, NV) |
 
 ## 📍 Body Location List
 
@@ -74,46 +80,65 @@ The goal of the competition is to build a lightweight and effective ML model tha
 
 ### F1-score for class types
 
-```
-F1_malignant = (F1_2 + F1_4 + F1_9) / 3  
-F1_medium    = (F1_3 + F1_5) / 2  
-F1_benign    = (F1_1 + F1_6 + F1_7 + F1_8 + F1_10) / 5
+```text
+F1_malignant = (F1_2 + F1_7 + F1_8 + F1_10) / 4  
+F1_medium    = (F1_1 + F1_4 + F1_11) / 3  
+F1_benign    = (F1_3 + F1_5 + F1_6 + F1_9) / 4
 ```
 
 ### Weighted-F1
 
-```
+```text
 Weighted-F1 = (3 × F1_malignant + 2 × F1_medium + 1 × F1_benign) / 6
 ```
 
 ### Accuracy
+
 Standard top-1 classification accuracy (percentage of correct classifications)
 
 ### Prediction Score (90%)
 
-```
+```text
 Prediction Score = 0.5 × Accuracy + 0.5 × Weighted-F1
 ```
 
 ### Efficiency Score
 
+```text
+Efficiency Score = 0.5 × Size Score + 0.5 × Speed Score
 ```
-Efficiency Score = 0.5 × (1 - (S - S_min) / (S_max - S_min)) +
-                   0.5 × (1 - (T - T_min) / (T_max - T_min))
+
+**Size Score:**
+
+```text
+Size Score = 1.0  if model_size ≤ 50 MB
+Size Score = (150 - model_size) / 100  if 50 MB < model_size ≤ 150 MB
+Size Score = 0.0  if model_size > 150 MB
 ```
+
+**Speed Score:**
+
+```text
+Speed Score = (slowest_time - model_time) / (slowest_time - fastest_time)
+```
+
+- Fastest model gets score of 1.0
+- Slowest model gets score of 0.0
+- Models with equal speed all get score of 1.0
 
 **Where:**
-- **S** – model size in MB
-- **T** – inference time for single image (in ms)
-- **S_min = 50 MB, S_max = 150 MB**
-- **T_min = shortest time in competition, T_max = longest time in competition**
+
+- **model_size** – model size in MB
+- **model_time** – average inference time per image (in ms)
+- **fastest_time** – fastest inference time in competition
+- **slowest_time** – slowest inference time in competition
 - **Efficiency Score ∈ [0.0, 1.0]**
 
-> **Note**: Inference time will be measured on uniform CPU hardware (no GPU).
+> **Note**: Inference time will be measured on uniform CPU hardware (no GPU) and averaged across all test images.
 
 ### Final Score
 
-```
+```text
 Final Score = 0.9 × Prediction Score + 0.1 × Efficiency Score
 ```
 
@@ -127,14 +152,16 @@ Final Score = 0.9 × Prediction Score + 0.1 × Efficiency Score
 
 Example scripts and pipeline available in: `DOCS/competitions/tricorder_samples/`
 
-### Running the example:
+### Running the example
+
 ```bash
 cd DOCS/competitions/tricorder_samples
 ./run_pipeline.sh
 ```
 
-### Example structure:
-- `generate_tricorder_model.py` - 10-class model generation
+### Example structure
+
+- `generate_tricorder_model.py` - 11-class model generation
 - `run_tricorder_inference.py` - Inference script with demographic data
 - `example_dataset/` - Sample dataset with images and labels
 - `README_EXAMPLE_TRICORDER.md` - Detailed documentation
@@ -142,6 +169,6 @@ cd DOCS/competitions/tricorder_samples
 ## 📋 Submission Requirements
 
 - Model must accept both image and demographic inputs
-- Output exactly 10 probabilities that sum to 1.0
+- Output exactly 11 probabilities that sum to 1.0
 - Model size should be optimized (< 150 MB, ideally < 50 MB)
 - Include inference script compatible with the evaluation framework

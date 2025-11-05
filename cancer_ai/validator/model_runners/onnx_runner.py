@@ -3,19 +3,18 @@ import numpy as np
 import bittensor as bt
 from collections import defaultdict
 from ..exceptions import ModelRunException
-from ..competition_handlers.tricorder_handler import LocationId
 
 from . import BaseRunnerHandler
 
 
 class OnnxRunnerHandler(BaseRunnerHandler):
-    async def run(self, preprocessed_data_generator: AsyncGenerator[Union[np.ndarray, Tuple[np.ndarray, List[Dict[str, Any]]]], None]) -> List:
+    async def run(self, preprocessed_data_generator: AsyncGenerator[Union[np.ndarray, Tuple[np.ndarray, np.ndarray]], None]) -> List:
         """
         Run ONNX model inference on preprocessed data chunks.
         
         Args:
             preprocessed_data_generator: Generator yielding preprocessed numpy arrays,
-                                       or tuples of (numpy arrays, metadata) for tricorder
+                                       or tuples of (numpy arrays, preprocessed_metadata) for tricorder
             
         Returns:
             List of model predictions
@@ -34,9 +33,9 @@ class OnnxRunnerHandler(BaseRunnerHandler):
 
         async for data in preprocessed_data_generator:
             try:                
-                # Handle both formats: plain numpy array or tuple with metadata
+                # Handle both formats: plain numpy array or tuple with preprocessed metadata
                 if isinstance(data, tuple):
-                    # Tricorder format: (image_data, metadata)
+                    # Tricorder format: (image_data, preprocessed_metadata)
                     chunk, metadata = data
                     
                     # Prepare inputs for ONNX model
@@ -47,7 +46,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                         # Model expects both image and metadata inputs
                         image_input_name = inputs[0].name
                         metadata_input_name = inputs[1].name
-                        metadata_array = self._prepare_metadata_array(metadata)
+                        metadata_array = metadata
                         
                         input_data = {
                             image_input_name: chunk,
@@ -80,39 +79,3 @@ class OnnxRunnerHandler(BaseRunnerHandler):
             raise ModelRunException("No results obtained from model inference")
 
         return results
-    
-    def _prepare_metadata_array(self, metadata: List[Dict[str, Any]]):
-        """Convert metadata list to numpy array for ONNX model input"""
-        # Convert metadata to numerical format
-        metadata_array = []
-        for entry in metadata:
-            age = entry.get('age', 0) if entry.get('age') is not None else 0
-            # Convert gender to numerical: male=1, female=0, unknown=-1
-            gender_str = entry.get('gender', '').lower() if entry.get('gender') else ''
-            if gender_str in ['male', 'm']:
-                gender = 1
-            elif gender_str in ['female', 'f']:
-                gender = 0
-            else:
-                gender = -1  # Unknown/missing gender
-            
-            # Convert location to numerical using LocationId enum
-            location_str = entry.get('location', '').lower() if entry.get('location') else ''
-            location = self._get_location_value(location_str)
-            
-            metadata_array.append([age, gender, location])
-        
-        return np.array(metadata_array, dtype=np.float32)
-    
-    def _get_location_value(self, location_str: str) -> int:
-        """Convert location string to numerical value using LocationId enum."""
-        if not location_str:
-            return -1
-        
-        try:
-            # Convert to uppercase to match enum names
-            location_enum = LocationId[location_str.upper()]
-            return location_enum.value
-        except KeyError:
-            # Unknown/invalid location
-            return -1

@@ -328,6 +328,13 @@ def add_validator_args(cls, parser):
         default=False,
     )
 
+    parser.add_argument(
+        "--mock_models",
+        action="store_true",
+        help="Use mock models for testing with local ONNX files",
+        default=False,
+    )
+
 
     parser.add_argument(
         "--miners_refresh_interval",
