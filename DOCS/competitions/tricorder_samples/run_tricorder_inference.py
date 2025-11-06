@@ -1,46 +1,58 @@
 import os
+import sys
 import numpy as np
 import onnxruntime as ort
 from PIL import Image
-import torchvision.transforms as transforms
 import argparse
 
-# Class mapping for tricorder competition
+# Tricorder-3 class mapping (11 classes)
 CLASS_NAMES = [
-    "Actinic keratosis (AK)",
-    "Basal cell carcinoma (BCC)", 
-    "Seborrheic keratosis (SK)",
-    "Squamous cell carcinoma (SCC)",
-    "Vascular lesion (VASC)",
+    "Actinic keratosis/intraepidermal carcinoma (AKIEC)",
+    "Basal cell carcinoma (BCC)",
+    "Other benign proliferations (BEN_OTH)",
+    "Benign keratinocytic lesion (BKL)",
     "Dermatofibroma (DF)",
-    "Benign nevus (NV)",
-    "Other non-neoplastic (NON)",
+    "Inflammatory and infectious (INF)",
+    "Other malignant proliferations (MAL_OTH)",
     "Melanoma (MEL)",
-    "Other neoplastic (ON)"
+    "Melanocytic Nevus (NV)",
+    "Squamous cell carcinoma/keratoacanthoma (SCCKA)",
+    "Vascular lesions and hemorrhage (VASC)"
 ]
 
 class ONNXInference:
     def __init__(self, model_path):
-        """Initialize ONNX model session."""
+        """Initialize ONNX model session and detect input size."""
         self.session = ort.InferenceSession(model_path)
         self.input_names = [inp.name for inp in self.session.get_inputs()]
         
-        # Image preprocessing
-        self.transform = transforms.Compose([
-            transforms.Resize((512, 512)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
+        # Detect model's expected input size from first input
+        self.input_size = self._get_input_size()
+        print(f"Model input size: {self.input_size}")
+    
+    def _get_input_size(self):
+        """Extract expected image input size from ONNX model."""
+        inputs = self.session.get_inputs()
+        if inputs:
+            shape = inputs[0].shape
+            # Shape is typically [batch_size, channels, height, width]
+            if len(shape) >= 4:
+                h = shape[2] if isinstance(shape[2], int) else 512
+                w = shape[3] if isinstance(shape[3], int) else 512
+                return (h, w)
+        return (512, 512)  # Default fallback
     
     def preprocess_image(self, image_path):
-        """Load and preprocess image to [0,512] range as specified."""
+        """Load and preprocess image to [0, 1] range."""
         img = Image.open(image_path).convert('RGB')
-        # Resize to 512x512
-        img = img.resize((512, 512))
-        # Convert to numpy array with [0,512] range
-        img_array = np.array(img, dtype=np.float32)
-        # Scale from [0,255] to [0,512]
-        img_array = img_array * (512.0 / 255.0)
+        
+        # Resize to model's expected size
+        h, w = self.input_size
+        img = img.resize((w, h), Image.Resampling.LANCZOS)
+        
+        # Convert to numpy array and normalize to [0, 1]
+        img_array = np.array(img, dtype=np.float32) / 255.0
+        
         # Convert to BCHW format
         img_array = np.transpose(img_array, (2, 0, 1))
         img_array = np.expand_dims(img_array, axis=0)

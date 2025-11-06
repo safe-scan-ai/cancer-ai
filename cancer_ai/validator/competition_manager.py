@@ -3,6 +3,7 @@ from typing import List, Tuple, Optional
 
 import bittensor as bt
 import wandb
+import hashlib
 
 from dotenv import load_dotenv
 
@@ -264,7 +265,7 @@ class CompetitionManager(SerializableManager):
         if self.competition_id == "tricorder-3" and len(self.results) > 0:
             # Extract model IDs and sizes for efficiency calculation
             model_ids = [result[0] for result in self.results]
-            model_sizes_mb = {result[0]: result[1].model_size_mb for result in self.results}
+            model_sizes_mb = {model_id: self.model_manager.hotkey_store[model_id].model_size_mb for model_id in model_ids}
             
             # Update results with efficiency scores
             original_results = [result[1] for result in self.results]

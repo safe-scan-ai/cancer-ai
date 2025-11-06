@@ -15,7 +15,7 @@ The goal of the competition is to build a lightweight and effective ML model tha
 - **Format**: JPEG or PNG
 - **Channels**: RGB (3 channels), no alpha channel
 - **Minimum side length**: ≥ 512 px
-- **Pixel values**: range [0, 512], dtype=np.uint8
+- **Preprocessing**: Resize to model's expected size (typically 512×512), normalize to [0, 1] range
 
 #### 2. Patient Demographic Data
 
@@ -152,16 +152,26 @@ Final Score = 0.9 × Prediction Score + 0.1 × Efficiency Score
 
 Example scripts and pipeline available in: `DOCS/competitions/tricorder_samples/`
 
+### Model Architecture Reference
+
+The model architecture and constants are defined in:
+- **Architecture**: `cancer_ai/validator/competition_handlers/tricorder_common.py` (lines 51-57)
+  - `TRICORDER_3_IMAGE_SIZE = (512, 512)`
+  - `TRICORDER_3_NUM_CLASSES = 11`
+  - `TRICORDER_3_FEATURE_CHANNELS = [16, 32, 64]`
+  - `TRICORDER_3_DEMOGRAPHICS_FEATURES = 16`
+
 ### Running the example
 
 ```bash
 cd DOCS/competitions/tricorder_samples
-./run_pipeline.sh
+python generate_tricorder_3_model.py  # Generate sample model
+python run_tricorder_inference.py --model sample_tricorder_3_model.onnx --image <path> --age 42 --gender m --location 5
 ```
 
 ### Example structure
 
-- `generate_tricorder_model.py` - 11-class model generation
+- `generate_tricorder_3_model.py` - 11-class model generation (uses constants from tricorder_common.py)
 - `run_tricorder_inference.py` - Inference script with demographic data
 - `example_dataset/` - Sample dataset with images and labels
 - `README_EXAMPLE_TRICORDER.md` - Detailed documentation

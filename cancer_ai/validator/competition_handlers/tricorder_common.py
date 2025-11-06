@@ -48,6 +48,14 @@ WEIGHTED_F1_WEIGHT = 0.5
 # Age validation
 MAX_AGE = 120
 
+# Tricorder-3 Model Architecture Constants
+TRICORDER_3_NUM_CLASSES = 11
+TRICORDER_3_NUM_DEMOGRAPHICS = 3
+TRICORDER_3_IMAGE_SIZE = (512, 512)
+TRICORDER_3_FEATURE_CHANNELS = [16, 32, 64]  # Conv layer output channels
+TRICORDER_3_DEMOGRAPHICS_FEATURES = 16
+TRICORDER_3_COMBINED_FEATURES = 64 + 16  # Image features + demographics features
+
 
 # --- Data Structures ---
 class RiskCategory(str, Enum):
@@ -647,8 +655,11 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
             # Define all possible class labels
             labels = list(range(len(self.CLASS_INFO)))
 
-            # Get predicted class indices
-            y_pred_classes = np.argmax(y_pred, axis=1)
+            # Get predicted class indices - handle both 1D and 2D predictions
+            if y_pred.ndim == 1:
+                y_pred_classes = y_pred.astype(int)
+            else:
+                y_pred_classes = np.argmax(y_pred, axis=1)
 
             # Calculate basic metrics
             accuracy = float(accuracy_score(y_test, y_pred_classes))

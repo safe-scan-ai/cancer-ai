@@ -1,38 +1,52 @@
+import sys
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+# Add parent directories to path to import from cancer_ai
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+from cancer_ai.validator.competition_handlers.tricorder_common import (
+    TRICORDER_3_NUM_CLASSES,
+    TRICORDER_3_NUM_DEMOGRAPHICS,
+    TRICORDER_3_IMAGE_SIZE,
+    TRICORDER_3_FEATURE_CHANNELS,
+    TRICORDER_3_DEMOGRAPHICS_FEATURES,
+    TRICORDER_3_COMBINED_FEATURES,
+)
+
 class SimpleSkinLesionModel(nn.Module):
-    def __init__(self, num_classes=11, num_demographics=3):
+    def __init__(self, num_classes=TRICORDER_3_NUM_CLASSES, num_demographics=TRICORDER_3_NUM_DEMOGRAPHICS):
         super().__init__()
-        # Image feature extractor
+        # Image feature extractor with channels from constants
+        ch = TRICORDER_3_FEATURE_CHANNELS  # [16, 32, 64]
         self.features = nn.Sequential(
-            nn.Conv2d(3, 16, 3, padding=1, bias=False),
-            nn.BatchNorm2d(16),
+            nn.Conv2d(3, ch[0], 3, padding=1, bias=False),
+            nn.BatchNorm2d(ch[0]),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2),  # 256x256
 
-            nn.Conv2d(16, 32, 3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(ch[0], ch[1], 3, padding=1, bias=False),
+            nn.BatchNorm2d(ch[1]),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2, 2),  # 128x128
 
-            nn.Conv2d(32, 64, 3, padding=1, bias=False),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(ch[1], ch[2], 3, padding=1, bias=False),
+            nn.BatchNorm2d(ch[2]),
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d((1, 1))
         )
 
         # Demographic data processor
         self.demographics_processor = nn.Sequential(
-            nn.Linear(num_demographics, 16),
+            nn.Linear(num_demographics, TRICORDER_3_DEMOGRAPHICS_FEATURES),
             nn.ReLU(),
-            nn.BatchNorm1d(16)
+            nn.BatchNorm1d(TRICORDER_3_DEMOGRAPHICS_FEATURES)
         )
 
         # Combined classifier
-        self.classifier = nn.Linear(64 + 16, num_classes, bias=False)
+        self.classifier = nn.Linear(TRICORDER_3_COMBINED_FEATURES, num_classes, bias=False)
 
     def forward(self, image, demographics):
         image_features = self.features(image)
@@ -49,11 +63,12 @@ class SimpleSkinLesionModel(nn.Module):
 
 def export_optimized_model(output_path='sample_tricorder_3_model.pt'):
     # Create model and set to evaluation mode
-    model = SimpleSkinLesionModel(num_classes=11, num_demographics=3)
+    model = SimpleSkinLesionModel()
     model.eval()
 
-    # Create dummy inputs
-    dummy_image = torch.randn(1, 3, 512, 512)
+    # Create dummy inputs using constants
+    h, w = TRICORDER_3_IMAGE_SIZE
+    dummy_image = torch.randn(1, 3, h, w)
     dummy_demo = torch.tensor([[42.0, 1.0, 5.0]])  # age, sex, location
 
     # Export to ONNX with optimization
@@ -88,7 +103,10 @@ def export_optimized_model(output_path='sample_tricorder_3_model.pt'):
     print(f"Tricorder-3 optimized model sizes:")
     print(f"- PyTorch (FP16): {pt_size:.2f} MB")
     print(f"- ONNX: {onnx_size:.2f} MB")
-    print(f"- Classes: 11 (vs 10 for Tricorder-2)")
+    print(f"- Input size: {TRICORDER_3_IMAGE_SIZE}")
+    print(f"- Classes: {TRICORDER_3_NUM_CLASSES}")
+    print(f"- Demographics features: {TRICORDER_3_DEMOGRAPHICS_FEATURES}")
+    print(f"- Feature channels: {TRICORDER_3_FEATURE_CHANNELS}")
 
 if __name__ == "__main__":
     export_optimized_model()
