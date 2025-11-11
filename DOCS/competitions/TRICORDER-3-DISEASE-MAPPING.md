@@ -1,3 +1,5 @@
+## 🏥 New Tricorder Detailed Classification Mapping
+
 ### 1. **Actinic keratosis / intraepidermal carcinoma (AKIEC)**
 - Solar or actinic keratosis
   - bowenoid actinic keratosis
