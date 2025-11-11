@@ -1,21 +1,60 @@
-from typing import List, AsyncGenerator, Union, Dict, Any, Tuple
+from typing import List, AsyncGenerator, Union, Tuple
 import numpy as np
 import bittensor as bt
 from collections import defaultdict
 from ..exceptions import ModelRunException
-from ..competition_handlers.tricorder_handler import LocationId
 
 from . import BaseRunnerHandler
 
 
 class OnnxRunnerHandler(BaseRunnerHandler):
-    async def run(self, preprocessed_data_generator: AsyncGenerator[Union[np.ndarray, Tuple[np.ndarray, List[Dict[str, Any]]]], None]) -> List:
+    def _get_model_input_size(self, session) -> Tuple[int, int]:
+        """Extract expected image input size from ONNX model"""
+        inputs = session.get_inputs()
+        if inputs:
+            shape = inputs[0].shape
+            # Shape is typically [batch_size, channels, height, width]
+            if len(shape) >= 4:
+                h = shape[2] if isinstance(shape[2], int) else 512
+                w = shape[3] if isinstance(shape[3], int) else 512
+                return (h, w)
+        return (512, 512)  # Default fallback
+    
+    def _resize_image_batch(self, chunk: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
+        """Resize image batch to target size using PIL for quality"""
+        from PIL import Image
+        
+        batch_size, channels, height, width = chunk.shape
+        target_h, target_w = target_size
+        
+        if (height, width) == target_size:
+            return chunk  # Already correct size
+        
+        resized_batch = []
+        for i in range(batch_size):
+            # Convert from (C, H, W) to (H, W, C) for PIL
+            img_array = np.transpose(chunk[i], (1, 2, 0))
+            # Scale back to 0-255 range for PIL
+            img_array = (img_array * 255).astype(np.uint8)
+            
+            # Resize using PIL
+            img = Image.fromarray(img_array)
+            img = img.resize((target_w, target_h), Image.Resampling.LANCZOS)
+            
+            # Convert back to (C, H, W) and normalize to 0-1
+            resized_array = np.array(img, dtype=np.float32) / 255.0
+            resized_array = np.transpose(resized_array, (2, 0, 1))
+            resized_batch.append(resized_array)
+        
+        return np.array(resized_batch, dtype=np.float32)
+
+    async def run(self, preprocessed_data_generator: AsyncGenerator[Union[np.ndarray, Tuple[np.ndarray, np.ndarray]], None]) -> List:
         """
         Run ONNX model inference on preprocessed data chunks.
         
         Args:
             preprocessed_data_generator: Generator yielding preprocessed numpy arrays,
-                                       or tuples of (numpy arrays, metadata) for tricorder
+                                       or tuples of (numpy arrays, preprocessed_metadata) for tricorder
             
         Returns:
             List of model predictions
@@ -26,18 +65,28 @@ class OnnxRunnerHandler(BaseRunnerHandler):
 
         try:
             session = onnxruntime.InferenceSession(self.model_path)
-        except Exception as e:
-            bt.logging.error(f"An unexpected error occurred when loading ONNX model: {e}")
-            raise ModelRunException(f"An unexpected error occurred when loading ONNX model: {e}") from e
+        except onnxruntime.OnnxRuntimeException as e:
+            bt.logging.error(f"ONNX runtime error when loading model: {e}")
+            raise ModelRunException(f"ONNX runtime error when loading model: {e}") from e
+        except OSError as e:
+            bt.logging.error(f"File error when loading ONNX model: {e}")
+            raise ModelRunException(f"File error when loading ONNX model: {e}") from e
+
+        # Detect model's expected input size
+        model_input_size = self._get_model_input_size(session)
+        bt.logging.debug(f"Model expects input size: {model_input_size}")
 
         results = []
 
         async for data in preprocessed_data_generator:
             try:                
-                # Handle both formats: plain numpy array or tuple with metadata
+                # Handle both formats: plain numpy array or tuple with preprocessed metadata
                 if isinstance(data, tuple):
-                    # Tricorder format: (image_data, metadata)
+                    # Tricorder format: (image_data, preprocessed_metadata)
                     chunk, metadata = data
+                    
+                    # Resize chunk to match model's expected input size
+                    chunk = self._resize_image_batch(chunk, model_input_size)
                     
                     # Prepare inputs for ONNX model
                     inputs = session.get_inputs()
@@ -47,7 +96,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                         # Model expects both image and metadata inputs
                         image_input_name = inputs[0].name
                         metadata_input_name = inputs[1].name
-                        metadata_array = self._prepare_metadata_array(metadata)
+                        metadata_array = metadata
                         
                         input_data = {
                             image_input_name: chunk,
@@ -59,6 +108,10 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                 else:
                     # Melanoma format: plain numpy array (no metadata)
                     chunk = data
+                    
+                    # Resize chunk to match model's expected input size
+                    chunk = self._resize_image_batch(chunk, model_input_size)
+                    
                     input_name = session.get_inputs()[0].name
                     input_data = {input_name: chunk}
                 
@@ -80,39 +133,3 @@ class OnnxRunnerHandler(BaseRunnerHandler):
             raise ModelRunException("No results obtained from model inference")
 
         return results
-    
-    def _prepare_metadata_array(self, metadata: List[Dict[str, Any]]):
-        """Convert metadata list to numpy array for ONNX model input"""
-        # Convert metadata to numerical format
-        metadata_array = []
-        for entry in metadata:
-            age = entry.get('age', 0) if entry.get('age') is not None else 0
-            # Convert gender to numerical: male=1, female=0, unknown=-1
-            gender_str = entry.get('gender', '').lower() if entry.get('gender') else ''
-            if gender_str in ['male', 'm']:
-                gender = 1
-            elif gender_str in ['female', 'f']:
-                gender = 0
-            else:
-                gender = -1  # Unknown/missing gender
-            
-            # Convert location to numerical using LocationId enum
-            location_str = entry.get('location', '').lower() if entry.get('location') else ''
-            location = self._get_location_value(location_str)
-            
-            metadata_array.append([age, gender, location])
-        
-        return np.array(metadata_array, dtype=np.float32)
-    
-    def _get_location_value(self, location_str: str) -> int:
-        """Convert location string to numerical value using LocationId enum."""
-        if not location_str:
-            return -1
-        
-        try:
-            # Convert to uppercase to match enum names
-            location_enum = LocationId[location_str.upper()]
-            return location_enum.value
-        except KeyError:
-            # Unknown/invalid location
-            return -1

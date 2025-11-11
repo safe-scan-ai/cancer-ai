@@ -104,3 +104,31 @@ class BaseCompetitionHandler(ABC):
             A tuple of key metrics that can be used for comparison.
         """
         raise NotImplementedError
+
+    def record_speed_result(self, model_id: str, inference_time_ms: float) -> None:
+        """
+        Stub method to record inference speed result for a model.
+        
+        Can be overridden by competition handlers that need speed tracking.
+        
+        Args:
+            model_id: Unique identifier for the model
+            inference_time_ms: Inference time in milliseconds for single image
+        """
+        pass
+
+    def update_results_with_efficiency(self, results: list, model_ids: list, model_sizes_mb: dict) -> list:
+        """
+        Stub method to update evaluation results with efficiency scores.
+        
+        Can be overridden by competition handlers that need efficiency scoring.
+        
+        Args:
+            results: List of evaluation results to update
+            model_ids: List of model IDs corresponding to results
+            model_sizes_mb: Dictionary mapping model_id to model size in MB
+            
+        Returns:
+            Updated list of evaluation results (default: unchanged)
+        """
+        return results

@@ -9,12 +9,14 @@ The goal of the competition is to build a lightweight and effective ML model tha
 ### Input
 
 #### 1. Skin Lesion Image
+
 - **Format**: JPEG or PNG
 - **Channels**: RGB (3 channels), no alpha channel
 - **Minimum side length**: ≥ 512 px
 - **Pixel values**: range [0, 512], dtype=np.uint8
 
 #### 2. Patient Demographic Data
+
 - **Age**: integer in years (e.g., 42)
 - **Gender**: "m" (male) / "f" (female)
 - **Body location**: integer according to the table below
@@ -22,6 +24,7 @@ The goal of the competition is to build a lightweight and effective ML model tha
 > **Note**: The model must utilize both image and demographic data.
 
 ### Output
+
 - **List of 10 class probabilities**: List[float]
 - **Probabilities must sum to 1.0** (softmax)
 - **Value range**: [0.0, 1.0]
@@ -74,7 +77,7 @@ The goal of the competition is to build a lightweight and effective ML model tha
 
 ### F1-score for class types
 
-```
+```text
 F1_malignant = (F1_2 + F1_4 + F1_9) / 3  
 F1_medium    = (F1_3 + F1_5) / 2  
 F1_benign    = (F1_1 + F1_6 + F1_7 + F1_8 + F1_10) / 5
@@ -82,27 +85,29 @@ F1_benign    = (F1_1 + F1_6 + F1_7 + F1_8 + F1_10) / 5
 
 ### Weighted-F1
 
-```
+```text
 Weighted-F1 = (3 × F1_malignant + 2 × F1_medium + 1 × F1_benign) / 6
 ```
 
 ### Accuracy
+
 Standard top-1 classification accuracy (percentage of correct classifications)
 
 ### Prediction Score (90%)
 
-```
+```text
 Prediction Score = 0.5 × Accuracy + 0.5 × Weighted-F1
 ```
 
 ### Efficiency Score
 
-```
+```text
 Efficiency Score = 0.5 × (1 - (S - S_min) / (S_max - S_min)) +
                    0.5 × (1 - (T - T_min) / (T_max - T_min))
 ```
 
 **Where:**
+
 - **S** – model size in MB
 - **T** – inference time for single image (in ms)
 - **S_min = 50 MB, S_max = 150 MB**
@@ -113,7 +118,7 @@ Efficiency Score = 0.5 × (1 - (S - S_min) / (S_max - S_min)) +
 
 ### Final Score
 
-```
+```text
 Final Score = 0.9 × Prediction Score + 0.1 × Efficiency Score
 ```
 
@@ -127,13 +132,15 @@ Final Score = 0.9 × Prediction Score + 0.1 × Efficiency Score
 
 Example scripts and pipeline available in: `DOCS/competitions/tricorder_samples/`
 
-### Running the example:
+### Running the example
+
 ```bash
 cd DOCS/competitions/tricorder_samples
 ./run_pipeline.sh
 ```
 
-### Example structure:
+### Example structure
+
 - `generate_tricorder_model.py` - 10-class model generation
 - `run_tricorder_inference.py` - Inference script with demographic data
 - `example_dataset/` - Sample dataset with images and labels
