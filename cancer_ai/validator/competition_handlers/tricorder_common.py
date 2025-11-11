@@ -108,9 +108,12 @@ def convert_metadata_to_array(metadata: List[Dict[str, Any]]) -> np.ndarray:
     """
     metadata_array = []
     for entry in metadata:
-        age = entry.get('age', 0) if entry.get('age') is not None else 0
+        # Convert entry keys to lowercase for case-insensitive matching
+        entry_lower = {k.lower(): v for k, v in entry.items()}
+        
+        age = entry_lower.get('age', 0) if entry_lower.get('age') is not None else 0
         # Convert gender to numerical: male=1, female=0, unknown=-1
-        gender_str = entry.get('gender', '').lower() if entry.get('gender') else ''
+        gender_str = entry_lower.get('gender', '').lower() if entry_lower.get('gender') else ''
         if gender_str in ['male', 'm']:
             gender = 1
         elif gender_str in ['female', 'f']:
@@ -119,7 +122,7 @@ def convert_metadata_to_array(metadata: List[Dict[str, Any]]) -> np.ndarray:
             gender = -1  # Unknown/missing gender
         
         # Convert location to numerical using LocationId enum
-        location_str = entry.get('location', '').lower() if entry.get('location') else ''
+        location_str = entry_lower.get('location', '').lower() if entry_lower.get('location') else ''
         location = get_location_value(location_str)
         
         metadata_array.append([age, gender, location])
@@ -270,8 +273,11 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         validation_errors = []
 
         for i, meta_entry in enumerate(self.metadata):
+            # Convert entry keys to lowercase for case-insensitive matching
+            entry_lower = {k.lower(): v for k, v in meta_entry.items()}
+            
             # Validate age
-            age = meta_entry.get("age")
+            age = entry_lower.get("age")
             if age is None:
                 validation_errors.append(f"Missing age at index {i}")
             elif not isinstance(age, (int, float)) or age < 0 or age > MAX_AGE:
@@ -280,7 +286,7 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 )
 
             # Validate gender
-            gender = meta_entry.get("gender")
+            gender = entry_lower.get("gender")
             if gender is None:
                 validation_errors.append(f"Missing gender at index {i}")
             else:
@@ -293,7 +299,7 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                     meta_entry["gender"] = gender_lower
 
             # Validate location
-            location = meta_entry.get("location")
+            location = entry_lower.get("location")
             if location is None:
                 validation_errors.append(f"Missing location at index {i}")
             else:

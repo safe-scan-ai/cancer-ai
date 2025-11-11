@@ -1,5 +1,4 @@
 from .base_handler import BaseDatasetHandler
-from PIL import Image
 from typing import List, Tuple
 from dataclasses import dataclass
 import csv
@@ -30,8 +29,7 @@ class DatasetImagesCSV(BaseDatasetHandler):
     """
 
     def __init__(self, config, dataset_path, label_path: str) -> None:
-        self.config = config
-        self.dataset_path = dataset_path
+        super().__init__(config, dataset_path)
         self.label_path = label_path
         self.metadata_columns = ["filepath", "label", "age", "location", "gender"]
 
@@ -47,15 +45,18 @@ class DatasetImagesCSV(BaseDatasetHandler):
         reader = csv.DictReader(io.StringIO(content))
         
         for row in reader:
+            # Convert all keys to lowercase for case-insensitive matching
+            row_lower = {k.lower(): v for k, v in row.items()}
+            
             # Get filepath - support different column names
-            filepath = row.get('NewFileName') or row.get('filepath') or row.get('filename') or ''
+            filepath = row_lower.get('newfilename') or row_lower.get('filepath') or row_lower.get('filename') or ''
             
             # Get label - support different column names
-            label = row.get('Class') or row.get('label') or ''
+            label = row_lower.get('class') or row_lower.get('label') or ''
             
             # Parse age
             age = None
-            age_str = row.get('Age') or row.get('age') or ''
+            age_str = row_lower.get('age') or ''
             if age_str:
                 try:
                     age = int(age_str)
@@ -64,7 +65,7 @@ class DatasetImagesCSV(BaseDatasetHandler):
             
             # Parse location
             location = None
-            location_str = row.get('Location') or row.get('location') or ''
+            location_str = row_lower.get('location') or ''
             if location_str:
                 location = location_str.strip().lower()
                 # Validate against expected location values
@@ -74,7 +75,7 @@ class DatasetImagesCSV(BaseDatasetHandler):
             
             # Parse gender
             gender = None
-            gender_str = row.get('Gender') or row.get('gender') or ''
+            gender_str = row_lower.get('gender') or ''
             if gender_str:
                 gender = gender_str.strip().lower()
                 # Keep the raw value - validation will happen in tricorder handler
@@ -98,7 +99,7 @@ class DatasetImagesCSV(BaseDatasetHandler):
         """
         await self.sync_training_data()
         pred_x = [
-            Path(self.dataset_path, entry.relative_path).resolve()
+            Path(self.path, entry.relative_path).resolve()
             for entry in self.entries
         ]
         pred_y = [entry.label for entry in self.entries]

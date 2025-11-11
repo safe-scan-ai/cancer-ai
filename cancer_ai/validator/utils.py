@@ -196,6 +196,7 @@ async def sync_organizations_data_references(fetched_yaml_files: list[dict]):
     all_orgs = []
     for file in fetched_yaml_files:
         yaml_data = file["yaml_data"]
+        # TODO IMPORTANT BUG use different organization_id for each entry 
         for entry in yaml_data:
             # Remap 'org_id' to 'organization_id' if needed.
             if "org_id" in entry:
@@ -395,7 +396,7 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
                 shutil.move(filepath, os.path.join(already_released_dir, filename))
                 bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
                 return NewDatasetFile(
-                    competition_id=random.choice(["melanoma-3"]), 
+                    competition_id=random.choice(["tricorder-3"]), 
                     dataset_hf_repo="local",
                     dataset_hf_filename=os.path.join(already_released_dir, filename),
                 )
