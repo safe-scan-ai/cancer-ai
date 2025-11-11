@@ -1,146 +1,140 @@
-## 🔄 DETAILED CHANGES IN MAPPING
+## 🧬 Tricorder detailed disease classes mapping
 
-### 1. CLASS 1 (AKIEC) - NEW CONTENT
+### 1. **Actinic keratosis (AK)**
+- actinic keratosis
+- bowenoid actinic keratosis  
+- pagetoid actinic keratosis  
+- AK  
 
-**Added to AKIEC (from SCC in situ):**
-- Bowen's disease → class 1
-- Intraepithelial carcinoma (IEC, PIN, VIN, IEN) → class 1
-- Erythroplasia of Queyrat → class 1
-- Squamous cell carcinoma in situ → class 1
+### 2. **Basal cell carcinoma (BCC)**
+- basal cell carcinoma  
+- BCC  
 
-**Retained in AKIEC (from AK):**
-- Actinic keratosis (all types)
-- Pigmented AK, Bowenoid AK, Pagetoid AK
+### 3. **Seborrheic keratosis (SK)**
+- seborrheic keratosis
+- solar lentigo  
+- lentigo  
+- lentigo simplex  
+- seborrheic keratosis  
+- benign lichenoid keratosis  
+- lichen planus-like keratosis  
+- LPLK  
+- SK  
 
-### 2. CLASS 3 (BEN_OTH) - NEW MIXED CLASS
+### 4. **Squamous cell carcinoma (SCC)**
+- squamous cell carcinoma  
+- intraepithelial carcinoma  
+- PIN  
+- VIN  
+- IEC  
+- IEN  
+- Bowen’s disease  
+- Erythroplasia of Queyrat  
+- SCC  
 
-**Content from NON:**
-- Mastocytoma/mastocytosis
-- Epidermal nevus / nevus sebaceous / sebaceous nevus
-- Fibroepithelial polyp / skin tag
-- Scar
-- Cyst (all types)
-- Comedo
-- Hidradenoma (eccrine, apocrine)
-- Foreign body
+### 5. **Vascular lesion (VASC)**
+- vascular lesion
+- pyogenic granuloma  
+- angioma  
+  - hemangioma  
+  - lymphangioma  
+  - stellate angioma  
+- VASC  
 
-**Content from ON (benign):**
-- Cylindroma
-- Trichoblastoma
-- Trichoepithelioma
-- Trichilemmoma
-- Desmoplastic epithelioma
-- Poroma (eccrine, apocrine)
-- Pilomatricoma/pilomatrixoma
-- Spiradenoma
-- Syringocystadenoma
-- Sebaceous hyperplasia
+### 6. **Dermatofibroma (DF)**
+- dermatofibroma
+- histiocytoma  
+- DF  
 
-### 3. CLASS 4 (BKL) - CHANGE FROM SK
+### 7. **Benign nevus (NV)**
+- nevus spilus  
+- junctional nevus  
+- compound nevus  
+- combined nevus  
+- blue nevus  
+- dermal nevus  
+- special site nevus  
+- halo nevus  
+- Sutton nevus  
+- Mayerson nevus  
+- inflammatory nevus  
+- sclerosing nevus  
+- Nanta nevus  
+- Spitz nevus  
+- NV  
 
-**Name change:** Seborrheic Keratosis → Benign Keratinocytic Lesion
+### 8. **Other non-neoplastic (NON)**
+- mastocytoma  
+- comedo  
+- nevus sebaceous  
+- sebaceous nevus  
+- epidermal nevus  
+- viral wart  
+- verruca  
+- molluscum  
+- MCV  
+- fibroepithelial polyp  
+- skin tag  
+- fibroma molle  
+- scar  
+- cyst  
+- hydrocystoma  
+- eccrine hidradenoma  
+- apocrine hidradenoma  
+- porokeratosis  
+  - lineat porokeratosis  
+  - DSAP (disseminated superficial actinic porokeratosis)  
+  - DSP (disseminated superficial porokeratosis)  
+  - porokeratosis of Mibelli  
+  - genitogluteal porokeratosis  
+  - verrucous porokeratosis  
+- inflammatory disease  
+  - psoriasis  
+  - eczema  
+  - lichen planus  
+  - pityriasis rosea  
+  - seborrheic dermatitis  
+  - Darier disease  
+  - Grover Disease  
+- NON  
 
-**Retained:**
-- Seborrheic keratosis
-- Solar lentigo, lentigo simplex
-- LPLK (Lichen planus-like keratosis)
-- Ink spot lentigo
-- Clear cell acanthoma (added from class 9)
+### 9. **Melanoma (MEL)**
+- Melanoma
+- MELTUMP (melanocytic tumor of uncertain malignant potential)  
+- SAMPUS (superficial melanocytic proliferation of unknown significance)  
+- IAMPUS (intraepidermal melanocytic proliferation of unknown significance)  
+- AST (Atypical Spitz Tumor)  
+- melanocytoma  
+- MIS (melanoma in situ)  
+- SSM (superficial spreading melanoma)  
+- NM (nodular melanoma)  
+- ALM (acral lentiginous melanoma)  
+- LMM (lentigo maligna melanoma)  
+- spitzoid melanoma  
+- LM (lentigo maligna)  
+- desmoplastic melanoma  
+- nevoid melanoma  
+- nevus-associated melanoma  
+- BAPoma (BAP1-inactivated melanocytic tumor)  
+- balloon cell melanoma  
+- MEL  
 
-### 4. CLASS 6 (INF) - NEW CLASS!
-
-**NEW CLASS for inflammatory and infectious diseases (from NON):**
-
-**Inflammatory diseases:**
-- Psoriasis
-- Eczema
-- Lichen planus
-- Pityriasis rosea
-- Seborrheic dermatitis
-- Rosacea
-- Demodex/demodicosis
-- Darier disease
-- Grover disease
-
-**Infectious:**
-- Viral wart/verruca
-- Molluscum contagiosum
-- Porokeratosis (all types: DSAP, DSP, linear, Mibelli)
-- Dermatophyte infection
-- Herpes
-- Pseudomonas infection
-- Scabies
-
-### 5. CLASS 7 (MAL_OTH) - NEW CLASS
-
-**Content from ON (malignant):**
-- Merkel cell carcinoma (MCC)
-- Kaposi sarcoma
-- Angiosarcoma
-- Dermatofibrosarcoma protuberans (DFSP)
-- Sebaceous carcinoma
-- Paget disease
-- Porocarcinoma
-- Atypical fibroxanthoma (AFX)
-- Malignant peripheral nerve sheath tumor
-- Lymphocytic proliferations
-
-### 6. CLASS 10 (SCCKA) - INVASIVE ONLY
-
-**NEW:** Only invasive forms of SCC:
-- Squamous cell carcinoma (invasive) → class 10
-- Keratoacanthoma → class 10
-
-**REMOVED:** (moved to class 1)
-- Bowen's disease
-- IEC, PIN, VIN, IEN
-- SCC in situ forms
-
----
-
-## ✅ NEW SYNONYMS ADDED (according to ISIC)
-
-### For AKIEC (class 1):
-- squamous cell carcinoma in situ
-- sccis
-- intraepithelial neoplasia
-- peiin
-- vulvar intraepithelial neoplasia
-- penile intraepithelial neoplasia
-
-### For BEN_OTH (class 3):
-- epidermal nevus
-- nevus sebaceous
-- sebaceous nevus
-- jadassohn nevus
-- steatocystoma
-- supernumerary nipple
-- trichilemmal cyst
-- pilar cyst
-- juvenile xanthogranuloma
-- mucosal melanotic macule
-- exogenous
-- foreign body granuloma
-
-### For BKL (class 4):
-- clear cell acanthoma
-- cca
-- ink spot lentigo
-- ink-spot lentigo
-
-### For INF (class 6):
-- darier disease
-- grover disease
-- inflammatory or infectious diseases
-- verruca
-- linear porokeratosis
-- genitogluteal porokeratosis
-
-### For MAL_OTH (class 7):
-- porocarcinoma
-- atypical fibroxanthoma
-- afx
-- malignant peripheral nerve sheath tumor
-- lymphocytic proliferations
-- t-cell
-- nk cell
+### 10. **Other neoplastic / Benign (ON)**
+- Merkel cell carcinoma  
+- MCC  
+- Kaposi Sarcoma  
+- angiosarcoma  
+- dermatofibrosarcoma protuberans  
+- cylindroma  
+- desmoplastic epithelioma  
+- trichoepithelioma  
+- trichilemmoma  
+- trichoblastoma  
+- Paget disease  
+- eccrine poroma  
+- poroma  
+- apocrine poroma  
+- pilomatricoma  
+- pilomatrixoma  
+- sebaceous carcinoma  
+- ON
