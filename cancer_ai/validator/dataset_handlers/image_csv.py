@@ -42,7 +42,11 @@ class DatasetImagesCSV(BaseDatasetHandler):
             
         # Parse CSV with DictReader for column-agnostic access
         import io
-        reader = csv.DictReader(io.StringIO(content))
+        # Detect delimiter by checking first line
+        first_line = content.split('\n')[0] if content else ''
+        delimiter = ';' if ';' in first_line else ','
+        
+        reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
         
         for row in reader:
             # Convert all keys to lowercase for case-insensitive matching

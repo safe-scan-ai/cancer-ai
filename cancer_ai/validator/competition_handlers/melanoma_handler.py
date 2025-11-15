@@ -21,7 +21,6 @@ from cancer_ai.validator.models import WanDBLogModelBase
 from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
 
 class MelanomaWanDBLogModelEntry(WanDBLogModelBase):
-    model_url: str
     accuracy: float
     precision: float
     fbeta: float

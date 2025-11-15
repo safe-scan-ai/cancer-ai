@@ -158,7 +158,6 @@ HIGH_RISK_WEIGHT = 3.0
 
 class TricorderWanDBLogModelEntry(WanDBLogModelBase):
     tested_entries: int
-    model_url: str
     accuracy: float
     precision: float
     fbeta: float
