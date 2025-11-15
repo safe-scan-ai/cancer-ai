@@ -42,6 +42,11 @@ class ChainMinerModel(BaseModel):
         """Returns the Hugging Face link for the model."""
         return f"https://huggingface.co/{self.hf_repo_id}/blob/main/{self.hf_model_filename}"
 
+    @property
+    def hf_code_link(self) -> str:
+        """Returns the Hugging Face link for the code."""
+        return f"https://huggingface.co/{self.hf_repo_id}/blob/main/{self.hf_code_filename}"
+
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ChainMinerModel"]:
         """Returns an instance of this class from a compressed string representation"""
