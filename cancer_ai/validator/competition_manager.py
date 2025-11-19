@@ -220,12 +220,13 @@ class CompetitionManager(SerializableManager):
                 self.error_results.append((miner_hotkey, "The hash of model uploaded does not match hash of model submitted on-chain"))
                 hotkeys_to_slash.append(miner_hotkey)
 
-            model_manager = ModelRunManager(
-                self.config, self.model_manager.hotkey_store[miner_hotkey]
-            )
             inference_start_time = time.time()
+            model_manager = None
 
             try:
+                model_manager = ModelRunManager(
+                    self.config, self.model_manager.hotkey_store[miner_hotkey]
+                )
                 # Pass the preprocessed data generator instead of raw paths
                 preprocessed_data_gen = self.competition_handler.get_preprocessed_data_generator()
                 bt.logging.info(f"Running model inference for hotkey {miner_hotkey}")
@@ -238,12 +239,13 @@ class CompetitionManager(SerializableManager):
                 continue
             finally:
                 # Clean up
-                if hasattr(model_manager, 'handler') and hasattr(model_manager.handler, 'cleanup'):
+                if model_manager and hasattr(model_manager, 'handler') and hasattr(model_manager.handler, 'cleanup'):
                     try:
                         model_manager.handler.cleanup()
                     except Exception as cleanup_error:
                         bt.logging.warning(f"Error during model cleanup: {cleanup_error}")
-                del model_manager
+                if model_manager:
+                    del model_manager
 
             # Calculate total inference time
             total_time = time.time() - inference_start_time
