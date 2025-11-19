@@ -236,6 +236,14 @@ class CompetitionManager(SerializableManager):
                 )
                 self.error_results.append((miner_hotkey, f"Failed to run model: {e}"))
                 continue
+            finally:
+                # Clean up
+                if hasattr(model_manager, 'handler') and hasattr(model_manager.handler, 'cleanup'):
+                    try:
+                        model_manager.handler.cleanup()
+                    except Exception as cleanup_error:
+                        bt.logging.warning(f"Error during model cleanup: {cleanup_error}")
+                del model_manager
 
             # Calculate total inference time
             total_time = time.time() - inference_start_time

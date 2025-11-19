@@ -1,6 +1,7 @@
 from typing import List, AsyncGenerator, Union, Tuple
 import numpy as np
 import bittensor as bt
+import asyncio
 from collections import defaultdict
 from ..exceptions import ModelRunException
 
@@ -8,6 +9,16 @@ from . import BaseRunnerHandler
 
 
 class OnnxRunnerHandler(BaseRunnerHandler):
+    def __init__(self, config, model_path):
+        super().__init__(config, model_path)
+        self.session = None
+
+    def cleanup(self):
+        """Clean up ONNX session and release resources."""
+        if self.session:
+            bt.logging.debug("Cleaning up ONNX session.")
+            self.session = None
+    
     def _get_model_input_size(self, session) -> Tuple[int, int]:
         """Extract expected image input size from ONNX model"""
         inputs = session.get_inputs()
@@ -64,7 +75,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
         error_counter = defaultdict(int)
 
         try:
-            session = onnxruntime.InferenceSession(self.model_path)
+            self.session = onnxruntime.InferenceSession(self.model_path)
         except onnxruntime.OnnxRuntimeException as e:
             bt.logging.error(f"ONNX runtime error when loading model: {e}")
             raise ModelRunException(f"ONNX runtime error when loading model: {e}") from e
@@ -73,7 +84,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
             raise ModelRunException(f"File error when loading ONNX model: {e}") from e
 
         # Detect model's expected input size
-        model_input_size = self._get_model_input_size(session)
+        model_input_size = self._get_model_input_size(self.session)
         bt.logging.debug(f"Model expects input size: {model_input_size}")
 
         results = []
@@ -89,7 +100,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                     chunk = self._resize_image_batch(chunk, model_input_size)
                     
                     # Prepare inputs for ONNX model
-                    inputs = session.get_inputs()
+                    inputs = self.session.get_inputs()
                     input_data = {}
                     
                     if len(inputs) >= 2:
@@ -112,14 +123,26 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                     # Resize chunk to match model's expected input size
                     chunk = self._resize_image_batch(chunk, model_input_size)
                     
-                    input_name = session.get_inputs()[0].name
+                    input_name = self.session.get_inputs()[0].name
                     input_data = {input_name: chunk}
                 
-                chunk_results = session.run(None, input_data)[0]
+                # Run inference with timeout protection
+                bt.logging.debug(f"Running ONNX inference on chunk with shape {chunk.shape}")
+                # Use asyncio timeout to prevent hanging
+                chunk_results = await asyncio.wait_for(
+                    asyncio.to_thread(self.session.run, None, input_data),
+                    timeout=120.0  # 2 minutes max per chunk
+                )
+                chunk_results = chunk_results[0]
+                bt.logging.debug(f"ONNX inference completed, got {len(chunk_results)} results")
                 results.extend(chunk_results)
                 
+            except asyncio.TimeoutError:
+                bt.logging.error(f"ONNX inference timeout after 120s on chunk")
+                error_counter['TimeoutError'] += 1
+                continue
             except Exception as e:
-                bt.logging.warning(f"An error occurred during inference on chunk {data}: {e}")
+                bt.logging.error(f"ONNX inference error during chunk processing: {e}", exc_info=True)
                 error_counter['InferenceError'] += 1
                 continue
 

@@ -2,6 +2,7 @@ from . import BaseRunnerHandler
 from typing import List, AsyncGenerator
 import numpy as np
 import bittensor as bt
+import asyncio
 
 
 class PytorchRunnerHandler(BaseRunnerHandler):
@@ -25,13 +26,31 @@ class PytorchRunnerHandler(BaseRunnerHandler):
         
         async for chunk in preprocessed_data_generator:
             try:
+                bt.logging.debug(f"Running PyTorch inference on chunk with shape {chunk.shape}")
                 # Convert numpy array to torch tensor
                 chunk_tensor = torch.from_numpy(chunk)
-                with torch.no_grad():
-                    chunk_results = model(chunk_tensor)
-                    results.extend(chunk_results.cpu().numpy())
+                
+                # Run inference with timeout protection
+                def _run_inference():
+                    with torch.no_grad():
+                        return model(chunk_tensor).cpu().numpy()
+                
+                chunk_results = await asyncio.wait_for(
+                    asyncio.to_thread(_run_inference),
+                    timeout=120.0  # 2 minutes max per chunk
+                )
+                results.extend(chunk_results)
+                bt.logging.debug(f"PyTorch inference completed, got {len(chunk_results)} results")
+                
+            except asyncio.TimeoutError:
+                bt.logging.error("PyTorch inference timeout after 120s on chunk")
+                continue
             except Exception as e:
-                bt.logging.error(f"PyTorch inference error on chunk: {e}")
+                bt.logging.error(f"PyTorch inference error on chunk: {e}", exc_info=True)
                 continue
                 
         return results
+
+    def cleanup(self):
+        """Clean up resources for the PyTorch runner."""
+        pass

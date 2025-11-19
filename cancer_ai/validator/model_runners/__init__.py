@@ -10,3 +10,7 @@ class BaseRunnerHandler:
     @abstractmethod
     async def run(self, preprocessed_data_generator: AsyncGenerator[Union[np.ndarray, Tuple[np.ndarray, List[Dict[str, Any]]]], None]):
         """Execute the run process of the model with preprocessed data chunks."""
+
+    @abstractmethod
+    def cleanup(self):
+        """Clean up resources used by the model runner."""
