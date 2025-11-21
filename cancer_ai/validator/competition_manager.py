@@ -290,7 +290,7 @@ class CompetitionManager(SerializableManager):
             # Replace results with updated ones
             self.results = list(zip(model_ids, updated_results))
             
-            bt.logging.info("Updated all results with efficiency scores (50% size + 50% speed)")
+            bt.logging.info("Updated all results with efficiency scores (size-only, based on model size)")
         
         # see if there are any duplicate scores, slash the copied models owners
         grouped_duplicated_hotkeys = self.group_duplicate_scores(hotkeys_to_slash)
