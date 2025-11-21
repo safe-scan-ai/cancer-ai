@@ -213,11 +213,13 @@ class CompetitionManager(SerializableManager):
             if not computed_hash:
                 bt.logging.info("Could not determine model hash. Skipping.")
                 self.error_results.append((miner_hotkey, "Could not determine model hash"))
+                self.results.append((miner_hotkey, BaseModelEvaluationResult(score=0.0)))
                 continue
         
             if computed_hash != model_info.model_hash:
                 bt.logging.info(f"The hash of model uploaded by {miner_hotkey} does not match hash of model submitted on-chain. Slashing.")
                 self.error_results.append((miner_hotkey, "The hash of model uploaded does not match hash of model submitted on-chain"))
+                self.results.append((miner_hotkey, BaseModelEvaluationResult(score=0.0)))
                 hotkeys_to_slash.append(miner_hotkey)
 
             inference_start_time = time.time()
@@ -236,6 +238,7 @@ class CompetitionManager(SerializableManager):
                     f"Model hotkey: {miner_hotkey} failed to run. Skipping. error: {e}"
                 )
                 self.error_results.append((miner_hotkey, f"Failed to run model: {e}"))
+                self.results.append((miner_hotkey, BaseModelEvaluationResult(score=0.0)))
                 continue
             finally:
                 # Clean up
@@ -265,6 +268,7 @@ class CompetitionManager(SerializableManager):
                     f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}", exc_info=True
                 )
                 self.error_results.append((miner_hotkey, f"Error evaluating model: {e}"))
+                self.results.append((miner_hotkey, BaseModelEvaluationResult(score=0.0)))
                 bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error. error: {e}")
 
         if len(self.results) == 0:

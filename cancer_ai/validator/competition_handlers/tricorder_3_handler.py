@@ -10,9 +10,6 @@ from .tricorder_common import (
     TricorderEvaluationResult
 )
 
-# Speed scoring constants (50% of efficiency score)
-SPEED_WEIGHT = 0.5
-SIZE_WEIGHT = 0.5
 
 
 # 1-based class IDs for better readability
@@ -36,8 +33,6 @@ class Tricorder3CompetitionHandler(BaseTricorderCompetitionHandler):
     def __init__(self, X_test: List[str], y_test: List[int], metadata: List[Dict[str, Any]] = None, config: Dict[str, Any] = None) -> None:
         super().__init__(X_test, y_test, metadata, config)
         
-        # Speed tracking for efficiency scoring
-        self.speed_results: List[Dict[str, float]] = []
 
     def get_class_info(self) -> Dict[ClassId, Dict[str, Any]]:
         """Return the class information dictionary for Tricorder-3."""
@@ -110,64 +105,20 @@ class Tricorder3CompetitionHandler(BaseTricorderCompetitionHandler):
             },
         }
 
-    def record_speed_result(self, model_id: str, inference_time_ms: float) -> None:
-        """Record inference speed result for a model.
-        
-        Args:
-            model_id: Unique identifier for the model
-            inference_time_ms: Inference time in milliseconds for single image
-        """
-        self.speed_results.append({
-            "model_id": model_id,
-            "inference_time_ms": inference_time_ms
-        })
-        import bittensor as bt
-        bt.logging.debug(f"Recorded speed for {model_id}: {inference_time_ms:.2f}ms")
-
-    def calculate_speed_scores(self) -> Dict[str, float]:
-        """Calculate speed scores for all recorded models based on relative performance.
-        
-        Returns:
-            Dictionary mapping model_id to speed_score (0.0-1.0)
-            Faster models get higher scores
-        """
-        if not self.speed_results:
-            return {}
-        
-        # Extract inference times
-        times = [result["inference_time_ms"] for result in self.speed_results]
-        min_time = min(times)
-        max_time = max(times)
-        
-        # Calculate speed scores (faster = higher score)
-        speed_scores = {}
-        for result in self.speed_results:
-            model_id = result["model_id"]
-            time_ms = result["inference_time_ms"]
-            
-            if max_time == min_time:
-                # All models have same speed
-                speed_score = 1.0
-            else:
-                # Linear scaling: fastest gets 1.0, slowest gets 0.0
-                speed_score = (max_time - time_ms) / (max_time - min_time)
-            
-            speed_scores[model_id] = max(0.0, min(1.0, speed_score))
-            import bittensor as bt
-            bt.logging.debug(f"Speed score for {model_id}: {speed_score:.3f} (time: {time_ms:.2f}ms)")
-        
-        return speed_scores
 
     def calculate_efficiency_scores(self, model_sizes_mb: Dict[str, float]) -> Dict[str, float]:
-        """Calculate combined efficiency scores (50% size + 50% speed).
-        
+        """Calculate deterministic efficiency scores based on model size.
+
+        This score is based on a linear decay function. Models smaller than
+        MIN_MODEL_SIZE_MB get a score of 1.0, and models larger than
+        MAX_MODEL_SIZE_MB get a score of 0.0.
+
         Args:
-            model_sizes_mb: Dictionary mapping model_id to model size in MB
-            
+            model_sizes_mb: Dictionary mapping model_id to model size in MB.
+
         Returns:
-            Dictionary mapping model_id to efficiency_score (0.0-1.0)
+            A dictionary mapping model_id to its efficiency_score (0.0-1.0).
         """
-        speed_scores = self.calculate_speed_scores()
         efficiency_scores = {}
         
         for model_id in model_sizes_mb:
@@ -180,17 +131,13 @@ class Tricorder3CompetitionHandler(BaseTricorderCompetitionHandler):
             else:
                 size_score = 0.0
             
-            # Get speed score (0.0 if not recorded)
-            speed_score = speed_scores.get(model_id, 0.0)
-            
-            # Combined efficiency score (50% size + 50% speed)
-            efficiency_score = SIZE_WEIGHT * size_score + SPEED_WEIGHT * speed_score
+            # Deterministic efficiency score based only on size
+            efficiency_score = size_score
             efficiency_scores[model_id] = efficiency_score
             
             import bittensor as bt
             bt.logging.debug(
-                f"Efficiency for {model_id}: size={size_score:.3f}, speed={speed_score:.3f}, "
-                f"combined={efficiency_score:.3f}"
+                f"Efficiency for {model_id}: size_score={size_score:.3f}, final_efficiency={efficiency_score:.3f}"
             )
         
         return efficiency_scores
@@ -217,6 +164,7 @@ class Tricorder3CompetitionHandler(BaseTricorderCompetitionHandler):
             return results
         
         # Calculate efficiency scores
+        # Calculate deterministic efficiency scores based on size
         efficiency_scores = self.calculate_efficiency_scores(model_sizes_mb)
         
         # Update results

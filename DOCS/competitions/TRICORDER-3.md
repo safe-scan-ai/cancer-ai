@@ -74,7 +74,7 @@ The goal of the competition is to build a lightweight and effective ML model tha
 | Category | Weight | Max pts | Notes |
 |----------|--------|---------|-------|
 | Prediction Quality | 90% | 90 pts | Weighted average: 50% Accuracy, 50% Weighted-F1 |
-| Efficiency | 10% | 10 pts | Model size (50%) + inference speed (50%) |
+| Efficiency | 10% | 10 pts | Based on model size |
 
 ## 📊 Score Calculation
 
@@ -105,7 +105,7 @@ Prediction Score = 0.5 × Accuracy + 0.5 × Weighted-F1
 ### Efficiency Score
 
 ```text
-Efficiency Score = 0.5 × Size Score + 0.5 × Speed Score
+Efficiency Score = Size Score
 ```
 
 **Size Score:**
@@ -116,25 +116,10 @@ Size Score = (150 - model_size) / 100  if 50 MB < model_size ≤ 150 MB
 Size Score = 0.0  if model_size > 150 MB
 ```
 
-**Speed Score:**
-
-```text
-Speed Score = (slowest_time - model_time) / (slowest_time - fastest_time)
-```
-
-- Fastest model gets score of 1.0
-- Slowest model gets score of 0.0
-- Models with equal speed all get score of 1.0
-
 **Where:**
 
 - **model_size** – model size in MB
-- **model_time** – average inference time per image (in ms)
-- **fastest_time** – fastest inference time in competition
-- **slowest_time** – slowest inference time in competition
-- **Efficiency Score ∈ [0.0, 1.0]**
-
-> **Note**: Inference time will be measured on uniform CPU hardware (no GPU) and averaged across all test images.
+- **Efficiency Score ∈ [0.0, 1.0]
 
 ### Final Score
 
