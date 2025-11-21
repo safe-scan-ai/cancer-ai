@@ -44,7 +44,7 @@ from cancer_ai.validator.utils import (
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
-from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
+from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile, WanDBLogModelBase
 from cancer_ai.validator.models import WanDBLogCompetitionWinners, WanDBLogBase, WanDBLogModelErrorEntry
 from huggingface_hub import HfApi
 
@@ -332,7 +332,7 @@ class Validator(BaseValidatorNeuron):
                     
                     if wandb_initialized:
                         try:
-                            ActualWanDBLogModelEntryClass = competition_manager.competition_handler.WanDBLogModelClass
+                            ActualWanDBLogModelEntryClass: WanDBLogModelBase = competition_manager.competition_handler.WanDBLogModelClass
                             model_log = ActualWanDBLogModelEntryClass(
                                 uuid=competition_uuid,
                                 competition_id=competition_id,
@@ -340,6 +340,7 @@ class Validator(BaseValidatorNeuron):
                                 uid=self.metagraph.hotkeys.index(miner_hotkey),
                                 validator_hotkey=self.wallet.hotkey.ss58_address,
                                 model_url=model.hf_link,
+                                code_url=model.hf_code_link,
                                 average_score=avg_score,
                                 run_time_s=evaluation_result.run_time_s,
                                 dataset_filename=data_package.dataset_hf_filename,
@@ -530,25 +531,20 @@ class Validator(BaseValidatorNeuron):
         }
         
         state_path = self.config.neuron.full_path + "/state.json"
+        temp_state_path = state_path + ".tmp"
         os.makedirs(os.path.dirname(state_path), exist_ok=True)
-        
+
         try:
-            with open(state_path, 'w') as f:
+            with open(temp_state_path, 'w') as f:
                 json.dump(state_dict, f, indent=2, cls=self.DateTimeEncoder)
-                f.flush()
-                f.close()
-        except TypeError as e:
-            bt.logging.error(f"Error serializing state to JSON: {e}", exc_info=True)
-            for key, value in state_dict.items():
-                try:
-                    json.dumps(value, cls=self.DateTimeEncoder)
-                except TypeError as e:
-                    bt.logging.error(f"Problem serializing field '{key}': {e}")
+            # Atomically move the temporary file to the final destination
+            os.rename(temp_state_path, state_path)
+            bt.logging.debug(f"Validator state saved to {state_path}")
         except Exception as e:
             bt.logging.error(f"Error saving validator state: {e}", exc_info=True)
-            if 'f' in locals() and f:
-                f.flush()
-                f.close()
+            # Clean up the temporary file if it exists
+            if os.path.exists(temp_state_path):
+                os.remove(temp_state_path)
     
     def create_empty_state(self):
         """Creates an empty state file."""
@@ -585,10 +581,9 @@ class Validator(BaseValidatorNeuron):
                     state['competition_results_store']
                 )
             except (json.JSONDecodeError, KeyError, TypeError) as e:
-                bt.logging.error(f"Error loading JSON state: {e}")
-                if 'f' in locals() and f:
-                    f.close()
-                    bt.logging.info("Validator state file closed after loading.")
+                bt.logging.error(f"Error loading or parsing state file: {e}. Resetting to a clean state.")
+                self.create_empty_state()
+                return
         else:
             bt.logging.warning("No state file found. Creating an empty one.")
             self.create_empty_state()

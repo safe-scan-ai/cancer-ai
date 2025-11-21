@@ -158,7 +158,6 @@ HIGH_RISK_WEIGHT = 3.0
 
 class TricorderWanDBLogModelEntry(WanDBLogModelBase):
     tested_entries: int
-    model_url: str
     accuracy: float
     precision: float
     fbeta: float
@@ -485,8 +484,8 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
 
     def _preprocess_single_image(self, img: Image.Image) -> np.ndarray:
         """Preprocess a single PIL image for tricorder competition"""
-        # Resize to target size
-        img = img.resize(TARGET_SIZE)
+        # Resize to target size using a deterministic algorithm
+        img = img.resize(TARGET_SIZE, Image.LANCZOS)
 
         # Convert to numpy array and normalize
         img_array = np.array(img, dtype=np.float32) / NORMALIZATION_FACTOR
@@ -731,10 +730,11 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 )
 
             # Calculate final score using calculate_score method
+            # Round metrics to ensure deterministic scoring across different hardware
             metrics = {
-                "accuracy": accuracy,
-                "weighted_f1": weighted_f1,
-                "efficiency": efficiency_score,
+                "accuracy": round(accuracy, 6),
+                "weighted_f1": round(weighted_f1, 6),
+                "efficiency": round(efficiency_score, 6),
             }
             score = self.calculate_score(metrics)
             # Create result object
@@ -742,12 +742,12 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 tested_entries=len(y_test),
                 run_time_s=run_time_s,
                 predictions_raw=y_pred.tolist(),
-                accuracy=accuracy,
-                precision=precision,
-                recall=recall,
-                fbeta=fbeta,
-                weighted_f1=weighted_f1,
-                efficiency_score=efficiency_score,
+                accuracy=metrics["accuracy"],
+                precision=round(precision, 6),
+                recall=round(recall, 6),
+                fbeta=round(fbeta, 6),
+                weighted_f1=metrics["weighted_f1"],
+                efficiency_score=metrics["efficiency"],
                 f1_by_class=f1_scores.tolist(),
                 class_weights=self.class_weights,
                 confusion_matrix=confusion_matrix(

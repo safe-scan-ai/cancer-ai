@@ -72,6 +72,10 @@ class WanDBLogModelBase(WanDBLogBase):
     log_type: str = "model_results"
     uid: int
     miner_hotkey: str
+
+    model_url: str
+    code_url: str
+
     
     score: float = 0.0
     average_score: float = 0.0

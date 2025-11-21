@@ -204,12 +204,14 @@ class CompetitionResultsStore(BaseModel):
             self.add_score(competition_id, hotkey, result.score, date=evaluation_timestamp)
             evaluated_miners.add(hotkey)
         
-        # Add score of 0 for miners who are in the competition but didn't take part in the evaluation
-        # This is necessary to decrease their average score when their model fails or has errors
         failed_miners = competition_miners - evaluated_miners
         for hotkey in failed_miners:
-            bt.logging.info(f"Adding score of 0 for hotkey {hotkey} in competition {competition_id} due to model failure or error")
+            bt.logging.info(
+                f"Adding score of 0 for hotkey {hotkey} in competition {competition_id} due to model failure or error"
+            )
             self.add_score(competition_id, hotkey, 0.0, date=evaluation_timestamp)
+            evaluated_miners.add(hotkey)
+        
 
         # Get the winner hotkey for this competition
         try:
