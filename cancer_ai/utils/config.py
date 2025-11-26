@@ -87,6 +87,13 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--ignore_registered",
+        action="store_true",
+        help="Ignore hotkey registration check.",
+        default=False,
+    )
+
+    parser.add_argument(
         "--mock",
         action="store_true",
         help="Mock neuron and all network components.",

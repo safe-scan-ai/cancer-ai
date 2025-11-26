@@ -96,17 +96,31 @@ class BaseNeuron(ABC):
         bt.logging.info(f"Subtensor: {self.subtensor}")
         bt.logging.info(f"Metagraph: {self.metagraph}")
 
-        # Check if the miner is registered on the Bittensor network before proceeding further.
         self.check_registered()
 
-        # Each miner gets a unique identity (UID) in the network for differentiation.
-        self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
-        bt.logging.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
-        )
+        try:
+            self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+            bt.logging.info(
+                f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
+            )
+        except ValueError:
+            if self.config.ignore_registered:
+                bt.logging.info(
+                    f"Hotkey not found in metagraph (not registered). Using mock uid -1 for --ignore_registered mode"
+                )
+                self.uid = -1
+            else:
+                bt.logging.error(
+                    f"Hotkey {self.wallet.hotkey.ss58_address} not found in metagraph. "
+                    f"Make sure the hotkey is registered or use --ignore_registered flag."
+                )
+                raise
         self.step = 0
 
-        self._last_updated_block = self.metagraph.last_update[self.uid]
+        if self.uid >= 0:
+            self._last_updated_block = self.metagraph.last_update[self.uid]
+        else:
+            self._last_updated_block = 0
 
     @abstractmethod
     def run(self): ...
@@ -170,6 +184,11 @@ class BaseNeuron(ABC):
         retries = 3
         while retries > 0:
             try:
+                if self.config.ignore_registered:
+                    # bt.logging.info("Ignoring hotkey registration check due to --ignore_registered flag")
+                    self.is_registered = True
+                    return self.is_registered
+                
                 if not hasattr(self, "is_registered"):
                     self.is_registered = self.subtensor.is_hotkey_registered(
                         netuid=self.config.netuid,
