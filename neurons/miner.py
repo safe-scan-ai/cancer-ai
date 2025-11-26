@@ -266,7 +266,7 @@ class MinerManagerCLI:
 
         # bt.logging(config=self.config)
         if self.config.action != "submit" and not self.config.model_path:
-            bt.logging.error("Missing --model-path argument")
+            bt.logging.error("Missing --model_path argument")
             return
         if self.config.action != "submit" and not MinerManagerCLI.is_onnx_model(
             self.config.model_path

@@ -277,20 +277,64 @@ class CompetitionManager(SerializableManager):
         
         # Update results with efficiency scores for tricorder-3 competition only
         if self.competition_id == "tricorder-3" and len(self.results) > 0:
+            bt.logging.info(f"TRICORDER-3: Starting efficiency score update for {len(self.results)} results")
+            
             # Extract model IDs and sizes for efficiency calculation
             model_ids = [result[0] for result in self.results]
             model_sizes_mb = {model_id: self.model_manager.hotkey_store[model_id].model_size_mb for model_id in model_ids}
             
-            # Update results with efficiency scores
+            bt.logging.debug(f"TRICORDER-3: Model IDs: {model_ids}")
+            bt.logging.debug(f"TRICORDER-3: Model sizes: {model_sizes_mb}")
+            
+            # Log original scores before update
             original_results = [result[1] for result in self.results]
-            updated_results = self.competition_handler.update_results_with_efficiency(
-                original_results, model_ids, model_sizes_mb
-            )
+            for model_id, result in zip(model_ids, original_results):
+                bt.logging.info(f"TRICORDER-3: BEFORE update - {model_id}: score={result.score:.6f}, efficiency={result.efficiency_score:.6f}")
             
-            # Replace results with updated ones
-            self.results = list(zip(model_ids, updated_results))
+            # Update results with efficiency scores
+            try:
+                bt.logging.info("TRICORDER-3: Calling update_results_with_efficiency...")
+                updated_results = self.competition_handler.update_results_with_efficiency(
+                    original_results, model_ids, model_sizes_mb
+                )
+                bt.logging.info(f"TRICORDER-3: update_results_with_efficiency returned {len(updated_results)} results")
+                
+                # Log updated scores after update
+                for model_id, result in zip(model_ids, updated_results):
+                    bt.logging.info(f"TRICORDER-3: AFTER update - {model_id}: score={result.score:.6f}, efficiency={result.efficiency_score:.6f}")
+                
+                # Replace results with updated ones
+                self.results = list(zip(model_ids, updated_results))
+                
+                bt.logging.info("TRICORDER-3: Updated all results with efficiency scores (size-only, based on model size)")
+            except Exception as e:
+                bt.logging.error("TRICORDER-3: CRITICAL ERROR during efficiency score update!", exc_info=True)
+                bt.logging.error(f"TRICORDER-3: Error details: {str(e)}")
+                bt.logging.error(f"TRICORDER-3: Number of original results: {len(original_results)}")
+                bt.logging.error(f"TRICORDER-3: Number of model IDs: {len(model_ids)}")
+                bt.logging.error(f"TRICORDER-3: Model sizes dict keys: {list(model_sizes_mb.keys())}")
+                bt.logging.error("TRICORDER-3: Keeping original results without efficiency update due to error")
+                # Keep original results if update fails
+        
+        # Validate final scores - check for suspicious zero scores
+        if self.competition_id in ["tricorder-3", "tricorder-2"]:
+            zero_score_models = []
+            for model_id, result in self.results:
+                if result.score == 0.0 and not result.error:
+                    # Zero score but no error - this is suspicious
+                    zero_score_models.append({
+                        "model_id": model_id,
+                        "accuracy": getattr(result, 'accuracy', None),
+                        "weighted_f1": getattr(result, 'weighted_f1', None),
+                        "efficiency_score": getattr(result, 'efficiency_score', None),
+                        "error": result.error
+                    })
             
-            bt.logging.info("Updated all results with efficiency scores (size-only, based on model size)")
+            if zero_score_models:
+                bt.logging.warning(f"TRICORDER: Found {len(zero_score_models)} models with zero score but no error!")
+                for model_info in zero_score_models:
+                    bt.logging.warning(f"TRICORDER: Zero score model: {model_info}")
+                    bt.logging.warning(f"TRICORDER: This may indicate a scoring calculation bug!")
         
         # see if there are any duplicate scores, slash the copied models owners
         grouped_duplicated_hotkeys = self.group_duplicate_scores(hotkeys_to_slash)

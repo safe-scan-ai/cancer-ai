@@ -113,7 +113,7 @@ class Validator(BaseValidatorNeuron):
                 continue
 
             hotkey = str(hotkey)
-            bt.logging.debug(f"Downloading model {i+1}/{len(self.hotkeys)} from hotkey {hotkey}")
+            bt.logging.debug(f"Downloading metadata {i+1}/{len(self.hotkeys)} from hotkey {hotkey}")
             try:
                 uid = self.metagraph.hotkeys.index(hotkey)
                 chain_model_metadata = await self.chain_models.retrieve_model_metadata(hotkey, uid)
