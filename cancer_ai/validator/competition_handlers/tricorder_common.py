@@ -630,19 +630,32 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
 
     def calculate_score(self, metrics: Dict[str, float]) -> float:
         """Calculate final competition score (0-1)."""
-        # Prediction quality (accuracy + weighted F1)
-        prediction_score = (
-            ACCURACY_WEIGHT * metrics["accuracy"]
-            + WEIGHTED_F1_WEIGHT * metrics["weighted_f1"]
-        )
+        import bittensor as bt
+        
+        try:
+            bt.logging.debug(f"TRICORDER: calculate_score called with metrics={metrics}")
+            bt.logging.debug(f"TRICORDER: Scoring weights - ACCURACY_WEIGHT={ACCURACY_WEIGHT}, WEIGHTED_F1_WEIGHT={WEIGHTED_F1_WEIGHT}, PREDICTION_WEIGHT={PREDICTION_WEIGHT}, EFFICIENCY_WEIGHT={EFFICIENCY_WEIGHT}")
+            
+            # Prediction quality (accuracy + weighted F1)
+            prediction_score = (
+                ACCURACY_WEIGHT * metrics["accuracy"]
+                + WEIGHTED_F1_WEIGHT * metrics["weighted_f1"]
+            )
+            bt.logging.debug(f"TRICORDER: prediction_score = {ACCURACY_WEIGHT} * {metrics['accuracy']} + {WEIGHTED_F1_WEIGHT} * {metrics['weighted_f1']} = {prediction_score:.6f}")
 
-        # Efficiency score
-        efficiency_score = metrics.get("efficiency", 1.0)  # Default to max if not set
+            # Efficiency score
+            efficiency_score = metrics.get("efficiency", 1.0)  # Default to max if not set
+            bt.logging.debug(f"TRICORDER: efficiency_score from metrics = {efficiency_score:.6f}")
 
-        final_score = (
-            PREDICTION_WEIGHT * prediction_score + EFFICIENCY_WEIGHT * efficiency_score
-        )
-        return final_score
+            final_score = (
+                PREDICTION_WEIGHT * prediction_score + EFFICIENCY_WEIGHT * efficiency_score
+            )
+            bt.logging.debug(f"TRICORDER: final_score = {PREDICTION_WEIGHT} * {prediction_score:.6f} + {EFFICIENCY_WEIGHT} * {efficiency_score:.6f} = {final_score:.6f}")
+            
+            return final_score
+        except Exception as e:
+            bt.logging.error(f"TRICORDER: ERROR in calculate_score: {e}, metrics: {metrics}", exc_info=True)
+            return 0.0
 
     def get_model_result(
         self,
@@ -652,10 +665,16 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         model_size_mb: float = None,
     ) -> TricorderEvaluationResult:
         """Evaluate model predictions and return detailed results."""
+        import bittensor as bt
+        
         try:
+            bt.logging.debug(f"TRICORDER: get_model_result called with y_test len={len(y_test)}, y_pred len={len(y_pred)}, model_size_mb={model_size_mb}")
+            
             # Convert to numpy arrays
             y_test = np.array(y_test)
             y_pred = np.array(y_pred)
+            
+            bt.logging.debug(f"TRICORDER: Converted to numpy - y_test shape={y_test.shape}, y_pred shape={y_pred.shape}")
 
             # Define all possible class labels
             labels = list(range(len(self.CLASS_INFO)))
@@ -667,6 +686,7 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 y_pred_classes = np.argmax(y_pred, axis=1)
 
             # Calculate basic metrics
+            bt.logging.debug("TRICORDER: Calculating basic metrics...")
             accuracy = float(accuracy_score(y_test, y_pred_classes))
             precision = float(
                 precision_score(
@@ -695,15 +715,22 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                     zero_division=0,
                 )
             )
+            bt.logging.debug(f"TRICORDER: Basic metrics - accuracy={accuracy:.6f}, precision={precision:.6f}, recall={recall:.6f}, fbeta={fbeta:.6f}")
 
             # Calculate F1 scores by class, ensuring all classes are included
+            bt.logging.debug("TRICORDER: Calculating F1 scores by class...")
             f1_scores = f1_score(
                 y_test, y_pred_classes, labels=labels, average=None, zero_division=0
             )
+            bt.logging.debug(f"TRICORDER: F1 scores by class: {f1_scores}")
 
             # Calculate risk category scores and weighted F1
+            bt.logging.debug("TRICORDER: Calculating risk category scores...")
             category_scores = self._calculate_risk_category_scores(f1_scores)
+            bt.logging.debug(f"TRICORDER: Risk category scores: {category_scores}")
+            
             weighted_f1 = self._calculate_weighted_f1(category_scores)
+            bt.logging.debug(f"TRICORDER: Weighted F1: {weighted_f1:.6f}")
 
             # Log important metrics
             bt.logging.info(f"Model evaluation results:")
@@ -713,31 +740,44 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 bt.logging.info(f"- {category.value} F1: {score:.4f}")
 
             # Calculate efficiency score based on model size
+            bt.logging.debug(f"TRICORDER: Calculating efficiency score with model_size_mb={model_size_mb}")
             efficiency_score = 1.0  # Default to max if size not provided
             if model_size_mb is not None:
+                bt.logging.debug(f"TRICORDER: Model size provided, calculating efficiency (MIN={MIN_MODEL_SIZE_MB}, MAX={MAX_MODEL_SIZE_MB})")
                 if model_size_mb <= MIN_MODEL_SIZE_MB:
                     efficiency_score = 1.0  # Full efficiency score
+                    bt.logging.debug(f"TRICORDER: Model size <= MIN, efficiency=1.0")
                 elif model_size_mb <= MAX_MODEL_SIZE_MB:
                     # Linear decay from 1.0 to 0.0 between MIN and MAX MB
                     efficiency_score = (
                         MAX_MODEL_SIZE_MB - model_size_mb
                     ) / EFFICIENCY_RANGE_MB
+                    bt.logging.debug(f"TRICORDER: Model size in range, efficiency={efficiency_score:.6f}")
                 else:
                     efficiency_score = 0.0  # No efficiency score above MAX MB
+                    bt.logging.debug(f"TRICORDER: Model size > MAX, efficiency=0.0")
 
                 bt.logging.info(
                     f"- Model size: {model_size_mb:.1f}MB, Efficiency score: {efficiency_score:.2f}"
                 )
+            else:
+                bt.logging.debug("TRICORDER: No model size provided, using default efficiency=1.0")
 
             # Calculate final score using calculate_score method
             # Round metrics to ensure deterministic scoring across different hardware
+            bt.logging.debug("TRICORDER: Preparing metrics for final score calculation...")
             metrics = {
                 "accuracy": round(accuracy, 6),
                 "weighted_f1": round(weighted_f1, 6),
                 "efficiency": round(efficiency_score, 6),
             }
+            bt.logging.info(f"TRICORDER: Final metrics before calculate_score: {metrics}")
+            
             score = self.calculate_score(metrics)
+            bt.logging.info(f"TRICORDER: calculate_score returned: {score:.6f}")
+            
             # Create result object
+            bt.logging.debug("TRICORDER: Creating TricorderEvaluationResult object...")
             result = TricorderEvaluationResult(
                 tested_entries=len(y_test),
                 run_time_s=run_time_s,
@@ -757,16 +797,23 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 score=score,
             )
 
+            bt.logging.info(f"TRICORDER: Result created successfully with score={result.score:.6f}")
             return result
 
         except Exception as e:
             error_msg = f"Error in get_model_result: {str(e)}"
-            bt.logging.error(error_msg, exc_info=True)
-            return TricorderEvaluationResult(
+            bt.logging.error("TRICORDER: EXCEPTION in get_model_result!", exc_info=True)
+            bt.logging.error(f"TRICORDER: Exception details - {error_msg}")
+            bt.logging.error(f"TRICORDER: y_test available: {'y_test' in locals()}, y_pred available: {'y_pred' in locals()}")
+            bt.logging.error(f"TRICORDER: model_size_mb: {model_size_mb}, run_time_s: {run_time_s}")
+            
+            result = TricorderEvaluationResult(
                 tested_entries=len(y_test) if "y_test" in locals() else 0,
                 run_time_s=run_time_s,
                 error=error_msg,
             )
+            bt.logging.error(f"TRICORDER: Returning error result with score={result.score}")
+            return result
 
     def get_comparable_result_fields(self) -> tuple[str, ...]:
         """Field names for get_comparable_result, in order."""

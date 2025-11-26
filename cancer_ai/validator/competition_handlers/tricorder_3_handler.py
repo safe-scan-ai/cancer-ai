@@ -119,27 +119,37 @@ class Tricorder3CompetitionHandler(BaseTricorderCompetitionHandler):
         Returns:
             A dictionary mapping model_id to its efficiency_score (0.0-1.0).
         """
+        import bittensor as bt
+        
+        bt.logging.debug(f"TRICORDER-3: calculate_efficiency_scores called with {len(model_sizes_mb)} models")
+        bt.logging.debug(f"TRICORDER-3: Efficiency thresholds - MIN={MIN_MODEL_SIZE_MB}MB, MAX={MAX_MODEL_SIZE_MB}MB, RANGE={EFFICIENCY_RANGE_MB}MB")
+        
         efficiency_scores = {}
         
         for model_id in model_sizes_mb:
             # Calculate size score
             size_mb = model_sizes_mb[model_id]
+            bt.logging.debug(f"TRICORDER-3: Processing {model_id} with size={size_mb:.2f}MB")
+            
             if size_mb <= MIN_MODEL_SIZE_MB:
                 size_score = 1.0
+                bt.logging.debug(f"TRICORDER-3: {model_id} size <= MIN, size_score=1.0")
             elif size_mb <= MAX_MODEL_SIZE_MB:
                 size_score = (MAX_MODEL_SIZE_MB - size_mb) / EFFICIENCY_RANGE_MB
+                bt.logging.debug(f"TRICORDER-3: {model_id} size in range, size_score={size_score:.6f} = ({MAX_MODEL_SIZE_MB} - {size_mb}) / {EFFICIENCY_RANGE_MB}")
             else:
                 size_score = 0.0
+                bt.logging.debug(f"TRICORDER-3: {model_id} size > MAX, size_score=0.0")
             
             # Deterministic efficiency score based only on size
             efficiency_score = size_score
             efficiency_scores[model_id] = efficiency_score
             
-            import bittensor as bt
-            bt.logging.debug(
-                f"Efficiency for {model_id}: size_score={size_score:.3f}, final_efficiency={efficiency_score:.3f}"
+            bt.logging.info(
+                f"TRICORDER-3: Efficiency for {model_id}: size={size_mb:.2f}MB, score={efficiency_score:.6f}"
             )
         
+        bt.logging.debug(f"TRICORDER-3: Calculated efficiency scores for {len(efficiency_scores)} models")
         return efficiency_scores
 
     def update_results_with_efficiency(
@@ -169,27 +179,35 @@ class Tricorder3CompetitionHandler(BaseTricorderCompetitionHandler):
         
         # Update results
         updated_results = []
+        import bittensor as bt
+        
         for result, model_id in zip(results, model_ids):
-            # Create a copy to avoid modifying original
-            updated_result = TricorderEvaluationResult(**result.dict())
-            
-            # Update efficiency score
-            updated_result.efficiency_score = efficiency_scores.get(model_id, 0.0)
-            
-            # Recalculate final score
-            metrics = {
-                "accuracy": updated_result.accuracy,
-                "weighted_f1": updated_result.weighted_f1,
-                "efficiency": updated_result.efficiency_score,
-            }
-            updated_result.score = self.calculate_score(metrics)
-            
-            updated_results.append(updated_result)
-            
-            import bittensor as bt
-            bt.logging.info(
-                f"Updated {model_id}: efficiency={updated_result.efficiency_score:.3f}, "
-                f"final_score={updated_result.score:.3f}"
-            )
+            try:
+                # Create a copy to avoid modifying original
+                updated_result = TricorderEvaluationResult(**result.dict())
+                
+                # Update efficiency score
+                updated_result.efficiency_score = efficiency_scores.get(model_id, 0.0)
+                
+                # Recalculate final score
+                metrics = {
+                    "accuracy": updated_result.accuracy,
+                    "weighted_f1": updated_result.weighted_f1,
+                    "efficiency": updated_result.efficiency_score,
+                }
+                
+                bt.logging.debug(f"Recalculating score for {model_id} with metrics: {metrics}")
+                updated_result.score = self.calculate_score(metrics)
+                
+                updated_results.append(updated_result)
+                
+                bt.logging.info(
+                    f"Updated {model_id}: efficiency={updated_result.efficiency_score:.3f}, "
+                    f"final_score={updated_result.score:.3f}"
+                )
+            except Exception as e:
+                bt.logging.error(f"Error updating result for {model_id}: {e}", exc_info=True)
+                # Keep original result if update fails
+                updated_results.append(result)
         
         return updated_results
