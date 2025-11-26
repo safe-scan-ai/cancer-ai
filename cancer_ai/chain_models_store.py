@@ -143,7 +143,7 @@ class ChainModelMetadata:
             )
 
         model = ChainMinerModel.from_compressed_str(chain_str)
-        bt.logging.debug(f"Model: {model}")
+        bt.logging.trace(f"Model: {model}")
         if model is None:
             raise ValueError(
                 f"Metadata might be in old format or invalid for hotkey '{hotkey}'. Raw value: {chain_str}"

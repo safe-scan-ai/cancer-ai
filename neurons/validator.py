@@ -189,8 +189,8 @@ class Validator(BaseValidatorNeuron):
         self.update_scores(competition_weights, 0.000001, 0.000002)
 
 
-    async def monitor_datasets(self):
-        """Main validation logic, triggered by new datastes on huggingface"""
+    async def monitor_datasets(self) -> None:
+        """Main validation logic, triggered by new datasets being pushed to huggingface repositories for evaluation"""
         
         if self.last_monitor_datasets is not None and (
                 time.time() - self.last_monitor_datasets
@@ -214,7 +214,7 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info("Fetched and synced organization data references")
         
         try:
-            data_packages: list[NewDatasetFile] = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+            data_packages = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
         except Exception as e:
             stack_trace = traceback.format_exc()
             bt.logging.error(f"Error checking for new dataset files: {e}\n Stack trace: {stack_trace}")
@@ -225,12 +225,23 @@ class Validator(BaseValidatorNeuron):
             return
         
         bt.logging.info(f"Found {len(data_packages)} new data packages")
+        await self.run_competition_for_data_packages(data_packages)
+
         
+    async def run_competition_for_data_packages(self, data_packages: list[NewDatasetFile]):
+
+        if not data_packages:
+            bt.logging.info("No data packages to process.")
+            return
+
         for data_package in data_packages:
+            bt.logging.info("====== STARTING COMPETITION ======")
+            bt.logging.info("== Dataset: %s", data_package.dataset_hf_filename)
+            bt.logging.info("== Competition ID: %s", data_package.competition_id)
+            bt.logging.info("==================================")
             competition_id = data_package.competition_id
             competition_uuid = uuid4().hex
             competition_start_time = datetime.datetime.now()
-            bt.logging.info(f"Starting competition for {competition_id}")    
             competition_manager = CompetitionManager(
                 config=self.config,
                 subtensor=self.subtensor,
@@ -252,18 +263,19 @@ class Validator(BaseValidatorNeuron):
                 stack_trace = traceback.format_exc()
                 bt.logging.error(f"Cannot run {competition_id}: {stack_trace}")
                 try:
-                    wandb.init(project=competition_id, group="competition_evaluation")
-                    error_log = WanDBLogBase(
-                        uuid=competition_uuid,
-                        log_type="competition_error",
-                        competition_id=competition_id,
-                        run_time_s=(datetime.datetime.now() - competition_start_time).seconds,
-                        validator_hotkey=self.wallet.hotkey.ss58_address,
-                        errors=str(stack_trace),
-                        dataset_filename=data_package.dataset_hf_filename
-                    )
-                    wandb.log(error_log.model_dump())
-                    wandb.finish()
+                    if not self.config.wandb.off:
+                        wandb.init(project=competition_id, group="competition_evaluation")
+                        error_log = WanDBLogBase(
+                            uuid=competition_uuid,
+                            log_type="competition_error",
+                            competition_id=competition_id,
+                            run_time_s=(datetime.datetime.now() - competition_start_time).seconds,
+                            validator_hotkey=self.wallet.hotkey.ss58_address,
+                            errors=str(stack_trace),
+                            dataset_filename=data_package.dataset_hf_filename
+                        )
+                        wandb.log(error_log.model_dump())
+                        wandb.finish()
                 except Exception as wandb_error:
                     bt.logging.warning(f"Failed to log to wandb: {wandb_error}")
                 continue
@@ -281,24 +293,25 @@ class Validator(BaseValidatorNeuron):
 
             average_winning_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
             try:
-                winner_log = WanDBLogCompetitionWinners(
-                    uuid=competition_uuid,
-                    competition_id=competition_id,
+                if not self.config.wandb.off:
+                    winner_log = WanDBLogCompetitionWinners(
+                        uuid=competition_uuid,
+                        competition_id=competition_id,
 
-                    competition_winning_hotkey=winning_hotkey,
-                    competition_winning_uid=self.metagraph.hotkeys.index(winning_hotkey),
+                        competition_winning_hotkey=winning_hotkey,
+                        competition_winning_uid=self.metagraph.hotkeys.index(winning_hotkey),
 
-                    average_winning_hotkey=average_winning_hotkey,
-                    average_winning_uid=self.metagraph.hotkeys.index(average_winning_hotkey),
+                        average_winning_hotkey=average_winning_hotkey,
+                        average_winning_uid=self.metagraph.hotkeys.index(average_winning_hotkey),
 
-                    validator_hotkey=self.wallet.hotkey.ss58_address,
-                    model_link=winning_model_link,
-                    dataset_filename=data_package.dataset_hf_filename,
-                    run_time_s=(datetime.datetime.now() - competition_start_time).seconds
-                )
-                wandb.init(project=competition_id, group="competition_evaluation")
-                wandb.log(winner_log.model_dump())
-                wandb.finish()
+                        validator_hotkey=self.wallet.hotkey.ss58_address,
+                        model_link=winning_model_link,
+                        dataset_filename=data_package.dataset_hf_filename,
+                        run_time_s=(datetime.datetime.now() - competition_start_time).seconds
+                    )
+                    wandb.init(project=competition_id, group="competition_evaluation")
+                    wandb.log(winner_log.model_dump())
+                    wandb.finish()
             except Exception as wandb_error:
                 bt.logging.warning(f"Failed to log competition winners to wandb: {wandb_error}")
 
@@ -308,8 +321,11 @@ class Validator(BaseValidatorNeuron):
 
             # Logging results
             try:
-                wandb.init(project=competition_id, group="model_evaluation")
-                wandb_initialized = True
+                if not self.config.wandb.off:
+                    wandb.init(project=competition_id, group="model_evaluation")
+                    wandb_initialized = True
+                else:
+                    wandb_initialized = False
             except Exception as wandb_error:
                 bt.logging.warning(f"Failed to initialize wandb for model evaluation: {wandb_error}")
                 wandb_initialized = False
@@ -380,6 +396,10 @@ class Validator(BaseValidatorNeuron):
             # Save state only after successful competition evaluation
             # This ensures that org_latest_updates are persisted only for successfully processed packages
             self.save_state()
+
+            bt.logging.info(f"Successfully completed competition for {competition_id}")
+            bt.logging.info("====== COMPETITION FINISHED ======")
+            bt.logging.info("==================================")
     
 
     def update_scores(

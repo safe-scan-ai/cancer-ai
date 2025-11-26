@@ -100,14 +100,13 @@ class ModelDBController:
                 model_record = self.convert_chain_model_to_db_model(chain_miner_model, hotkey)
                 session.add(model_record)
                 session.commit()
-                bt.logging.debug(f"Successfully added DB model info for hotkey {hotkey} into the DB.")
+                bt.logging.debug(f"Added DB model for hotkey {hotkey} (competition {model_record.competition_id}).")
             except Exception as e:
                 session.rollback()
                 raise e
             finally:
                 session.close()
         else:
-            bt.logging.debug(f"DB model for hotkey {hotkey} already exists, proceeding with updating the model info.")
             self.update_model(chain_miner_model, hotkey)
 
     def get_model(self, hotkey: str) -> ChainMinerModel | None:
