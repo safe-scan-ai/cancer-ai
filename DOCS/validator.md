@@ -22,7 +22,7 @@ Key features of the script include:
 
 ### System requirements
 
-- **Python 3.12 and virtualenv**: The script is written in Python and requires Python 3.10 to run.
+- **Python 3.12 and virtualenv**: The script is written in Python and requires Python 3.12 to run.
 - **PM2**: PM2 must be installed and available on your system. It is used to manage the validator process.
 - **zip and unzip**
 
