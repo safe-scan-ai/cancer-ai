@@ -98,7 +98,7 @@ cd
 git clone https://github.com/safe-scan-ai/cancer-ai
 cd cancer-ai
 
-virtualenv --python=3.10 venv
+virtualenv --python=3.12 venv
 source venv/bin/activate
 pip install -U setuptools
 pip install -r requirements.txt
