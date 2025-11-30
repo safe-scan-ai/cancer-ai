@@ -3,6 +3,8 @@ from typing import TypedDict, List, Dict, Any, AsyncGenerator, Tuple, Optional
 from abc import ABC, abstractmethod
 
 import os
+import json
+import hashlib
 import pickle
 from pathlib import Path
 from collections import defaultdict
@@ -504,34 +506,21 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         self,
     ) -> AsyncGenerator[Tuple[np.ndarray, np.ndarray], None]:
         """Generator that yields preprocessed data chunks with preprocessed metadata"""
-        bt.logging.debug(
-            f"TRICORDER: Starting data generator with {len(self.preprocessed_chunks)} chunks"
-        )
 
         for i, chunk_file in enumerate(self.preprocessed_chunks):
-            bt.logging.debug(f"TRICORDER: Processing chunk {i}: {chunk_file}")
+            bt.logging.trace(f"TRICORDER: Processing chunk {i}: {chunk_file}")
             if os.path.exists(chunk_file):
                 try:
                     # Load image data
-                    bt.logging.debug(f"TRICORDER: Loading image data from {chunk_file}")
                     with open(chunk_file, "rb") as f:
                         chunk_data = pickle.load(f)
-                    bt.logging.debug(
-                        f"TRICORDER: Loaded chunk data shape: {chunk_data.shape}"
-                    )
 
                     # Load corresponding metadata
                     metadata_file = str(Path(chunk_file).parent / f"metadata_{i}.pkl")
-                    bt.logging.debug(
-                        f"TRICORDER: Loading metadata from {metadata_file}"
-                    )
                     chunk_metadata = []
                     if os.path.exists(metadata_file):
                         with open(metadata_file, "rb") as f:
                             chunk_metadata = pickle.load(f)
-                        bt.logging.debug(
-                            f"TRICORDER: Loaded {len(chunk_metadata)} metadata entries"
-                        )
                     else:
                         # Default metadata if file doesn't exist
                         bt.logging.warning(
@@ -674,7 +663,6 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
             y_test = np.array(y_test)
             y_pred = np.array(y_pred)
             
-            bt.logging.debug(f"TRICORDER: Converted to numpy - y_test shape={y_test.shape}, y_pred shape={y_pred.shape}")
 
             # Define all possible class labels
             labels = list(range(len(self.CLASS_INFO)))
@@ -686,7 +674,6 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 y_pred_classes = np.argmax(y_pred, axis=1)
 
             # Calculate basic metrics
-            bt.logging.debug("TRICORDER: Calculating basic metrics...")
             accuracy = float(accuracy_score(y_test, y_pred_classes))
             precision = float(
                 precision_score(
@@ -715,47 +702,32 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                     zero_division=0,
                 )
             )
-            bt.logging.debug(f"TRICORDER: Basic metrics - accuracy={accuracy:.6f}, precision={precision:.6f}, recall={recall:.6f}, fbeta={fbeta:.6f}")
-
-            # Calculate F1 scores by class, ensuring all classes are included
-            bt.logging.debug("TRICORDER: Calculating F1 scores by class...")
             f1_scores = f1_score(
                 y_test, y_pred_classes, labels=labels, average=None, zero_division=0
             )
-            bt.logging.debug(f"TRICORDER: F1 scores by class: {f1_scores}")
 
             # Calculate risk category scores and weighted F1
-            bt.logging.debug("TRICORDER: Calculating risk category scores...")
             category_scores = self._calculate_risk_category_scores(f1_scores)
-            bt.logging.debug(f"TRICORDER: Risk category scores: {category_scores}")
             
             weighted_f1 = self._calculate_weighted_f1(category_scores)
-            bt.logging.debug(f"TRICORDER: Weighted F1: {weighted_f1:.6f}")
 
             # Log important metrics
-            bt.logging.info(f"Model evaluation results:")
-            bt.logging.info(f"- Accuracy: {accuracy:.4f}")
-            bt.logging.info(f"- Weighted F1: {weighted_f1:.4f}")
+            bt.logging.info(f"Model evaluation results:: Accuracy: {accuracy:.4f}, Weighted F1: {weighted_f1:.4f}")
             for category, score in category_scores.items():
                 bt.logging.info(f"- {category.value} F1: {score:.4f}")
 
-            # Calculate efficiency score based on model size
-            bt.logging.debug(f"TRICORDER: Calculating efficiency score with model_size_mb={model_size_mb}")
+        
             efficiency_score = 1.0  # Default to max if size not provided
             if model_size_mb is not None:
-                bt.logging.debug(f"TRICORDER: Model size provided, calculating efficiency (MIN={MIN_MODEL_SIZE_MB}, MAX={MAX_MODEL_SIZE_MB})")
                 if model_size_mb <= MIN_MODEL_SIZE_MB:
                     efficiency_score = 1.0  # Full efficiency score
-                    bt.logging.debug(f"TRICORDER: Model size <= MIN, efficiency=1.0")
                 elif model_size_mb <= MAX_MODEL_SIZE_MB:
                     # Linear decay from 1.0 to 0.0 between MIN and MAX MB
                     efficiency_score = (
                         MAX_MODEL_SIZE_MB - model_size_mb
                     ) / EFFICIENCY_RANGE_MB
-                    bt.logging.debug(f"TRICORDER: Model size in range, efficiency={efficiency_score:.6f}")
                 else:
                     efficiency_score = 0.0  # No efficiency score above MAX MB
-                    bt.logging.debug(f"TRICORDER: Model size > MAX, efficiency=0.0")
 
                 bt.logging.info(
                     f"- Model size: {model_size_mb:.1f}MB, Efficiency score: {efficiency_score:.2f}"
@@ -765,7 +737,6 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
 
             # Calculate final score using calculate_score method
             # Round metrics to ensure deterministic scoring across different hardware
-            bt.logging.debug("TRICORDER: Preparing metrics for final score calculation...")
             metrics = {
                 "accuracy": round(accuracy, 6),
                 "weighted_f1": round(weighted_f1, 6),
@@ -828,15 +799,32 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         if not isinstance(result, TricorderEvaluationResult):
             return tuple()
 
-        # Round floats to handle potential floating point inaccuracies
-        return (
-            round(result.accuracy, 6),
-            round(result.weighted_f1, 6),
-            # Sort risk category scores by key to ensure consistent order
-            tuple(
-                sorted(
-                    (k.value, round(v, 6))
-                    for k, v in result.risk_category_scores.items()
-                )
-            ),
-        )
+        
+        predictions_array = np.asarray(result.predictions_raw, dtype=float)
+        if predictions_array.ndim == 1:
+            predictions_array = predictions_array.reshape(-1, 1)
+
+        num_samples = int(predictions_array.shape[0])
+        if num_samples == 0:
+            return (
+                round(result.accuracy, 6),
+                round(result.weighted_f1, 6),
+            )
+
+        max_signature_samples = 200
+        step = max(1, num_samples // max_signature_samples)
+        indices = list(range(0, num_samples, step))
+
+        top_classes = np.argmax(predictions_array, axis=1)
+        top_probs = predictions_array[np.arange(num_samples), top_classes]
+
+        signature: list[tuple[int, float]] = []
+        for idx in indices:
+            class_id = int(top_classes[idx])
+            prob = round(float(top_probs[idx]), 4)
+            signature.append((class_id, prob))
+
+        encoded = json.dumps(signature, separators=(",", ":"), sort_keys=False)
+        pred_hash = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+        return (pred_hash,)

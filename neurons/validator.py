@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # The MIT License (MIT)
 # Copyright 2023 Yuma Rao
 # Copyright 2024 Safe-Scan
@@ -33,23 +34,19 @@ import numpy as np
 import wandb
 
 from cancer_ai.chain_models_store import ChainModelMetadata
-from cancer_ai.validator.rewarder import CompetitionResultsStore
+from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION
 from cancer_ai.base.base_validator import BaseValidatorNeuron
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
-    fetch_organization_data_references,
-    sync_organizations_data_references,
     check_for_new_dataset_files,
     get_local_dataset,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.competition_manager import CompetitionManager
-from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile, WanDBLogModelBase
-from cancer_ai.validator.models import WanDBLogCompetitionWinners, WanDBLogBase, WanDBLogModelErrorEntry
+from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
+from cancer_ai.validator.models import WanDBLogBase
+from cancer_ai.validator.validator_helpers import setup_organization_data_references
 from huggingface_hub import HfApi
-
-BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"
-BLACKLIST_FILE_PATH_TESTNET = "config/hotkey_blacklist_testnet.json"
 
 class Validator(BaseValidatorNeuron):
     
@@ -72,7 +69,7 @@ class Validator(BaseValidatorNeuron):
     async def concurrent_forward(self):
 
         coroutines = [
-            self.refresh_miners(),
+            # self.refresh_miners(),
         ]
         if self.config.filesystem_evaluation:
             coroutines.append(self.filesystem_test_evaluation())
@@ -84,56 +81,19 @@ class Validator(BaseValidatorNeuron):
 
 
     async def refresh_miners(self):
-        """
-        Downloads miner's models from the chain and stores them in the DB
-        """
-
-        if self.last_miners_refresh is not None and (
-            time.time() - self.last_miners_refresh
-            < self.config.miners_refresh_interval * 60
-        ):
-            bt.logging.trace("Skipping model refresh, not enough time passed")
+        """Downloads miner's models from the chain and stores them in the DB."""
+        from cancer_ai.validator.validator_helpers import (
+            should_refresh_miners, load_blacklisted_hotkeys, process_miner_models
+        )
+        
+        if not should_refresh_miners(self.last_miners_refresh, self.config.miners_refresh_interval):
             return
 
-        bt.logging.info("Synchronizing miners from the chain")
-        bt.logging.info(f"Amount of hotkeys: {len(self.hotkeys)}")
-
-        blacklist_file = (
-            BLACKLIST_FILE_PATH_TESTNET
-            if self.config.test_mode
-            else BLACKLIST_FILE_PATH
-        )
-
-        with open(blacklist_file, "r", encoding="utf-8") as f:
-            BLACKLISTED_HOTKEYS = json.load(f)
+        bt.logging.info(f"Synchronizing {len(self.hotkeys)} miners from the chain")
+        blacklisted_hotkeys = load_blacklisted_hotkeys(self.config.test_mode)
         
-        for i, hotkey in enumerate(self.hotkeys):
-            if hotkey in BLACKLISTED_HOTKEYS:
-                bt.logging.debug(f"Skipping blacklisted hotkey {hotkey}")
-                continue
-
-            hotkey = str(hotkey)
-            bt.logging.debug(f"Downloading metadata {i+1}/{len(self.hotkeys)} from hotkey {hotkey}")
-            try:
-                uid = self.metagraph.hotkeys.index(hotkey)
-                chain_model_metadata = await self.chain_models.retrieve_model_metadata(hotkey, uid)
-            except Exception as e:
-                bt.logging.warning(f"Cannot get miner model for hotkey {hotkey} from the chain: {e}. Skipping.")
-                continue
-
-            try:
-                self.db_controller.add_model(chain_model_metadata, hotkey)
-            except Exception as e:
-                # Check if it's a model_hash length constraint error
-                if "CHECK constraint failed: LENGTH(model_hash) <= 8" in str(e):
-                    bt.logging.error(
-                        f"Invalid model hash for hotkey {hotkey}: "
-                        f"Hash '{chain_model_metadata.model_hash}' exceeds 8-character limit. "
-                        f"Model info will not be persisted to database."
-                    )
-                else:
-                    bt.logging.error(f"An error occured while trying to persist the model info: {e}", exc_info=True)
-
+        await process_miner_models(self, blacklisted_hotkeys)
+        
         self.db_controller.clean_old_records(self.hotkeys)
         self.last_miners_refresh = time.time()
         self.save_state()
@@ -144,51 +104,10 @@ class Validator(BaseValidatorNeuron):
         if not data_package:
             bt.logging.info("No new data packages found.")
             return
-        competition_manager = CompetitionManager(
-                config=self.config,
-                subtensor=self.subtensor,
-                hotkeys=self.hotkeys,
-                validator_hotkey=self.hotkey,
-                competition_id=data_package.competition_id,
-                dataset_hf_repo="",
-                dataset_hf_filename = data_package.dataset_hf_filename,
-                dataset_hf_repo_type="dataset",
-                db_controller = self.db_controller,
-                test_mode = self.config.test_mode,
-                local_fs_mode=True,
-            )
-        try:
-            winning_hotkey, _ = await competition_manager.evaluate()
-            if not winning_hotkey:
-                bt.logging.error("NO WINNING HOTKEY")
-        except Exception as e:
-            bt.logging.error(f"Error evaluating {data_package.dataset_hf_filename}: {e}", exc_info=True)
-            return
-
-        models_results = competition_manager.results
         
-      
-        try:
-            top_hotkey = self.competition_results_store.get_top_hotkey(data_package.competition_id)
-        except ValueError:
-            bt.logging.warning(f"No top hotkey available for competition {data_package.competition_id}")
-            top_hotkey = None
-        
-        
-        results_file_name = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{data_package.competition_id}.csv"
-        await self.log_results_to_csv(results_file_name, data_package, top_hotkey, models_results)
-        if winning_hotkey:
-            bt.logging.info(f"Competition result for {data_package.competition_id}: {winning_hotkey}")
+        await self.run_competition_for_data_package(data_package, local_mode=True)
 
-
-        # bt.logging.warning("Competition results store before update")
-        # bt.logging.warning(self.competition_results_store.model_dump_json())
-        competition_weights = await self.competition_results_store.update_competition_results(data_package.competition_id, models_results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller)
-        # bt.logging.warning("Competition results store after update")
-        # bt.logging.warning(self.competition_results_store.model_dump_json())
-        self.update_scores(competition_weights, 0.000001, 0.000002)
-
-
+    
     async def monitor_datasets(self) -> None:
         """Main validation logic, triggered by new datasets being pushed to huggingface repositories for evaluation"""
         
@@ -200,208 +119,143 @@ class Validator(BaseValidatorNeuron):
         self.last_monitor_datasets = time.time()
         bt.logging.info("Starting monitor_datasets")
 
+        # Setup organization data references (cached) - always refresh to ensure latest data
         try:
-            yaml_data = await fetch_organization_data_references(
-                self.config.datasets_config_hf_repo_id,
-                self.hf_api,
-            )
-            await sync_organizations_data_references(yaml_data)
+            self.organizations_data_references = await setup_organization_data_references(self)
         except Exception as e:
             bt.logging.error(f"Error in monitor_datasets initial setup: {e}\n Stack trace: {traceback.format_exc()}")
             return
         
-        self.organizations_data_references = OrganizationDataReferenceFactory.get_instance()
-        bt.logging.info("Fetched and synced organization data references")
+        # Initialize org_latest_updates with all organization IDs if not present or empty
+        if not hasattr(self, 'org_latest_updates') or self.org_latest_updates is None:
+            self.org_latest_updates = {}
         
+        # Ensure org_latest_updates contains all current organizations
+        for org in self.organizations_data_references.organizations:
+            if org.organization_id not in self.org_latest_updates:
+                self.org_latest_updates[org.organization_id] = None
+        
+        bt.logging.info(f"org_latest_updates contains {len(self.org_latest_updates)} organizations")
+        
+        # Check for new dataset files
         try:
+            bt.logging.info(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
             data_packages = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+            bt.logging.info(f"Found data packages: {data_packages}")
         except Exception as e:
-            stack_trace = traceback.format_exc()
-            bt.logging.error(f"Error checking for new dataset files: {e}\n Stack trace: {stack_trace}")
+            bt.logging.error(f"Error checking for new dataset files: {e}\n Stack trace: {traceback.format_exc()}")
             return
         
         if not data_packages:
-            bt.logging.info("No new data packages found.")
+            bt.logging.info("No new data packages found")
             return
         
-        bt.logging.info(f"Found {len(data_packages)} new data packages")
-        await self.run_competition_for_data_packages(data_packages)
-
+        bt.logging.info(f"Processing {len(data_packages)} new data packages")
         
-    async def run_competition_for_data_packages(self, data_packages: list[NewDatasetFile]):
-
-        if not data_packages:
-            bt.logging.info("No data packages to process.")
-            return
-
+        # Refresh miners to get latest models before competition evaluation
+        bt.logging.info("Refreshing miners for new competition evaluation")
+        await self.refresh_miners()
         for data_package in data_packages:
-            bt.logging.info("====== STARTING COMPETITION ======")
-            bt.logging.info("== Dataset: %s", data_package.dataset_hf_filename)
-            bt.logging.info("== Competition ID: %s", data_package.competition_id)
-            bt.logging.info("==================================")
-            competition_id = data_package.competition_id
-            competition_uuid = uuid4().hex
-            competition_start_time = datetime.datetime.now()
-            competition_manager = CompetitionManager(
-                config=self.config,
-                subtensor=self.subtensor,
-                hotkeys=self.hotkeys,
-                validator_hotkey=self.hotkey,
-                competition_id=competition_id,
-                dataset_hf_repo=data_package.dataset_hf_repo,
-                dataset_hf_filename=data_package.dataset_hf_filename,
-                dataset_hf_repo_type="dataset",
-                db_controller = self.db_controller,
-                test_mode = self.config.test_mode,
-            )
+            await self.run_competition_for_data_package(data_package)
 
-            winning_hotkey = None
-            try:
-                winning_hotkey, _ = await competition_manager.evaluate()
+        
+    async def run_competition_for_data_package(self, data_package: NewDatasetFile, local_mode: bool = False):
+        competition_id = data_package.competition_id
+        bt.logging.info(f"====== STARTING COMPETITION: {data_package.dataset_hf_filename} ({competition_id}) {'[LOCAL]' if local_mode else '[REMOTE]'} ======")
+        competition_uuid = uuid4().hex
+        competition_start_time = datetime.datetime.now()
+        
+        # Configure CompetitionManager based on mode
+        competition_manager = CompetitionManager(
+            config=self.config,
+            subtensor=self.subtensor,
+            hotkeys=self.hotkeys,
+            validator_hotkey=self.hotkey,
+            competition_id=competition_id,
+            dataset_hf_repo="" if local_mode else data_package.dataset_hf_repo,
+            dataset_hf_filename=data_package.dataset_hf_filename,
+            dataset_hf_repo_type="dataset",
+            db_controller = self.db_controller,
+            test_mode = self.config.test_mode,
+            local_fs_mode=local_mode,
+        )
 
-            except Exception:
-                stack_trace = traceback.format_exc()
-                bt.logging.error(f"Cannot run {competition_id}: {stack_trace}")
-                try:
-                    if not self.config.wandb.off:
-                        wandb.init(project=competition_id, group="competition_evaluation")
-                        error_log = WanDBLogBase(
-                            uuid=competition_uuid,
-                            log_type="competition_error",
-                            competition_id=competition_id,
-                            run_time_s=(datetime.datetime.now() - competition_start_time).seconds,
-                            validator_hotkey=self.wallet.hotkey.ss58_address,
-                            errors=str(stack_trace),
-                            dataset_filename=data_package.dataset_hf_filename
-                        )
-                        wandb.log(error_log.model_dump())
-                        wandb.finish()
-                except Exception as wandb_error:
-                    bt.logging.warning(f"Failed to log to wandb: {wandb_error}")
-                continue
-
-            if not winning_hotkey:
-                bt.logging.warning("Could not determine the winner of competition")
-                continue
-            winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=self.config.models_query_cutoff).hf_link
-
-            
-            # Update competition results
-            bt.logging.info(f"Competition result for {competition_id}: {winning_hotkey}")
-            competition_weights = await self.competition_results_store.update_competition_results(competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller)
-            self.update_scores(competition_weights, 0.0001, 0.0002)
-
-            average_winning_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
+        winning_hotkey = None
+        try:
+            winning_hotkey, _ = await competition_manager.evaluate()
+        except Exception:
+            stack_trace = traceback.format_exc()
+            bt.logging.error(f"Cannot run {competition_id}: {stack_trace}")
             try:
                 if not self.config.wandb.off:
-                    winner_log = WanDBLogCompetitionWinners(
-                        uuid=competition_uuid,
-                        competition_id=competition_id,
-
-                        competition_winning_hotkey=winning_hotkey,
-                        competition_winning_uid=self.metagraph.hotkeys.index(winning_hotkey),
-
-                        average_winning_hotkey=average_winning_hotkey,
-                        average_winning_uid=self.metagraph.hotkeys.index(average_winning_hotkey),
-
-                        validator_hotkey=self.wallet.hotkey.ss58_address,
-                        model_link=winning_model_link,
-                        dataset_filename=data_package.dataset_hf_filename,
-                        run_time_s=(datetime.datetime.now() - competition_start_time).seconds
-                    )
                     wandb.init(project=competition_id, group="competition_evaluation")
-                    wandb.log(winner_log.model_dump())
-                    wandb.finish()
-            except Exception as wandb_error:
-                bt.logging.warning(f"Failed to log competition winners to wandb: {wandb_error}")
-
-            # log results to CSV
-            csv_filename = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{competition_id}.csv"
-            await self.log_results_to_csv(csv_filename, data_package, winning_hotkey, competition_manager.results)
-
-            # Logging results
-            try:
-                if not self.config.wandb.off:
-                    wandb.init(project=competition_id, group="model_evaluation")
-                    wandb_initialized = True
-                else:
-                    wandb_initialized = False
-            except Exception as wandb_error:
-                bt.logging.warning(f"Failed to initialize wandb for model evaluation: {wandb_error}")
-                wandb_initialized = False
-                
-            for miner_hotkey, evaluation_result in competition_manager.results:
-                if miner_hotkey in competition_manager.error_results:
-                    continue
-
-                try:
-                    model = self.db_controller.get_latest_model(
-                        hotkey=miner_hotkey,
-                        cutoff_time=self.config.models_query_cutoff,
+                    error_log = WanDBLogBase(
+                        uuid=competition_uuid,
+                        log_type="competition_error",
+                        competition_id=competition_id,
+                        run_time_s=(datetime.datetime.now() - competition_start_time).seconds,
+                        validator_hotkey=self.wallet.hotkey.ss58_address,
+                        errors=str(stack_trace),
+                        dataset_filename=data_package.dataset_hf_filename
                     )
-                    avg_score = 0.0
-                    if (
-                        data_package.competition_id in self.competition_results_store.average_scores and 
-                        miner_hotkey in self.competition_results_store.average_scores[competition_id]
-                    ):
-                        avg_score = self.competition_results_store.average_scores[competition_id][miner_hotkey]
-                    
-                    if wandb_initialized:
-                        try:
-                            ActualWanDBLogModelEntryClass: WanDBLogModelBase = competition_manager.competition_handler.WanDBLogModelClass
-                            model_log = ActualWanDBLogModelEntryClass(
-                                uuid=competition_uuid,
-                                competition_id=competition_id,
-                                miner_hotkey=miner_hotkey,
-                                uid=self.metagraph.hotkeys.index(miner_hotkey),
-                                validator_hotkey=self.wallet.hotkey.ss58_address,
-                                model_url=model.hf_link,
-                                code_url=model.hf_code_link,
-                                average_score=avg_score,
-                                run_time_s=evaluation_result.run_time_s,
-                                dataset_filename=data_package.dataset_hf_filename,
-                                **evaluation_result.to_log_dict(),
-                            )
-                            wandb.log(model_log.model_dump())
-                        except Exception as wandb_error:
-                            bt.logging.warning(f"Failed to log model results to wandb for hotkey {miner_hotkey}: {wandb_error}")
-                except Exception as e:
-                    bt.logging.error(f"Error processing model results for hotkey {miner_hotkey}: {e}")
-                    continue
-
-            # Logging errors
-            if wandb_initialized:
-                try:
-                    for miner_hotkey, error_message in competition_manager.error_results:
-                        model_log = WanDBLogModelErrorEntry(
-                            uuid=competition_uuid,
-                            competition_id=competition_id,
-                            miner_hotkey=miner_hotkey,
-                            uid=self.metagraph.hotkeys.index(miner_hotkey),
-                            validator_hotkey=self.wallet.hotkey.ss58_address,
-                            dataset_filename=data_package.dataset_hf_filename,
-                            errors=error_message,
-                        )
-                        wandb.log(model_log.model_dump())
-                except Exception as wandb_error:
-                    bt.logging.warning(f"Failed to log error results to wandb: {wandb_error}")
-            
-            # Finish wandb run if it was initialized
-            if wandb_initialized:
-                try:
+                    wandb.log(error_log.model_dump())
                     wandb.finish()
-                except Exception as wandb_error:
-                    bt.logging.warning(f"Failed to finish wandb run: {wandb_error}")
-            
-            # Save state only after successful competition evaluation
-            # This ensures that org_latest_updates are persisted only for successfully processed packages
-            self.save_state()
+            except Exception as wandb_error:
+                bt.logging.warning(f"Failed to log to wandb: {wandb_error}")
+            return
 
-            bt.logging.info(f"Successfully completed competition for {competition_id}")
-            bt.logging.info("====== COMPETITION FINISHED ======")
-            bt.logging.info("==================================")
+        if not winning_hotkey:
+            bt.logging.warning("Could not determine the winner of competition")
+            return
+        
+        # Process competition results
+        await self.process_competition_results(
+            competition_id, competition_uuid, data_package, competition_manager,
+            winning_hotkey, competition_start_time
+        )
+
+        bt.logging.info(f"Successfully completed competition for {competition_id}")
+        bt.logging.info("====== COMPETITION FINISHED ======")
+        bt.logging.info("==================================")
+
+    async def process_competition_results(
+        self,
+        competition_id: str,
+        competition_uuid: str,
+        data_package: NewDatasetFile,
+        competition_manager: CompetitionManager,
+        winning_hotkey: str,
+        competition_start_time: datetime.datetime
+    ):
+        """Process and log competition results."""
+        bt.logging.info(f"Competition result for {competition_id}: {winning_hotkey}")
+        
+        # Get winning model link
+        winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=self.config.models_query_cutoff).hf_link
+        
+        # Update competition results
+        competition_weights = await self.competition_results_store.update_competition_results(
+            competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller
+        )
+        self.update_scores(competition_weights, 0.0001, 0.0002)
+
+        average_winning_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
+        
+        # log results to CSV
+        csv_filename = f"{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}-{competition_id}.csv"
+        await self.log_results_to_csv(csv_filename, data_package, winning_hotkey, competition_manager.results)
+
+        # Log evaluation results to wandb/local files
+        from cancer_ai.utils.wandb_local import log_evaluation_results
+        await log_evaluation_results(
+            self, competition_id, competition_uuid, data_package, competition_manager,
+            winning_hotkey, winning_model_link, average_winning_hotkey, competition_start_time
+        )
+        
+        # Save state only after successful competition evaluation
+        self.save_state()
+
     
-
     def update_scores(
         self,
         competition_weights: dict[str, float],
@@ -412,18 +266,7 @@ class Validator(BaseValidatorNeuron):
         Distribute rewards to top 10 miners according to SCORE_DISTRIBUTION.
         All other miners get minimal scores.
         """
-        SCORE_DISTRIBUTION = {
-            1: 0.50,   # 50%
-            2: 0.17,   # 17% 
-            3: 0.10,   # 10%
-            4: 0.07,   # 7%
-            5: 0.05,   # 5%
-            6: 0.04,   # 4%
-            7: 0.03,   # 3%
-            8: 0.02,   # 2%
-            9: 0.01,   # 1%
-            10: 0.01   # 1%
-        }
+        
         
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
 

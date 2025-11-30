@@ -15,6 +15,21 @@ HISTORY_LENGTH = 10
 MOVING_AVERAGE_LENGTH = 5
 
 
+SCORE_DISTRIBUTION = {
+    1: 0.50,   # 50%
+    2: 0.17,   # 17% 
+    3: 0.10,   # 10%
+    4: 0.07,   # 7%
+    5: 0.05,   # 5%
+    6: 0.04,   # 4%
+    7: 0.03,   # 3%
+    8: 0.02,   # 2%
+    9: 0.01,   # 1%
+    10: 0.01   # 1%
+}
+
+
+
 class ModelScore(BaseModel):
     date: datetime
     score: float

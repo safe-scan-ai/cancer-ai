@@ -73,8 +73,8 @@ class WanDBLogModelBase(WanDBLogBase):
     uid: int
     miner_hotkey: str
 
-    model_url: str
-    code_url: str
+    model_url: str | None = ""
+    code_url: str | None = ""
 
     
     score: float = 0.0

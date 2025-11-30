@@ -22,6 +22,8 @@ import argparse
 import bittensor as bt
 from .logging import setup_events_logger
 
+BLACKLIST_FILE_PATH = "config/hotkey_blacklist.json"    
+BLACKLIST_FILE_PATH_TESTNET = "config/hotkey_blacklist_testnet.json"
 
 def is_cuda_available():
     try:
@@ -125,6 +127,13 @@ def add_args(cls, parser):
         "--wandb.offline",
         action="store_true",
         help="Runs wandb in offline mode.",
+        default=False,
+    )
+
+    parser.add_argument(
+        "--wandb.local_save",
+        action="store_true",
+        help="Save wandb data to local JSON files instead of sending to wandb.",
         default=False,
     )
 
@@ -347,7 +356,7 @@ def add_validator_args(cls, parser):
         "--miners_refresh_interval",
         type=int,
         help="The interval at which to refresh the miners in minutes",
-        default=30,
+        default=60,
     )
 
     parser.add_argument(
