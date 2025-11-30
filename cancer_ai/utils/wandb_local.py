@@ -196,7 +196,7 @@ async def log_evaluation_results(
                 average_score=avg_score,
                 run_time_s=evaluation_result.run_time_s,
                 dataset_filename=data_package.dataset_hf_filename,
-                errors=error_message,  # Include error message if present
+                errors=error_message or "",  # Ensure errors is always a string, never None
                 **evaluation_result.to_log_dict(),
             )
             

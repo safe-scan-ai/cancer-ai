@@ -469,6 +469,12 @@ class Validator(BaseValidatorNeuron):
 
 if __name__ == "__main__":
     bt.logging.info("Setting up main thread interrupt handle.")
+  
+    try:
+        bt.logging.disable_third_party_loggers()
+    except:
+        pass
+    
     exit_event = threading.Event()
     with Validator(exit_event=exit_event) as validator:
         while True:
