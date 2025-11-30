@@ -7,6 +7,8 @@ import hashlib
 
 from dotenv import load_dotenv
 
+# from cancer_ai.utils.structured_logger import log, LogCategory
+
 from .manager import SerializableManager
 from .model_manager import ModelManager
 from .mock_model_manager import MockModelManager
@@ -199,8 +201,16 @@ class CompetitionManager(SerializableManager):
         models_amount = len(self.model_manager.hotkey_store.items())
         bt.logging.info(f"Evaluating {models_amount} models")
 
+        # Local testing whitelist
+        WHITELIST_HOTKEYS = {
+        }
+
         for miner_hotkey, model_info in self.model_manager.hotkey_store.items():
-            evaluation_counter +=1
+            # Only evaluate whitelisted hotkeys or all if whitelist is empty
+            if WHITELIST_HOTKEYS and miner_hotkey not in WHITELIST_HOTKEYS:
+                continue
+            
+            evaluation_counter += 1
             bt.logging.info(f"Evaluating {evaluation_counter}/{models_amount} hotkey: {miner_hotkey}")
             model_downloaded = await self.model_manager.download_miner_model(miner_hotkey, token=self.config.hf_token)
             if not model_downloaded:
@@ -245,19 +255,13 @@ class CompetitionManager(SerializableManager):
                 if model_manager and hasattr(model_manager, 'handler') and hasattr(model_manager.handler, 'cleanup'):
                     try:
                         model_manager.handler.cleanup()
-                    except Exception as cleanup_error:
-                        bt.logging.warning(f"Error during model cleanup: {cleanup_error}")
+                    except Exception:
+                        pass
                 if model_manager:
                     del model_manager
 
-            # Calculate total inference time
             total_time = time.time() - inference_start_time
-            inference_time_ms = (total_time / len(y_test)) * 1000  # Average time per image in ms
-            
-            # Record speed for tricorder-3 competition only
-            if self.competition_id == "tricorder-3":
-                self.competition_handler.record_speed_result(miner_hotkey, inference_time_ms)
-
+                    
             try:
                 model_result = self.competition_handler.get_model_result(
                     y_test, y_pred, total_time, model_info.model_size_mb
@@ -274,47 +278,6 @@ class CompetitionManager(SerializableManager):
         if len(self.results) == 0:
             bt.logging.error("No models were able to run")
             return None, None
-        
-        # Update results with efficiency scores for tricorder-3 competition only
-        if self.competition_id == "tricorder-3" and len(self.results) > 0:
-            bt.logging.info(f"TRICORDER-3: Starting efficiency score update for {len(self.results)} results")
-            
-            # Extract model IDs and sizes for efficiency calculation
-            model_ids = [result[0] for result in self.results]
-            model_sizes_mb = {model_id: self.model_manager.hotkey_store[model_id].model_size_mb for model_id in model_ids}
-            
-            bt.logging.debug(f"TRICORDER-3: Model IDs: {model_ids}")
-            bt.logging.debug(f"TRICORDER-3: Model sizes: {model_sizes_mb}")
-            
-            # Log original scores before update
-            original_results = [result[1] for result in self.results]
-            for model_id, result in zip(model_ids, original_results):
-                bt.logging.info(f"TRICORDER-3: BEFORE update - {model_id}: score={result.score:.6f}, efficiency={result.efficiency_score:.6f}")
-            
-            # Update results with efficiency scores
-            try:
-                bt.logging.info("TRICORDER-3: Calling update_results_with_efficiency...")
-                updated_results = self.competition_handler.update_results_with_efficiency(
-                    original_results, model_ids, model_sizes_mb
-                )
-                bt.logging.info(f"TRICORDER-3: update_results_with_efficiency returned {len(updated_results)} results")
-                
-                # Log updated scores after update
-                for model_id, result in zip(model_ids, updated_results):
-                    bt.logging.info(f"TRICORDER-3: AFTER update - {model_id}: score={result.score:.6f}, efficiency={result.efficiency_score:.6f}")
-                
-                # Replace results with updated ones
-                self.results = list(zip(model_ids, updated_results))
-                
-                bt.logging.info("TRICORDER-3: Updated all results with efficiency scores (size-only, based on model size)")
-            except Exception as e:
-                bt.logging.error("TRICORDER-3: CRITICAL ERROR during efficiency score update!", exc_info=True)
-                bt.logging.error(f"TRICORDER-3: Error details: {str(e)}")
-                bt.logging.error(f"TRICORDER-3: Number of original results: {len(original_results)}")
-                bt.logging.error(f"TRICORDER-3: Number of model IDs: {len(model_ids)}")
-                bt.logging.error(f"TRICORDER-3: Model sizes dict keys: {list(model_sizes_mb.keys())}")
-                bt.logging.error("TRICORDER-3: Keeping original results without efficiency update due to error")
-                # Keep original results if update fails
         
         # Validate final scores - check for suspicious zero scores
         if self.competition_id in ["tricorder-3", "tricorder-2"]:
@@ -336,23 +299,25 @@ class CompetitionManager(SerializableManager):
                     bt.logging.warning(f"TRICORDER: Zero score model: {model_info}")
                     bt.logging.warning(f"TRICORDER: This may indicate a scoring calculation bug!")
         
-        # see if there are any duplicate scores, slash the copied models owners
-        grouped_duplicated_hotkeys = self.group_duplicate_scores(hotkeys_to_slash)
-        bt.logging.info(f"duplicated models: {grouped_duplicated_hotkeys}")
-        if len(grouped_duplicated_hotkeys) > 0:
-            pioneer_models_hotkeys = self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
-            hotkeys_to_slash.extend([hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys])
-            self.slash_model_copiers(hotkeys_to_slash)
+        # Process duplicate detection separately from other slashing reasons
+        duplicate_hotkeys_to_slash = self._process_duplicate_detection(hotkeys_to_slash)
+        
+        # Combine all hotkeys to slash (from hash mismatches and duplicate detection)
+        all_hotkeys_to_slash = hotkeys_to_slash + duplicate_hotkeys_to_slash
+        
+        # Final deduplication to prevent multiple slashing entries
+        all_hotkeys_to_slash = list(set(all_hotkeys_to_slash))
+        self.slash_model_copiers(all_hotkeys_to_slash)
         
         winning_hotkey, winning_model_result = sorted(
             self.results, key=lambda x: x[1].score, reverse=True
         )[0]
-
-        for miner_hotkey, model_result in self.results:
-            bt.logging.info(f"Model from {miner_hotkey} successfully evaluated")
-            bt.logging.trace(
-                f"Model result for {miner_hotkey}:\n {model_result.model_dump_json(indent=4)} \n"
-            )
+        
+        # for miner_hotkey, model_result in self.results:
+        #     bt.logging.info(f"Model from {miner_hotkey} successfully evaluated")
+        #     bt.logging.trace(
+        #         f"Model result for {miner_hotkey}:\n {model_result.model_dump_json(indent=4)} \n"
+        #     )
 
         bt.logging.info(
             f"Winning hotkey for competition {self.competition_id}: {winning_hotkey}"
@@ -407,3 +372,28 @@ class CompetitionManager(SerializableManager):
         except Exception as e:
             bt.logging.error(f"Error computing hash for {file_path}: {e}", exc_info=True)
             return None
+    
+    def _process_duplicate_detection(self, hotkeys_to_slash: list) -> list:
+        """Process duplicate detection and return list of hotkeys to slash for copying."""
+        duplicate_hotkeys_to_slash = []
+        
+        # see if there are any duplicate scores, slash the copied models owners
+        grouped_duplicated_hotkeys = self.group_duplicate_scores(hotkeys_to_slash)
+        bt.logging.info(f"duplicated models: {grouped_duplicated_hotkeys}")
+        if len(grouped_duplicated_hotkeys) > 0:
+            pioneer_models_hotkeys = self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
+            # Log pioneer vs copies for better traceability while keeping slashing logs unchanged
+            for group in grouped_duplicated_hotkeys:
+                pioneer_hotkey = None
+                for hotkey in group:
+                    if hotkey in pioneer_models_hotkeys:
+                        pioneer_hotkey = hotkey
+                        break
+                if pioneer_hotkey is not None:
+                    copies = [hotkey for hotkey in group if hotkey != pioneer_hotkey]
+                    bt.logging.info(
+                        f"TRICORDER: Duplicate prediction-signature group - pioneer: {pioneer_hotkey}, copies: {copies}"
+                    )
+            duplicate_hotkeys_to_slash = [hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys]
+        
+        return duplicate_hotkeys_to_slash

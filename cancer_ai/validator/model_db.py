@@ -123,7 +123,6 @@ class ModelDBController:
 
     def get_latest_model(self, hotkey: str, cutoff_time: float = None) -> ChainMinerModel | None:
         cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=cutoff_time) if cutoff_time else datetime.now(timezone.utc)
-        bt.logging.trace(f"Getting latest DB model for hotkey {hotkey}")
         session = self.Session()
         model_record = None
         try:

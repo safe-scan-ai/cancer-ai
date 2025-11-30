@@ -85,7 +85,6 @@ class OnnxRunnerHandler(BaseRunnerHandler):
 
         # Detect model's expected input size
         model_input_size = self._get_model_input_size(self.session)
-        bt.logging.debug(f"Model expects input size: {model_input_size}")
 
         results = []
 
