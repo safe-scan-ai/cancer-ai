@@ -81,7 +81,7 @@ class StructuredFormatter(logging.Formatter):
         identifier = context["hotkey"] or context["competition_id"] or ""
 
         return (
-            f"{timestamp} | {level:5} | {category:11} | {filename} | "
+            f"{timestamp} | {level:4} | {category:11} "
             f"{identifier} | {message}"
         )
 
