@@ -90,7 +90,6 @@ class CompetitionResultsStore(BaseModel):
 
         scores = self.score_map[competition_id][hotkey][-MOVING_AVERAGE_LENGTH:]
         scores = [score.score for score in scores]
-        bt.logging.debug(f"Scores used to calculate average for hotkey {hotkey}: {scores}")
         result = sum(score for score in scores) / MOVING_AVERAGE_LENGTH
 
         if competition_id not in self.average_scores:
