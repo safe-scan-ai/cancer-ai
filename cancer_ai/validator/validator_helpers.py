@@ -71,17 +71,12 @@ async def setup_organization_data_references(validator):
     from cancer_ai.validator.utils import OrganizationDataReferenceFactory
     
     import bittensor as bt
-    bt.logging.info(f"DEBUG: Fetching org data from {validator.config.datasets_config_hf_repo_id}")
     
-    yaml_data = await fetch_organization_data_references(
+    raw_data = await fetch_organization_data_references(
         validator.config.datasets_config_hf_repo_id,
         validator.hf_api,
     )
-    bt.logging.info(f"DEBUG: Fetched yaml_data: {yaml_data}")
-    
-    await sync_organizations_data_references(yaml_data)
-    
+    await sync_organizations_data_references(raw_data)
     factory = OrganizationDataReferenceFactory.get_instance()
-    bt.logging.info(f"DEBUG: Factory has {len(factory.organizations)} organizations")
     
     return factory

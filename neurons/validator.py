@@ -135,13 +135,12 @@ class Validator(BaseValidatorNeuron):
             if org.organization_id not in self.org_latest_updates:
                 self.org_latest_updates[org.organization_id] = None
         
-        bt.logging.info(f"org_latest_updates contains {len(self.org_latest_updates)} organizations")
+        bt.logging.trace(f"org_latest_updates contains {len(self.org_latest_updates)} organizations")
         
         # Check for new dataset files
         try:
-            bt.logging.info(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
+            bt.logging.trace(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
             data_packages = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
-            bt.logging.info(f"Found data packages: {data_packages}")
         except Exception as e:
             bt.logging.error(f"Error checking for new dataset files: {e}\n Stack trace: {traceback.format_exc()}")
             return
