@@ -24,6 +24,11 @@ class ModelManager():
         self.api = HfApi(token=self.config.hf_token)
         self.hotkey_store: dict[str, ModelInfo] = {}
         self.parent = parent
+        
+        # Retry configuration for HF API calls
+        self.hf_max_retries = 4
+        self.hf_initial_delay = 2
+        self.hf_max_delay = 30
 
         if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
             subtensor = bt.subtensor(network="archive")
@@ -61,12 +66,26 @@ class ModelManager():
         setattr(self.subtensor.substrate, "ws", new_ws)
         return new_ws
 
+    async def _hf_api_call_with_retry(self, api_call, *args, **kwargs):
+        """Wrapper for HF API calls with exponential backoff retry logic."""
+        for attempt in range(self.hf_max_retries):
+            try:
+                return api_call(*args, **kwargs)
+            except Exception as e:
+                if attempt == self.hf_max_retries - 1:
+                    bt.logging.error(f"HF API call failed after {self.hf_max_retries} attempts. Error: {e}")
+                    raise
+                
+                delay = min(self.hf_initial_delay * (2 ** attempt), self.hf_max_delay)
+                bt.logging.warning(f"HF API call attempt {attempt + 1}/{self.hf_max_retries} failed. Retrying in {delay}s. Error: {e}")
+                await asyncio.sleep(delay)
+
     async def model_license_valid(self, hotkey) -> tuple[bool, Optional[str]]:
         hf_id = self.hotkey_store[hotkey].hf_repo_id
+        
         try:
-            model_info = self.api.model_info(hf_id, timeout=30)
+            model_info = await self._hf_api_call_with_retry(self.api.model_info, hf_id, timeout=30)
         except Exception as e:
-            bt.logging.error(f"Cannot get information about repository {hf_id}. Error: {e}")
             return False, f"HF API ERROR: {e}"
 
         meta_license = None
@@ -98,10 +117,10 @@ class ModelManager():
 
             if reason.startswith("HF API ERROR"):
                 bt.logging.error(f"Could not verify license for {hf_id}: {reason.split(':', 1)[1]}")
-                self.parent.error_results.append((hotkey, "Couldn't verify license due to HF API error"))
+                # self.parent.error_results.append((hotkey, "Couldn't verify license due to HF API error"))
             else:
                 bt.logging.error(f"License for {hf_id} not found or invalid")
-                self.parent.error_results.append((hotkey, "MIT license not found or invalid"))
+                # self.parent.error_results.append((hotkey, "MIT license not found or invalid"))
             return False
 
 
@@ -129,7 +148,7 @@ class ModelManager():
                         await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))
                     else:
                         bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts")
-                        self.parent.error_results.append((hotkey, f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}"))
+                        # self.parent.error_results.append((hotkey, f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}"))
                         return False
                         
             except Exception as e:
@@ -138,7 +157,7 @@ class ModelManager():
                     await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))  # Exponential backoff
                 else:
                     bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts: {e}")
-                    self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
+                    # self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
                     return False
         
         # We don't need this check anymore since we handle it in the retry loop
@@ -146,35 +165,29 @@ class ModelManager():
         # Parse and check if the model is too recent to download
         is_too_recent, parsed_date = self.is_model_too_recent(file_date, model_info.hf_model_filename, hotkey)
         if is_too_recent:
-            self.parent.error_results.append((hotkey, f"Model is too recent"))
+            # self.parent.error_results.append((hotkey, f"Model is too recent"))
             return False
         
         file_date = parsed_date
         
         # Download the file with retry
-        for retry_counter in range(MAX_RETRIES):
-            try:
-                model_info.file_path = self.api.hf_hub_download(
-                    repo_id=model_info.hf_repo_id,
-                    repo_type="model",
-                    filename=model_info.hf_model_filename,
-                    cache_dir=self.config.models.model_dir,
-                    token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
-                )
-                break
-            except Exception as e:
-                if retry_counter < MAX_RETRIES - 1:
-                    bt.logging.warning(f"Retry {retry_counter+1}/{MAX_RETRIES}: Failed to download model file: {e}")
-                    await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))  # Exponential backoff
-                else:
-                    bt.logging.error(f"Failed to download model file after {MAX_RETRIES} attempts: {e}")
-                    self.parent.error_results.append((hotkey, f"Failed to download model file: {e}"))
-                    return False
+        try:
+            model_info.file_path = await self._hf_api_call_with_retry(
+                self.api.hf_hub_download,
+                repo_id=model_info.hf_repo_id,
+                repo_type="model",
+                filename=model_info.hf_model_filename,
+                cache_dir=self.config.models.model_dir,
+                token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
+            )
+        except Exception as e:
+            bt.logging.error(f"Failed to download model file: {e}")
+            return False
 
         # Verify the downloaded file exists
         if not os.path.exists(model_info.file_path):
             bt.logging.error(f"Downloaded file does not exist at {model_info.file_path}")
-            self.parent.error_results.append((hotkey, f"Downloaded file does not exist at {model_info.file_path}"))
+            # self.parent.error_results.append((hotkey, f"Downloaded file does not exist at {model_info.file_path}"))
             return False
         
         # Check model size for efficiency scoring
@@ -269,13 +282,18 @@ class ModelManager():
         raise KeyError("No Raw<n> entry found in `info.fields`")
 
 
-    def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> list[str]:
+    def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> tuple[list[str], dict[str, str]]:
         """
         Does a check on whether chain submit date was later then HF commit date. If not slashes.
         Compares chain submit date duplicated models to elect a pioneer based on block of submission (date)
         Every hotkey that is not included in the candidate list is a subject to slashing.
+        
+        Returns:
+            pioneers: list of hotkeys that are pioneers
+            errors: dict of hotkey -> error message for models that failed validation
         """
         pioneers = []
+        errors = {}
 
         if self.config.hf_token:
             fs = HfFileSystem(token=self.config.hf_token)
@@ -289,7 +307,7 @@ class ModelManager():
                 model_info = self.hotkey_store.get(hotkey)
                 if not model_info:
                     bt.logging.error(f"Model info for hotkey {hotkey} not found.")
-                    self.parent.error_results.append((hotkey, "Model info not found."))
+                    errors[hotkey] = "Model info not found"
                     continue
 
                 try:
@@ -308,7 +326,7 @@ class ModelManager():
 
                 except Exception as e:
                     bt.logging.error(f"Failed to load HF repo extrinsic record for {hotkey}: {e}", exc_info=True)
-                    self.parent.error_results.append((hotkey, "Invalid or missing extrinsic record in HF repo."))
+                    errors[hotkey] = f"Invalid or missing extrinsic record in HF repo: {e}"
                     continue
 
                 try:
@@ -334,11 +352,14 @@ class ModelManager():
                     raw_params = {p["name"]: p["value"] for p in call.get("call_args", [])}
                     decoded_params = decode_params(raw_params)
 
+                except ValueError as e:
+                    # Validation errors (signer mismatch, hash mismatch)
+                    bt.logging.error(f"Extrinsic validation failed for {hotkey}: {e}")
+                    errors[hotkey] = f"Extrinsic validation failed: {e}"
+                    continue
                 except Exception as e:
                     bt.logging.exception(f"Failed to decode extrinsic {extrinsic_id} for {hotkey}: {e}", exc_info=True)
-                    self.parent.error_results.append(
-                        (hotkey, f"Extrinsic {extrinsic_id} not found or invalid for hotkey.")
-                    )
+                    errors[hotkey] = f"Extrinsic decoding failed: {e}"
                     continue
 
                 bt.logging.info(f"Found Extrinsic {extrinsic_id} → {module}.{function} {decoded_params} for hotkey {hotkey}")
@@ -356,7 +377,7 @@ class ModelManager():
 
                 except Exception as e:
                     bt.logging.error(f"Model hash comparison failed for {hotkey}: {e}", exc_info=True)
-                    self.parent.error_results.append((hotkey, "Model hash mismatch or extraction error."))
+                    errors[hotkey] = f"Model hash mismatch or extraction error: {e}"
                     continue
                 
                 candidate_hotkeys.append((hotkey, block_num))
@@ -364,4 +385,4 @@ class ModelManager():
             if candidate_hotkeys:
                 pioneer_hotkey = min(candidate_hotkeys, key=lambda x: x[1])[0]
                 pioneers.append(pioneer_hotkey)
-        return pioneers
+        return pioneers, errors
