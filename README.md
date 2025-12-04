@@ -1,19 +1,15 @@
 # SAFE SCAN
 
-
 *Bittensor Subnet 76 for improving cancer detection algorithms*
 
 ![header.png](https://github.com/safe-scan-ai/cancer-ai-3/blob/LEMSTUDI0-patch-1/DOCS/header.png)
 
-
 [![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)]([https://discord.gg/bittensor](https://discord.com/channels/1259812760280236122/1262383307832823809))
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 [www.SAFE-SCAN.ai](https://www.safe-scan.ai)   &nbsp;&nbsp;&nbsp;&nbsp;  [www.SKIN-SCAN.ai](https://www.skin-scan.ai)   &nbsp;&nbsp;&nbsp;&nbsp;  [Follow us on X](https://x.com/SAFESCAN_AI)
 
-
 # **📋 TABLE OF CONTENT**
-
 
 - [👋 Introduction](#-introduction)
 - [⚙️ Features](#features)
@@ -24,12 +20,11 @@
 - [💰 Tokenomy & Economy](#-tokenomy--economy)
 - [👨‍👨‍👦‍👦 Team Composition](#-team-composition)
 - [🛣️ Roadmap](#roadmap)
-- [✅ Pre requirments](#-pre-requirments)
+- [✅ Pre requirements](#-pre-requirements)
 - [👍 Running Validator](#-running-validator)
 - [⛏️ Running Miner](#-running-miner)
-- [🚀 Get invloved](#-get-involved)
+- [🚀 Get involved](#-get-involved)
 - [📝 License](#-license)
-
 
 # **👋 INTRODUCTION**
 
@@ -38,25 +33,21 @@ Welcome to Safe Scan Cancer AI Detection, a groundbreaking initiative leveraging
 This repository contains subnet code to run on Bittensor network.
 
 <a name="features"></a>
+
 # **⚙️ FEATURES**
 
 🤗 Validator-friendly code
 
-🏆 Rewards for best-performing algorithms
-
-👑 Royalties for algorithms used in our real-world software solutions
-
-🤳 Free app for skin cancer detection
-
-⚔️ Various cancer detection algorithm competitions
-
-📊 Dashboard
-
-💻 Specialized software for detecting other types of cancer
-
-💸 Self-sustaining economy
+- 🏆 Rewards for best-performing algorithms
+- 👑 Royalties for algorithms used in our real-world software solutions
+- 🤳 Free app for skin cancer detection
+- ⚔️ Various cancer detection algorithm competitions
+- 📊 Dashboard
+- 💻 Specialized software for detecting other types of cancer
+- 💸 Self-sustaining economy
 
 <a name="vision"></a>
+
 # **👁️ VISION**
 
 Cancer is one of the most significant challenges of our time, and we believe that AI holds the key to addressing it. However, this solution should be accessible and free for everyone. Machine vision technology has long proven effective in early diagnosis, which is crucial for curing cancer. Yet, until now, it has largely remained in the realm of whitepapers. SAFESCAN is a project dedicated to aggregating and enhancing the best algorithms for detecting various types of cancer and providing free computational power for practical cancer detection. We aim to create open-source products that support cancer diagnosis for both patients and doctors.
@@ -100,9 +91,10 @@ SKIN SCAN app live demo:
 [https://x.com/SAFESCAN_AI/status/1819351129362149876](https://x.com/SAFESCAN_AI/status/1819351129362149876)
 
 <a name="why-is-safescan-subnet-important"></a>
+
 # **⚠️ WHY IS SAFESCAN SUBNET IMPORTANT?**
 
-SAFE SCAN harnesses the power of the Bittensor network to address one of the world's most pressing issues: cancer detection. Researchers can contribute to refining detection algorithms and earn TAO, with additional royalties for those whose algorithms are integrated into our software. By focusing on obtaining large datasets, including paid and hard-to-access medical data, we ensure the development of superior models. Our decentralized, transparent system guarantees fair competition and protects against model overfitting. With strong community and validator support, we can expand to create and register standalone software for detecting other types of cancer. 
+SAFE SCAN harnesses the power of the Bittensor network to address one of the world's most pressing issues: cancer detection. Researchers can contribute to refining detection algorithms and earn TAO, with additional royalties for those whose algorithms are integrated into our software. By focusing on obtaining large datasets, including paid and hard-to-access medical data, we ensure the development of superior models. Our decentralized, transparent system guarantees fair competition and protects against model overfitting. With strong community and validator support, we can expand to create and register standalone software for detecting other types of cancer.
 
 Additionally with Safe Scan, we can significantly broaden awareness of Bittensor's capabilities and resonate with a more general audience. This will be crucial for the network's growth and increasing market cap, attracting both large and microinvestors.
 
@@ -122,6 +114,7 @@ Our tokenomics are uniquely designed to drive research and development of new al
 You can find comprehensive details about competition scheduling, dataset release, model submission, evaluation, configuration, and development tools here: [COMPETITION README](DOCS/COMPETITIONS.md)
 
 **Incentives**: Rewards are distributed among the top 10 performing miners in each competition according to the following distribution:
+
 - 1st place: 50%
 - 2nd place: 17%
 - 3rd place: 10%
@@ -161,6 +154,7 @@ Team members:
 - **@Izuael -** Mobile software Engineer
 
 <a name="roadmap"></a>
+
 # **🛣️ ROADMAP**
 
 Given the complexity of creating a state-of-the-art roleplay LLM, we plan to divide the process into 3 distinct phases.
@@ -182,18 +176,21 @@ Given the complexity of creating a state-of-the-art roleplay LLM, we plan to div
 - [ ] Optimize skin cancer detection models to create one mixture-of-experts model which will run on mobile devices
 - [ ] Start the process for certifying models - FDA approval
 - [ ] Make competitions for breast cancer
-# **✅ PRE REQUIRMENTS**
+
+# **✅ PRE REQUIREMENTS**
+
 To install BITTENSOR and set up a wallet follow instructions in this link:
 
-[PRE REQUIRMENTS](DOCS/prerequirements.md)
-
+[PRE Requirements](DOCS/prerequirements.md)
 
 # **👍 RUNNING VALIDATOR**
+
 To run a validator follow instructions in this link:
 
 [RUNNING VALIDATOR](DOCS/validator.md)
 
 # **⛏️ RUNNING MINER**
+
 To run a miner follow instructions in this link:
 
 [RUNNING MINER](DOCS/miner.md)
@@ -206,25 +203,25 @@ To run a miner follow instructions in this link:
 
 3. Follow us on [![X (Twitter)](https://img.shields.io/badge/X-000000?style=for-the-badge&logo=twitter&logoColor=white)](https://x.com/SAFESCAN_AI) and help us spread the word.
 
-
 # **📝 LICENSE**
 
 This repository is licensed under the MIT License.
-    ```
-    # The MIT License (MIT)
-    # Copyright © 2024 Opentensor Foundation
-    
-    # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-    # documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-    # the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-    # and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-    
-    # The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-    # the Software.
-    
-    # THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-    # THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-    # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-    # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-    # DEALINGS IN THE SOFTWARE.
-    ```
+
+```
+# The MIT License (MIT)
+# Copyright © 2024 Opentensor Foundation
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+# the Software.
+
+# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+```
