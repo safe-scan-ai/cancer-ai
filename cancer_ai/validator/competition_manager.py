@@ -331,7 +331,8 @@ class CompetitionManager(SerializableManager):
         #bt.logging.info(f"Evaluating {models_amount} models")
 
         # Local testing whitelist
-        WHITELIST_HOTKEYS = {
+        WHITELIST_HOTKEYS = { "5FqZvRn19qdXwFLDQ4LWJeuHKmmxNQ6VjvkRFLYSguCFKCcL", "5GztfcQaQpe992Aru5Xkj4TyVg5H1JacS8j1J21G8uB2bjPq", 
+        "5H6FVJsSHebDxkjtfGMGLXk5pQRFtDZFt7K5y2cJXt2b3zWC"
         }
 
         for miner_hotkey, model_info in self.model_manager.hotkey_store.items():
