@@ -20,6 +20,7 @@ from cancer_ai.validator.models import (
     NewDatasetFile,
     OrganizationDataReferenceFactory,
 )
+from cancer_ai.utils.structured_logger import log
 
 
 class ModelType(Enum):
@@ -39,9 +40,12 @@ def log_time(func):
         result = await func(*args, **kwargs)
         end_time = time.time()
         module_name = func.__module__
-        bt.logging.trace(
+        log.validation.debug(
             f"'{module_name}.{func.__name__}'  took {end_time - start_time:.4f}s"
         )
+        #bt.logging.trace(
+        #    f"'{module_name}.{func.__name__}'  took {end_time - start_time:.4f}s"
+        #)
         return result
 
     return wrapper
@@ -73,7 +77,8 @@ def detect_model_format(file_path) -> ModelType:
                 return ModelType.KERAS_H5
 
     except Exception as e:
-        bt.logging.error(f"Failed to detect model format: {e}")
+        log.validation.error(f"Failed to detect model format: {e}")
+        #bt.logging.error(f"Failed to detect model format: {e}")
         return ModelType.UNKNOWN
 
     return ModelType.UNKNOWN
@@ -84,7 +89,8 @@ async def run_command(cmd):
     process = await asyncio.create_subprocess_shell(
         cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
-    bt.logging.debug(f"Running command: {cmd}")
+    log.validation.debug(f"Running command: {cmd}")
+    #bt.logging.debug(f"Running command: {cmd}")
     # Wait for the subprocess to finish and capture the output
     stdout, stderr = await process.communicate()
 
@@ -96,9 +102,12 @@ async def run_command(cmd):
 async def fetch_organization_data_references(
     hf_repo_id: str, hf_api: HfApi
 ) -> list[dict]:
-    bt.logging.trace(
+    log.dataset.debug(
         f"Fetching organization data references from Hugging Face repo {hf_repo_id}"
     )
+    #bt.logging.trace(
+    #    f"Fetching organization data references from Hugging Face repo {hf_repo_id}"
+    #)
     yaml_data = []
 
     # prevent stale connections
@@ -108,7 +117,8 @@ async def fetch_organization_data_references(
         # blocks event loop while sleeping between retries
         files = _list_repo_tree_with_retry_sync(hf_api, hf_repo_id)
     except Exception as e:
-        bt.logging.error("Failed to list repo tree after 10 attempts: %s", e)
+        log.dataset.error("Failed to list repo tree after 10 attempts: %s", e)
+        #bt.logging.error("Failed to list repo tree after 10 attempts: %s", e)
         return yaml_data
 
     for file_info in files:
@@ -130,18 +140,24 @@ async def fetch_organization_data_references(
                 if commit_date is not None:
                     date_uploaded = commit_date
                 else:
-                    bt.logging.warning(
+                    log.dataset.warn(
                         f"Could not get the last commit date for {file_path}"
                     )
+                    #bt.logging.warning(
+                    #    f"Could not get the last commit date for {file_path}"
+                    #)
                     date_uploaded = None
 
                 with open(local_file_path, "r", encoding="utf-8") as f:
                     try:
                         data = yaml.safe_load(f)
                     except yaml.YAMLError as e:
-                        bt.logging.error(
+                        log.dataset.error(
                             f"Error parsing YAML file {file_path}: {str(e)}"
                         )
+                        #bt.logging.error(
+                        #    f"Error parsing YAML file {file_path}: {str(e)}"
+                        #)
                         continue  # Skip this file due to parsing error
 
                 yaml_data.append(
@@ -224,7 +240,10 @@ async def get_newest_competition_packages(config: bt.Config, packages_count: int
     org = org_reference.find_organization_by_competition_id(config.competition_id)
     
     if not org:
-        bt.logging.info(f"No organization found for competition ID: {config.competition_id}")
+        log.set_competition(config.competition_id)
+        log.dataset.info("No organization found")
+        log.clear_competition()
+        #bt.logging.info(f"No organization found for competition ID: {config.competition_id}")
         return newest_competition_packages
 
     try:
@@ -236,7 +255,8 @@ async def get_newest_competition_packages(config: bt.Config, packages_count: int
             expand=True,
         )
     except Exception as e:
-        bt.logging.error(f"Failed to list repository tree for {org.dataset_hf_repo}: {e}")
+        log.dataset.error(f"Failed to list repository tree for {org.dataset_hf_repo}: {e}")
+        #bt.logging.error(f"Failed to list repository tree for {org.dataset_hf_repo}: {e}")
         raise 
     
     relevant_files = [
@@ -246,7 +266,8 @@ async def get_newest_competition_packages(config: bt.Config, packages_count: int
     ]
     
     if not relevant_files:
-        bt.logging.warning(f"No relevant files found in {org.dataset_hf_repo}/{org.dataset_hf_dir}")
+        log.dataset.warn(f"No relevant files found in {org.dataset_hf_repo}/{org.dataset_hf_dir}")
+        #bt.logging.warning(f"No relevant files found in {org.dataset_hf_repo}/{org.dataset_hf_dir}")
         return newest_competition_packages
     
     sorted_files = sorted(
@@ -382,7 +403,8 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
     already_released_dir = os.path.join(local_dataset_dir, "already_released")
 
     if not os.path.exists(to_be_released_dir):
-        bt.logging.warning(f"Directory {to_be_released_dir} does not exist.")
+        log.dataset.warn(f"Directory {to_be_released_dir} does not exist.")
+        #bt.logging.warning(f"Directory {to_be_released_dir} does not exist.")
         return []
 
     if not os.path.exists(already_released_dir):
@@ -394,14 +416,16 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
             try:
                 # Move the file to the already_released directory.
                 shutil.move(filepath, os.path.join(already_released_dir, filename))
-                bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
+                log.dataset.info(f"Successfully processed and moved {filename} to {already_released_dir}")
+                #bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
                 return NewDatasetFile(
                     competition_id=random.choice(["tricorder-3"]), 
                     dataset_hf_repo="local",
                     dataset_hf_filename=os.path.join(already_released_dir, filename),
                 )
             except Exception as e:
-                bt.logging.error(f"Error processing {filename}: {e}")
+                log.dataset.error(f"Error processing {filename}: {e}")
+                #bt.logging.error(f"Error processing {filename}: {e}")
 
     return None
 

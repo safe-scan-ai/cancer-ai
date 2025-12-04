@@ -6,6 +6,8 @@ import datetime
 import wandb
 import bittensor as bt
 
+from cancer_ai.utils.structured_logger import log
+
 
 
 from neurons.validator import Validator
@@ -34,7 +36,7 @@ class LocalWandbSaver:
         self._init_file(self.competition_file, [])
         self._init_file(self.model_file, [])
         
-        bt.logging.info(f"LocalWandbSaver initialized. Saving to: {self.run_dir}")
+        log.wandb.info(f"LocalWandbSaver initialized. Saving to: {self.run_dir}")
     
     def _init_file(self, filepath: str, initial_data: Any):
         """Initialize a JSON file with initial data."""
@@ -64,21 +66,21 @@ class LocalWandbSaver:
                 json.dump(existing_data, f, indent=2)
                 
         except Exception as e:
-            bt.logging.error(f"Failed to append to {filepath}: {e}")
+            log.wandb.error(f"Failed to append to {filepath}: {e}")
     
     def log_competition_winner(self, data: Dict[str, Any]):
         """Log competition winner data."""
         self._append_to_file(self.competition_file, data)
-        bt.logging.info(f"Saved competition winner to {self.competition_file}")
+        log.wandb.info(f"Saved competition winner to {self.competition_file}")
     
     def log_model_evaluation(self, data: Dict[str, Any]):
         """Log model evaluation data."""
         self._append_to_file(self.model_file, data)
-        bt.logging.debug(f"Saved model evaluation to {self.model_file}")
+        log.wandb.debug(f"Saved model evaluation to {self.model_file}")
     
     def init_session(self, project: str, group: str):
         """Mock wandb.init() for local saving."""
-        bt.logging.info(f"Local wandb session started: project={project}, group={group}")
+        log.wandb.info(f"Local wandb session started: project={project}, group={group}")
         return self
     
     def log(self, data: Dict[str, Any]):
@@ -88,7 +90,7 @@ class LocalWandbSaver:
     
     def finish(self):
         """Mock wandb.finish() for local saving."""
-        bt.logging.info("Local wandb session finished")
+        log.wandb.info("Local wandb session finished")
 
 
 # Global instance for the current competition run
@@ -147,8 +149,7 @@ async def log_evaluation_results(
             wandb.log(winner_log.model_dump())
             wandb.finish()
     except Exception as wandb_error:
-        import bittensor as bt
-        bt.logging.warning(f"Failed to log competition winners: {wandb_error}")
+        log.wandb.warn(f"Failed to log competition winners: {wandb_error}")
     
     # Log model evaluations
     local_wandb = None
@@ -160,8 +161,7 @@ async def log_evaluation_results(
         if not validator.config.wandb.off:
             wandb.init(project=competition_id, group="model_evaluation")
     except Exception as wandb_error:
-        import bittensor as bt
-        bt.logging.warning(f"Failed to initialize wandb for model evaluation: {wandb_error}")
+        log.wandb.warn(f"Failed to initialize wandb for model evaluation: {wandb_error}")
         
     # Log successful results and merge any error info
     for miner_hotkey, evaluation_result in competition_manager.results:
@@ -206,8 +206,7 @@ async def log_evaluation_results(
             if not validator.config.wandb.off:
                 wandb.log(model_log.model_dump())
         except Exception as wandb_error:
-            import bittensor as bt
-            bt.logging.warning(f"Failed to log model results for hotkey {miner_hotkey}: {wandb_error}")
+            log.wandb.warn(f"Failed to log model results for hotkey {miner_hotkey}: {wandb_error}")
     
     # Log errors for models that never ran (no evaluation result exists)
     processed_hotkeys = {hotkey for hotkey, _ in competition_manager.results}
@@ -239,5 +238,4 @@ async def log_evaluation_results(
         if not validator.config.wandb.off:
             wandb.finish()
     except Exception as wandb_error:
-        import bittensor as bt
-        bt.logging.warning(f"Failed to finish wandb run: {wandb_error}")
+        log.wandb.warn(f"Failed to finish wandb run: {wandb_error}")

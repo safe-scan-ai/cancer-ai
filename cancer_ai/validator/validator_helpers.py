@@ -6,6 +6,7 @@ import bittensor as bt
 
 from cancer_ai.utils.config import BLACKLIST_FILE_PATH, BLACKLIST_FILE_PATH_TESTNET
 
+from cancer_ai.utils.structured_logger import log
 
 def should_refresh_miners(last_miners_refresh, miners_refresh_interval) -> bool:
     """Check if miners should be refreshed based on time interval."""
@@ -30,7 +31,10 @@ async def retrieve_and_store_model(validator, hotkey: str):
         uid = validator.metagraph.hotkeys.index(hotkey)
         chain_model_metadata = await validator.chain_models.retrieve_model_metadata(hotkey, uid)
     except Exception as e:
-        bt.logging.warning(f"Cannot get miner model for {hotkey}: {e}")
+        # bt.logging.warning(f"Cannot get miner model for {hotkey}: {e}")
+        log.set_hotkey(hotkey)
+        log.validation.warn(f"Cannot get miner model: {e}")
+        log.clear_hotkey()
         return None
 
     try:
@@ -44,23 +48,35 @@ async def retrieve_and_store_model(validator, hotkey: str):
 def handle_model_storage_error(error: Exception, hotkey: str, metadata):
     """Handle errors when storing model metadata."""
     if "CHECK constraint failed: LENGTH(model_hash) <= 8" in str(error):
-        bt.logging.error(
-            f"Invalid model hash for {hotkey}: "
-            f"Hash '{metadata.model_hash}' exceeds 8-character limit"
-        )
+        #bt.logging.error(
+        #    f"Invalid model hash for {hotkey}: "
+        #    f"Hash '{metadata.model_hash}' exceeds 8-character limit"
+        #)
+        log.set_hotkey(hotkey)
+        log.validation.error(f"Invalid model hash: Hash '{metadata.model_hash}' exceeds 8-character limit")
+        log.clear_hotkey()
     else:
-        bt.logging.error(f"Failed to persist model info for {hotkey}: {error}", exc_info=True)
+        #bt.logging.error(f"Failed to persist model info for {hotkey}: {error}", exc_info=True)
+        log.set_hotkey(hotkey)
+        log.validation.error(f"Failed to persist model info: {error}")
+        log.clear_hotkey()
 
 
 async def process_miner_models(validator, blacklisted_hotkeys: set):
     """Process each miner's model metadata."""
     for i, hotkey in enumerate(validator.hotkeys):
         if hotkey in blacklisted_hotkeys:
-            bt.logging.debug(f"Skipping blacklisted hotkey {hotkey}")
+            #bt.logging.debug(f"Skipping blacklisted hotkey {hotkey}")
+            log.set_hotkey(hotkey)
+            log.validation.debug("Skipping blacklisted hotkey")
+            log.clear_hotkey()
             continue
 
         hotkey = str(hotkey)
-        bt.logging.debug(f"Processing {i+1}/{len(validator.hotkeys)}: {hotkey}")
+        #bt.logging.debug(f"Processing {i+1}/{len(validator.hotkeys)}: {hotkey}")
+        log.set_hotkey(hotkey)
+        log.validation.debug(f"Processing {i+1}/{len(validator.hotkeys)}")
+        log.clear_hotkey()
         
         await retrieve_and_store_model(validator, hotkey)
 

@@ -37,6 +37,7 @@ from cancer_ai.chain_models_store import ChainModelMetadata
 from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION
 from cancer_ai.base.base_validator import BaseValidatorNeuron
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
+from cancer_ai.utils.structured_logger import log
 from cancer_ai.validator.utils import (
     check_for_new_dataset_files,
     get_local_dataset,
@@ -89,7 +90,8 @@ class Validator(BaseValidatorNeuron):
         if not should_refresh_miners(self.last_miners_refresh, self.config.miners_refresh_interval):
             return
 
-        bt.logging.info(f"Synchronizing {len(self.hotkeys)} miners from the chain")
+        log.validation.info(f"Synchronizing {len(self.hotkeys)} miners from the chain")
+        #bt.logging.info(f"Synchronizing {len(self.hotkeys)} miners from the chain")
         blacklisted_hotkeys = load_blacklisted_hotkeys(self.config.test_mode)
         
         await process_miner_models(self, blacklisted_hotkeys)
@@ -102,7 +104,8 @@ class Validator(BaseValidatorNeuron):
         time.sleep(5)
         data_package = get_local_dataset(self.config.local_dataset_dir)
         if not data_package:
-            bt.logging.info("No new data packages found.")
+            log.competition.info("No new data packages found.")
+            #bt.logging.info("No new data packages found.")
             return
         
         await self.run_competition_for_data_package(data_package, local_mode=True)
@@ -117,13 +120,15 @@ class Validator(BaseValidatorNeuron):
             ):
             return
         self.last_monitor_datasets = time.time()
-        bt.logging.info("Starting monitor_datasets")
+        log.competition.info("Starting monitor_datasets")
+        #bt.logging.info("Starting monitor_datasets")
 
         # Setup organization data references (cached) - always refresh to ensure latest data
         try:
             self.organizations_data_references = await setup_organization_data_references(self)
         except Exception as e:
-            bt.logging.error(f"Error in monitor_datasets initial setup: {e}\n Stack trace: {traceback.format_exc()}")
+            log.dataset.error(f"Error in monitor_datasets initial setup: {e}\n Stack trace: {traceback.format_exc()}")
+            #bt.logging.error(f"Error in monitor_datasets initial setup: {e}\n Stack trace: {traceback.format_exc()}")
             return
         
         # Initialize org_latest_updates with all organization IDs if not present or empty
@@ -135,24 +140,30 @@ class Validator(BaseValidatorNeuron):
             if org.organization_id not in self.org_latest_updates:
                 self.org_latest_updates[org.organization_id] = None
         
-        bt.logging.trace(f"org_latest_updates contains {len(self.org_latest_updates)} organizations")
+        log.dataset.info(f"org_latest_updates contains {len(self.org_latest_updates)} organizations")
+        #bt.logging.info(f"org_latest_updates contains {len(self.org_latest_updates)} organizations")
         
         # Check for new dataset files
         try:
-            bt.logging.trace(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
+            log.dataset.info(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
+            #bt.logging.info(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
             data_packages = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
         except Exception as e:
-            bt.logging.error(f"Error checking for new dataset files: {e}\n Stack trace: {traceback.format_exc()}")
+            log.dataset.error(f"Error checking for new dataset files: {e}\n Stack trace: {traceback.format_exc()}")
+            #bt.logging.error(f"Error checking for new dataset files: {e}\n Stack trace: {traceback.format_exc()}")
             return
         
         if not data_packages:
-            bt.logging.info("No new data packages found")
+            log.dataset.info("No new data packages found")
+            #bt.logging.info("No new data packages found")
             return
         
-        bt.logging.info(f"Processing {len(data_packages)} new data packages")
+        log.competition.info(f"Processing {len(data_packages)} new data packages")
+        #bt.logging.info(f"Processing {len(data_packages)} new data packages")
         
         # Refresh miners to get latest models before competition evaluation
-        bt.logging.info("Refreshing miners for new competition evaluation")
+        log.validation.info("Refreshing miners for new competition evaluation")
+        #bt.logging.info("Refreshing miners for new competition evaluation")
         await self.refresh_miners()
         for data_package in data_packages:
             await self.run_competition_for_data_package(data_package)
@@ -160,7 +171,9 @@ class Validator(BaseValidatorNeuron):
         
     async def run_competition_for_data_package(self, data_package: NewDatasetFile, local_mode: bool = False):
         competition_id = data_package.competition_id
-        bt.logging.info(f"====== STARTING COMPETITION: {data_package.dataset_hf_filename} ({competition_id}) {'[LOCAL]' if local_mode else '[REMOTE]'} ======")
+        log.set_competition(competition_id)
+        log.competition.info(f"====== STARTING COMPETITION: {data_package.dataset_hf_filename} {'[LOCAL]' if local_mode else '[REMOTE]'} ======")
+        #bt.logging.info(f"====== STARTING COMPETITION: {data_package.dataset_hf_filename} ({competition_id}) {'[LOCAL]' if local_mode else '[REMOTE]'} ======")
         competition_uuid = uuid4().hex
         competition_start_time = datetime.datetime.now()
         
@@ -184,7 +197,8 @@ class Validator(BaseValidatorNeuron):
             winning_hotkey, _ = await competition_manager.evaluate()
         except Exception:
             stack_trace = traceback.format_exc()
-            bt.logging.error(f"Cannot run {competition_id}: {stack_trace}")
+            log.competition.error(f"Cannot run competition: {stack_trace}")
+            #bt.logging.error(f"Cannot run {competition_id}: {stack_trace}")
             try:
                 if not self.config.wandb.off:
                     wandb.init(project=competition_id, group="competition_evaluation")
@@ -200,11 +214,15 @@ class Validator(BaseValidatorNeuron):
                     wandb.log(error_log.model_dump())
                     wandb.finish()
             except Exception as wandb_error:
-                bt.logging.warning(f"Failed to log to wandb: {wandb_error}")
+                log.wandb.warn(f"Failed to log to wandb: {wandb_error}")
+                #bt.logging.warning(f"Failed to log to wandb: {wandb_error}")
+            log.clear_competition()
             return
 
         if not winning_hotkey:
-            bt.logging.warning("Could not determine the winner of competition")
+            log.competition.warn("Could not determine the winner of competition")
+            log.clear_competition()
+            #bt.logging.warning("Could not determine the winner of competition")
             return
         
         # Process competition results
@@ -213,9 +231,13 @@ class Validator(BaseValidatorNeuron):
             winning_hotkey, competition_start_time
         )
 
-        bt.logging.info(f"Successfully completed competition for {competition_id}")
-        bt.logging.info("====== COMPETITION FINISHED ======")
-        bt.logging.info("==================================")
+        log.competition.info("Successfully completed competition")
+        log.competition.info("====== COMPETITION FINISHED ======")
+        log.competition.info("==================================")
+        log.clear_competition()
+        #bt.logging.info(f"Successfully completed competition for {competition_id}")
+        #bt.logging.info("====== COMPETITION FINISHED ======")
+        #bt.logging.info("==================================")
 
     async def process_competition_results(
         self,
@@ -227,7 +249,10 @@ class Validator(BaseValidatorNeuron):
         competition_start_time: datetime.datetime
     ):
         """Process and log competition results."""
-        bt.logging.info(f"Competition result for {competition_id}: {winning_hotkey}")
+        log.set_competition(competition_id)
+        log.statistics.info(f"Competition result: {winning_hotkey}")
+        log.clear_competition()
+        #bt.logging.info(f"Competition result for {competition_id}: {winning_hotkey}")
         
         # Get winning model link
         winning_model_link = self.db_controller.get_latest_model(hotkey=winning_hotkey, cutoff_time=self.config.models_query_cutoff).hf_link
@@ -270,14 +295,19 @@ class Validator(BaseValidatorNeuron):
         self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
 
         for comp_id, weight in competition_weights.items():
+            log.set_competition(comp_id)
             try:
                 all_hotkeys = self.competition_results_store.get_hotkeys_with_non_zero_scores(comp_id)
             except ValueError as e:
-                bt.logging.warning(f"[{comp_id}] {e}")
+                log.statistics.warn(f"{e}")
+                log.clear_competition()
+                #bt.logging.warning(f"[{comp_id}] {e}")
                 continue
 
             if not all_hotkeys:
-                bt.logging.warning(f"[{comp_id}] No hotkeys with non-zero scores")
+                log.statistics.warn("No hotkeys with non-zero scores")
+                log.clear_competition()
+                #bt.logging.warning(f"[{comp_id}] No hotkeys with non-zero scores")
                 continue
 
             # Sort hotkeys by average score (descending)
@@ -290,13 +320,21 @@ class Validator(BaseValidatorNeuron):
                     reward_fraction = SCORE_DISTRIBUTION.get(rank, 0.0)
                     reward_amount = weight * reward_fraction
                     self.scores[idx] += reward_amount
-                    bt.logging.info(
-                        f"[{comp_id}] Rank {rank}: +{reward_amount:.6f} ({reward_fraction*100:.1f}%) to {hotkey}"
+                    log.set_hotkey(hotkey)
+                    log.statistics.info(
+                        f"Rank {rank}: +{reward_amount:.6f} ({reward_fraction*100:.1f}%)"
                     )
+                    log.clear_hotkey()
+                    #bt.logging.info(
+                    #    f"[{comp_id}] Rank {rank}: +{reward_amount:.6f} ({reward_fraction*100:.1f}%) to {hotkey}"
+                    #)
                 else:
-                    bt.logging.warning(
-                        f"[{comp_id}] Rank {rank} hotkey {hotkey!r} not in metagraph"
-                    )
+                    log.set_hotkey(hotkey)
+                    log.statistics.warn(f"Rank {rank} hotkey not in metagraph")
+                    log.clear_hotkey()
+                    #bt.logging.warning(
+                    #    f"[{comp_id}] Rank {rank} hotkey {hotkey!r} not in metagraph"
+                    #)
 
             # Award minimal scores to remaining miners (beyond top 10)
             remaining_hotkeys = sorted_hotkeys[10:]
@@ -321,18 +359,30 @@ class Validator(BaseValidatorNeuron):
                     if hotkey in self.metagraph.hotkeys:
                         idx = self.metagraph.hotkeys.index(hotkey)
                         self.scores[idx] += minimal
-                        bt.logging.info(
-                            f"[{comp_id}] Beyond top 10: +{minimal:.6f} to {hotkey}"
-                        )
+                        log.set_hotkey(hotkey)
+                        log.statistics.info(f"Beyond top 10: +{minimal:.6f}")
+                        log.clear_hotkey()
+                        #bt.logging.info(
+                        #    f"[{comp_id}] Beyond top 10: +{minimal:.6f} to {hotkey}"
+                        #)
                     else:
-                        bt.logging.warning(
-                            f"[{comp_id}] Non-top-10 hotkey {hotkey!r} not in metagraph"
-                        )
+                        log.set_hotkey(hotkey)
+                        log.statistics.warn("Non-top-10 hotkey not in metagraph")
+                        log.clear_hotkey()
+                        #bt.logging.warning(
+                        #    f"[{comp_id}] Non-top-10 hotkey {hotkey!r} not in metagraph"
+                        #)
+            
+            log.clear_competition()
 
-        bt.logging.debug(
+        log.statistics.debug(
             "Scores from update_scores:\n"
             f"{np.array2string(self.scores, precision=7, floatmode='fixed', separator=', ', suppress_small=True)}"
         )
+        #bt.logging.debug(
+        #    "Scores from update_scores:\n"
+        #    f"{np.array2string(self.scores, precision=7, floatmode='fixed', separator=', ', suppress_small=True)}"
+        #)
 
         self.save_state()
 
@@ -341,7 +391,10 @@ class Validator(BaseValidatorNeuron):
         """Debug method for dumping rewards for testing """
         
         csv_file_path = os.path.join("evaluation-results", file_name)
-        bt.logging.info(f"Logging results to CSV for {data_package.competition_id} to file {csv_file_path}")
+        log.set_competition(data_package.competition_id)
+        log.statistics.info(f"Logging results to CSV to file {csv_file_path}")
+        log.clear_competition()
+        #bt.logging.info(f"Logging results to CSV for {data_package.competition_id} to file {csv_file_path}")
         with open(csv_file_path, mode='a', newline='') as f:
             writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             if os.stat(csv_file_path).st_size == 0:
@@ -401,9 +454,11 @@ class Validator(BaseValidatorNeuron):
                 json.dump(state_dict, f, indent=2, cls=self.DateTimeEncoder)
             # Atomically move the temporary file to the final destination
             os.rename(temp_state_path, state_path)
-            bt.logging.debug(f"Validator state saved to {state_path}")
+            log.validation.debug(f"Validator state saved to {state_path}")
+            #bt.logging.debug(f"Validator state saved to {state_path}")
         except Exception as e:
-            bt.logging.error(f"Error saving validator state: {e}", exc_info=True)
+            log.validation.error(f"Error saving validator state: {e}", exc_info=True)
+            #bt.logging.error(f"Error saving validator state: {e}", exc_info=True)
             # Clean up the temporary file if it exists
             if os.path.exists(temp_state_path):
                 os.remove(temp_state_path)
@@ -443,11 +498,13 @@ class Validator(BaseValidatorNeuron):
                     state['competition_results_store']
                 )
             except (json.JSONDecodeError, KeyError, TypeError) as e:
-                bt.logging.error(f"Error loading or parsing state file: {e}. Resetting to a clean state.")
+                log.validation.error(f"Error loading or parsing state file: {e}. Resetting to a clean state.")
+                #bt.logging.error(f"Error loading or parsing state file: {e}. Resetting to a clean state.")
                 self.create_empty_state()
                 return
         else:
-            bt.logging.warning("No state file found. Creating an empty one.")
+            log.validation.warn("No state file found. Creating an empty one.")
+            #bt.logging.warning("No state file found. Creating an empty one.")
             self.create_empty_state()
             return
 
@@ -467,7 +524,8 @@ class Validator(BaseValidatorNeuron):
 
 
 if __name__ == "__main__":
-    bt.logging.info("Setting up main thread interrupt handle.")
+    log.validation.info("Setting up main thread interrupt handle.")
+    #bt.logging.info("Setting up main thread interrupt handle.")
   
     try:
         bt.logging.disable_third_party_loggers()
@@ -479,5 +537,6 @@ if __name__ == "__main__":
         while True:
             time.sleep(5)
             if exit_event.is_set():
-                bt.logging.info("Exit event received. Shutting down...")
+                log.validation.info("Exit event received. Shutting down...")
+                #bt.logging.info("Exit event received. Shutting down...")
                 break

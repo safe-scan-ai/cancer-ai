@@ -19,6 +19,7 @@ from sklearn.metrics import (
 
 from cancer_ai.validator.models import WanDBLogModelBase
 from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
+from cancer_ai.utils.structured_logger import log
 
 class MelanomaWanDBLogModelEntry(WanDBLogModelBase):
     accuracy: float
@@ -90,12 +91,14 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
         if not self.preprocessed_data_dir:
             raise ValueError("Preprocessed data directory not set")
             
-        bt.logging.info(f"Preprocessing {len(X_test)} images for melanoma competition")
+        log.dataset.info(f"Preprocessing {len(X_test)} images for melanoma competition")
+        #bt.logging.info(f"Preprocessing {len(X_test)} images for melanoma competition")
         error_counter = defaultdict(int)
         chunk_paths = []
         
         for i in range(0, len(X_test), MELANOMA_CHUNK_SIZE):
-            bt.logging.debug(f"Processing chunk {i} to {i + MELANOMA_CHUNK_SIZE}")
+            log.dataset.debug(f"Processing chunk {i} to {i + MELANOMA_CHUNK_SIZE}")
+            #bt.logging.debug(f"Processing chunk {i} to {i + MELANOMA_CHUNK_SIZE}")
             chunk_data = []
             
             for img_path in X_test[i: i + MELANOMA_CHUNK_SIZE]:
@@ -115,7 +118,8 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
                     error_counter['IOError'] += 1
                     continue
                 except Exception as e:
-                    bt.logging.debug(f"Unexpected error processing {img_path}: {e}")
+                    log.dataset.debug(f"Unexpected error processing {img_path}: {e}")
+                    #bt.logging.debug(f"Unexpected error processing {img_path}: {e}")
                     error_counter['UnexpectedError'] += 1
                     continue
 
@@ -128,18 +132,22 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
                         pickle.dump(chunk_array, f)
                     
                     chunk_paths.append(str(chunk_file))
-                    bt.logging.debug(f"Saved chunk with {len(chunk_data)} images to {chunk_file}")
+                    log.dataset.debug(f"Saved chunk with {len(chunk_data)} images to {chunk_file}")
+                    #bt.logging.debug(f"Saved chunk with {len(chunk_data)} images to {chunk_file}")
                     
                 except Exception as e:
-                    bt.logging.error(f"Failed to serialize chunk: {e}")
+                    log.dataset.error(f"Failed to serialize chunk: {e}")
+                    #bt.logging.error(f"Failed to serialize chunk: {e}")
                     error_counter['SerializationError'] += 1
 
         if error_counter:
             error_summary = "; ".join([f"{count} {error_type.replace('_', ' ')}(s)" 
                                      for error_type, count in error_counter.items()])
-            bt.logging.info(f"Preprocessing completed with issues: {error_summary}")
+            log.dataset.info(f"Preprocessing completed with issues: {error_summary}")
+            #bt.logging.info(f"Preprocessing completed with issues: {error_summary}")
             
-        bt.logging.info(f"Preprocessed data saved in {len(chunk_paths)} chunks")
+        log.dataset.info(f"Preprocessed data saved in {len(chunk_paths)} chunks")
+        #bt.logging.info(f"Preprocessed data saved in {len(chunk_paths)} chunks")
         self.preprocessed_chunks = chunk_paths
         return chunk_paths
 
@@ -170,10 +178,12 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
                         chunk_data = pickle.load(f)
                         yield chunk_data
                 except Exception as e:
-                    bt.logging.error(f"Error loading preprocessed chunk {chunk_file}: {e}")
+                    log.dataset.error(f"Error loading preprocessed chunk {chunk_file}: {e}")
+                    #bt.logging.error(f"Error loading preprocessed chunk {chunk_file}: {e}")
                     continue
             else:
-                bt.logging.warning(f"Preprocessed chunk file not found: {chunk_file}")
+                log.dataset.warn(f"Preprocessed chunk file not found: {chunk_file}")
+                #bt.logging.warning(f"Preprocessed chunk file not found: {chunk_file}")
 
     def preprocess_data(self):
         """Prepare the data for melanoma competition."""
@@ -185,9 +195,11 @@ class MelanomaCompetitionHandler(BaseCompetitionHandler):
             import shutil
             try:
                 shutil.rmtree(self.preprocessed_data_dir)
-                bt.logging.debug("Cleaned up preprocessed data")
+                log.dataset.debug("Cleaned up preprocessed data")
+                #bt.logging.debug("Cleaned up preprocessed data")
             except Exception as e:
-                bt.logging.error(f"Failed to cleanup preprocessed data: {e}")
+                log.dataset.error(f"Failed to cleanup preprocessed data: {e}")
+                #bt.logging.error(f"Failed to cleanup preprocessed data: {e}")
 
     def prepare_y_pred(self, y_pred: np.ndarray) -> np.ndarray:
         return [1 if y == "True" else 0 for y in self.y_test]

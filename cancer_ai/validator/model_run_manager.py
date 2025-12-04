@@ -9,6 +9,7 @@ from .model_runners.pytorch_runner import PytorchRunnerHandler
 from .model_runners.tensorflow_runner import TensorflowRunnerHandler
 from .model_runners.onnx_runner import OnnxRunnerHandler
 from .exceptions import ModelRunException
+from cancer_ai.utils.structured_logger import log
 
 
 MODEL_TYPE_HANDLERS = {
@@ -39,7 +40,8 @@ class ModelRunManager(SerializableManager):
         
         model_handler = MODEL_TYPE_HANDLERS.get(model_type)
         if model_handler == None: 
-            bt.logging.error (f"Unknown model format {self.model.hf_repo_id} {self.model.hf_repo_id}")
+            log.inference.error(f"Unknown model format {self.model.hf_repo_id} {self.model.hf_repo_id}")
+            #bt.logging.error (f"Unknown model format {self.model.hf_repo_id} {self.model.hf_repo_id}")
             raise ModelRunException("Unknown model format")
 
         
@@ -60,8 +62,10 @@ class ModelRunManager(SerializableManager):
             model_predictions = await self.handler.run(preprocessed_data_generator)
             return model_predictions
         except ModelRunException as e:
-            bt.logging.error(f"Error running model {self.model.hf_repo_id}: {e}")
+            log.inference.error(f"Error running model {self.model.hf_repo_id}: {e}")
+            #bt.logging.error(f"Error running model {self.model.hf_repo_id}: {e}")
             return [] # Return empty list to indicate failure
         except Exception as e:
-            bt.logging.error(f"Unexpected error running model {self.model.hf_repo_id}: {e}", exc_info=True)
+            log.inference.error(f"Unexpected error running model {self.model.hf_repo_id}: {e}", exc_info=True)
+            #bt.logging.error(f"Unexpected error running model {self.model.hf_repo_id}: {e}", exc_info=True)
             return [] 

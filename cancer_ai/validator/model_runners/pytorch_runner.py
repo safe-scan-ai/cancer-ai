@@ -3,6 +3,7 @@ from typing import List, AsyncGenerator
 import numpy as np
 import bittensor as bt
 import asyncio
+from cancer_ai.utils.structured_logger import log
 
 
 class PytorchRunnerHandler(BaseRunnerHandler):
@@ -18,7 +19,8 @@ class PytorchRunnerHandler(BaseRunnerHandler):
         """
         import torch
         
-        bt.logging.info("Running PyTorch model inference on preprocessed data")
+        log.inference.info("Running PyTorch model inference on preprocessed data")
+        #bt.logging.info("Running PyTorch model inference on preprocessed data")
         
         model = torch.load(self.model_path)
         model.eval()
@@ -26,7 +28,8 @@ class PytorchRunnerHandler(BaseRunnerHandler):
         
         async for chunk in preprocessed_data_generator:
             try:
-                bt.logging.debug(f"Running PyTorch inference on chunk with shape {chunk.shape}")
+                log.inference.debug(f"Running PyTorch inference on chunk with shape {chunk.shape}")
+                #bt.logging.debug(f"Running PyTorch inference on chunk with shape {chunk.shape}")
                 # Convert numpy array to torch tensor
                 chunk_tensor = torch.from_numpy(chunk)
                 
@@ -40,13 +43,16 @@ class PytorchRunnerHandler(BaseRunnerHandler):
                     timeout=120.0  # 2 minutes max per chunk
                 )
                 results.extend(chunk_results)
-                bt.logging.debug(f"PyTorch inference completed, got {len(chunk_results)} results")
+                log.inference.debug(f"PyTorch inference completed, got {len(chunk_results)} results")
+                #bt.logging.debug(f"PyTorch inference completed, got {len(chunk_results)} results")
                 
             except asyncio.TimeoutError:
-                bt.logging.error("PyTorch inference timeout after 120s on chunk")
+                log.inference.error("PyTorch inference timeout after 120s on chunk")
+                #bt.logging.error("PyTorch inference timeout after 120s on chunk")
                 continue
             except Exception as e:
-                bt.logging.error(f"PyTorch inference error on chunk: {e}", exc_info=True)
+                log.inference.error(f"PyTorch inference error on chunk: {e}", exc_info=True)
+                #bt.logging.error(f"PyTorch inference error on chunk: {e}", exc_info=True)
                 continue
                 
         return results

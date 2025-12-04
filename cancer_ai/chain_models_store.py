@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from retry import retry
 from websockets.client import OPEN as WS_OPEN
 
+from cancer_ai.utils.structured_logger import log
+
 
 
 class ChainMinerModel(BaseModel):
@@ -84,9 +86,9 @@ class ChainModelMetadata:
 
         try:
             ws = self.subtensor.substrate.connect()
-            bt.logging.info(f"[ChainModelMetadata] Initial WS state: {ws.state}")
+            log.chainstore.info(f"[ChainModelMetadata] Initial WS state: {ws.state}")
         except Exception as e:
-            bt.logging.error("Initial WS connect failed: %s", e, exc_info=True)
+            log.chainstore.error(f"Initial WS connect failed: {e}", exc_info=True)
 
         self.subnet_metadata = self.subtensor.metagraph(self.netuid)
 
@@ -103,11 +105,11 @@ class ChainModelMetadata:
             return current
 
         # If socket not open, reconnect
-        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
+        log.chainstore.warn("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
         try:
             new_ws = self._orig_ws_connect(*args, **kwargs)
         except Exception as e:
-            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
+            log.chainstore.error(f"Failed to reconnect WebSocket: {e}", exc_info=True)
             raise
 
         # Update the substrate.ws attribute so future calls reuse this socket
@@ -143,7 +145,7 @@ class ChainModelMetadata:
             )
 
         model = ChainMinerModel.from_compressed_str(chain_str)
-        bt.logging.trace(f"Model: {model}")
+        log.chainstore.trace(f"Model: {model}")
         if model is None:
             raise ValueError(
                 f"Metadata might be in old format or invalid for hotkey '{hotkey}'. Raw value: {chain_str}"
@@ -155,7 +157,7 @@ class ChainModelMetadata:
     
     def close(self):
         try:
-            bt.logging.debug("Closing ModelDBController and websocket connection.")
+            log.chainstore.debug("Closing ModelDBController and websocket connection.")
             self.subtensor.substrate.close_websocket()
         except Exception:
             pass

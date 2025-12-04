@@ -6,6 +6,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 import bittensor as bt
+from cancer_ai.utils.structured_logger import log
 from huggingface_hub import HfApi, HfFileSystem
 
 from .models import ModelInfo
@@ -41,7 +42,8 @@ class ModelManager():
         self.subtensor.substrate.connect = self._ws_connect
 
         ws = self.subtensor.substrate.connect()
-        bt.logging.info(f"Initial WebSocket state: {ws.state}")
+        #bt.logging.info(f"Initial WebSocket state: {ws.state}")
+        log.validation.info(f"Initial WebSocket state: {ws.state}")
 
     def _ws_connect(self, *args, **kwargs):
         """
@@ -55,11 +57,13 @@ class ModelManager():
             return current
 
         # If socket not open, reconnect
-        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
+        #bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
+        log.validation.warn("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
         try:
             new_ws = self._orig_ws_connect(*args, **kwargs)
         except Exception as e:
-            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
+            #bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
+            log.validation.error(f"Failed to reconnect WebSocket: {e}")
             raise
 
         # Update the substrate.ws attribute so future calls reuse this socket
@@ -116,15 +120,22 @@ class ModelManager():
             hf_id = self.hotkey_store[hotkey].hf_repo_id
 
             if reason.startswith("HF API ERROR"):
-                bt.logging.error(f"Could not verify license for {hf_id}: {reason.split(':', 1)[1]}")
+                log.set_hotkey(hotkey)
+                log.validation.error(f"Could not verify license for {hf_id}: {reason.split(':', 1)[1]}")
+                log.clear_hotkey()
+                #bt.logging.error(f"Could not verify license for {hf_id}: {reason.split(':', 1)[1]}")
                 # self.parent.error_results.append((hotkey, "Couldn't verify license due to HF API error"))
             else:
-                bt.logging.error(f"License for {hf_id} not found or invalid")
+                log.set_hotkey(hotkey)
+                log.validation.error(f"License for {hf_id} not found or invalid")
+                log.clear_hotkey()
+                #bt.logging.error(f"License for {hf_id} not found or invalid")
                 # self.parent.error_results.append((hotkey, "MIT license not found or invalid"))
             return False
 
 
-        bt.logging.debug(f"License found for {model_info.hf_repo_id}")
+        #bt.logging.debug(f"License found for {model_info.hf_repo_id}")
+        log.validation.debug(f"License found for {model_info.hf_repo_id}")
         # List files in the repository and get file date with retry
         files = None
         file_date = None
@@ -144,19 +155,23 @@ class ModelManager():
                 else:
                     # File not found but repository exists, so we'll try again
                     if retry_counter < MAX_RETRIES - 1:
-                        bt.logging.warning(f"Retry {retry_counter+1}/{MAX_RETRIES}: File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}, retrying...")
+                        #bt.logging.warning(f"Retry {retry_counter+1}/{MAX_RETRIES}: File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}, retrying...")
+                        log.validation.warn(f"Retry {retry_counter+1}/{MAX_RETRIES}: File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}, retrying...")
                         await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))
                     else:
-                        bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts")
+                        #bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts")
+                        log.validation.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts")
                         # self.parent.error_results.append((hotkey, f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}"))
                         return False
                         
             except Exception as e:
                 if retry_counter < MAX_RETRIES - 1:
-                    bt.logging.warning(f"Retry {retry_counter+1}/{MAX_RETRIES}: Failed to list files in repository {model_info.hf_repo_id}: {e}")
+                    #bt.logging.warning(f"Retry {retry_counter+1}/{MAX_RETRIES}: Failed to list files in repository {model_info.hf_repo_id}: {e}")
+                    log.validation.warn(f"Retry {retry_counter+1}/{MAX_RETRIES}: Failed to list files in repository {model_info.hf_repo_id}: {e}")
                     await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))  # Exponential backoff
                 else:
-                    bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts: {e}")
+                    #bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts: {e}")
+                    log.validation.error(f"Failed to list files in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts: {e}")
                     # self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
                     return False
         
@@ -199,20 +214,24 @@ class ModelManager():
         
         # Log model size with efficiency implications
         if model_size_mb <= 50:
-            bt.logging.info(
-                f"Model size: {model_size_mb:.1f}MB - Full efficiency score"
-            )
+            #bt.logging.info(
+            #    f"Model size: {model_size_mb:.1f}MB - Full efficiency score"
+            #)
+            log.validation.info(f"Model size: {model_size_mb:.1f}MB - Full efficiency score")
         elif model_size_mb <= 150:
             efficiency_percent = ((150 - model_size_mb) / 100) * 100
-            bt.logging.info(
-                f"Model size: {model_size_mb:.1f}MB - {efficiency_percent:.0f}% efficiency score"
-            )
+            #bt.logging.info(
+            #    f"Model size: {model_size_mb:.1f}MB - {efficiency_percent:.0f}% efficiency score"
+            #)
+            log.validation.info(f"Model size: {model_size_mb:.1f}MB - {efficiency_percent:.0f}% efficiency score")
         else:
-            bt.logging.warning(
-                f"Model size: {model_size_mb:.1f}MB - 0% efficiency score (exceeds 150MB)"
-            )
+            #bt.logging.warning(
+            #    f"Model size: {model_size_mb:.1f}MB - 0% efficiency score (exceeds 150MB)"
+            #)
+            log.validation.warn(f"Model size: {model_size_mb:.1f}MB - 0% efficiency score (exceeds 150MB)")
         
-        bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
+        # bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
+        log.validation.info(f"Successfully downloaded model file to {model_info.file_path}")
         return True
 
     def is_model_too_recent(self, file_date, filename, hotkey):
@@ -234,10 +253,12 @@ class ModelManager():
             if file_date.tzinfo is None:
                 file_date = file_date.replace(tzinfo=timezone.utc)
         except Exception as e:
-            bt.logging.error(f"Failed to parse file date {file_date}: {e}")
+            # bt.logging.error(f"Failed to parse file date {file_date}: {e}")
+            log.validation.error(f"Failed to parse file date {file_date}: {e}")
             return True, None
 
-        bt.logging.debug(f"File {filename} was uploaded on: {file_date}")
+        # bt.logging.debug(f"File {filename} was uploaded on: {file_date}")
+        log.validation.debug(f"File {filename} was uploaded on: {file_date}")
         
         # Check if file is newer than our cutoff date (uploaded within last X minutes)
         now = datetime.now(timezone.utc)  # Get current time in UTC
@@ -246,7 +267,10 @@ class ModelManager():
         time_diff = (now - file_date).total_seconds() / 60
         
         if time_diff < self.config.models_query_cutoff:
-            bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
+            log.set_hotkey(hotkey)
+            log.validation.warn(f"Skipping model because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
+            log.clear_hotkey()
+            # bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
             return True, file_date
             
         return False, file_date
@@ -268,7 +292,10 @@ class ModelManager():
     def delete_model(self, hotkey) -> None:
         """Deletes locally information about a model and the corresponding file on disk."""
 
-        bt.logging.info(f"Deleting model: {hotkey}")
+        # bt.logging.info(f"Deleting model: {hotkey}")
+        log.set_hotkey(hotkey)
+        log.validation.info("Deleting model")
+        log.clear_hotkey()
         if hotkey in self.hotkey_store and self.hotkey_store[hotkey].file_path:
             os.remove(self.hotkey_store[hotkey].file_path)
         self.hotkey_store[hotkey] = None
@@ -306,8 +333,12 @@ class ModelManager():
             for hotkey in group:
                 model_info = self.hotkey_store.get(hotkey)
                 if not model_info:
-                    bt.logging.error(f"Model info for hotkey {hotkey} not found.")
+                    # bt.logging.error(f"Model info for hotkey {hotkey} not found.")
+                    log.set_hotkey(hotkey)
+                    log.validation.error("Model info not found")
+                    log.clear_hotkey()
                     errors[hotkey] = "Model info not found"
+                    # self.parent.error_results.append((hotkey, "Model info not found."))
                     continue
 
                 try:
@@ -325,8 +356,12 @@ class ModelManager():
                         raise ValueError(f"Invalid record contents: {record_data}")
 
                 except Exception as e:
-                    bt.logging.error(f"Failed to load HF repo extrinsic record for {hotkey}: {e}", exc_info=True)
+                    # bt.logging.error(f"Failed to load HF repo extrinsic record for {hotkey}: {e}", exc_info=True)
+                    log.set_hotkey(hotkey)
+                    log.validation.error(f"Failed to load HF repo extrinsic record: {e}")
                     errors[hotkey] = f"Invalid or missing extrinsic record in HF repo: {e}"
+                    log.clear_hotkey()
+                    #self.parent.error_results.append((hotkey, "Invalid or missing extrinsic record in HF repo."))
                     continue
 
                 try:
@@ -358,11 +393,20 @@ class ModelManager():
                     errors[hotkey] = f"Extrinsic validation failed: {e}"
                     continue
                 except Exception as e:
-                    bt.logging.exception(f"Failed to decode extrinsic {extrinsic_id} for {hotkey}: {e}", exc_info=True)
+                    # bt.logging.exception(f"Failed to decode extrinsic {extrinsic_id} for {hotkey}: {e}", exc_info=True)
+                    log.set_hotkey(hotkey)
+                    log.validation.error(f"Failed to decode extrinsic {extrinsic_id}: {e}")
                     errors[hotkey] = f"Extrinsic decoding failed: {e}"
+                    log.clear_hotkey()
+                    #self.parent.error_results.append(
+                    #    (hotkey, f"Extrinsic {extrinsic_id} not found or invalid for hotkey.")
+                    #)
                     continue
 
-                bt.logging.info(f"Found Extrinsic {extrinsic_id} → {module}.{function} {decoded_params} for hotkey {hotkey}")
+                # bt.logging.info(f"Found Extrinsic {extrinsic_id} → {module}.{function} {decoded_params} for hotkey {hotkey}")
+                log.set_hotkey(hotkey)
+                log.validation.info(f"Found Extrinsic {extrinsic_id} → {module}.{function} {decoded_params}")
+                log.clear_hotkey()
                 try:
                     info    = decoded_params.get("info", {})
                     fields  = info.get("fields", [])
@@ -376,8 +420,12 @@ class ModelManager():
                         )
 
                 except Exception as e:
-                    bt.logging.error(f"Model hash comparison failed for {hotkey}: {e}", exc_info=True)
+                    # bt.logging.error(f"Model hash comparison failed for {hotkey}: {e}", exc_info=True)
+                    log.set_hotkey(hotkey)
+                    log.validation.error(f"Model hash comparison failed: {e}")
                     errors[hotkey] = f"Model hash mismatch or extraction error: {e}"
+                    log.clear_hotkey()
+                    #self.parent.error_results.append((hotkey, "Model hash mismatch or extraction error."))
                     continue
                 
                 candidate_hotkeys.append((hotkey, block_num))

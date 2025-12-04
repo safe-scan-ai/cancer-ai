@@ -5,7 +5,7 @@ from typing import List, Tuple
 
 from huggingface_hub import HfApi
 import bittensor as bt
-
+from cancer_ai.utils.structured_logger import log
 from .manager import SerializableManager
 from .utils import run_command, log_time
 from .dataset_handlers.image_csv import DatasetImagesCSV
@@ -67,19 +67,26 @@ class DatasetManager(SerializableManager):
 
     def delete_dataset(self) -> None:
         """Delete dataset from disk"""
-
-        bt.logging.info("Deleting dataset: ")
-
+        log.set_competition(self.competition_id)
+        
+        # bt.logging.info("Deleting dataset: ")
+        log.dataset.info("Deleting dataset")
         try:
             if not os.access(self.config.models.dataset_dir, os.W_OK):
-                bt.logging.error(f"No write permissions for: {self.local_extracted_dir}")
+                #bt.logging.error(f"No write permissions for: {self.local_extracted_dir}")
+                log.dataset.error(f"No write permissions for: {self.local_extracted_dir}")
+                log.clear_competition()
                 return
 
             # Optional: Check if any files are open or being used.
             shutil.rmtree(self.config.models.dataset_dir)
-            bt.logging.info("Dataset deleted")
+            #bt.logging.info("Dataset deleted")
+            log.dataset.info("Dataset deleted")
         except OSError as e:
-            bt.logging.error(f"Failed to delete dataset from disk: {e}")
+            #bt.logging.error(f"Failed to delete dataset from disk: {e}")
+            log.dataset.error(f"Failed to delete dataset from disk: {e}")
+        finally:
+            log.clear_competition()
 
     @log_time
     async def unzip_dataset(self) -> None:
@@ -92,7 +99,8 @@ class DatasetManager(SerializableManager):
         if os.path.exists(self.local_extracted_dir):
             os.system(f"chmod -R u+rw {self.local_extracted_dir} && rm -R {self.local_extracted_dir}")
 
-        bt.logging.debug(f"Dataset extracted to: { self.local_compressed_path}")
+        #bt.logging.debug(f"Dataset extracted to: { self.local_compressed_path}")
+        log.dataset.debug(f"Dataset extracted to: { self.local_compressed_path}")
 
         # Ensure the extraction directory exists
         os.makedirs(self.local_extracted_dir, exist_ok=True)
@@ -103,9 +111,11 @@ class DatasetManager(SerializableManager):
         command = f'unzip -o "{zip_file_path}" -d {extract_dir} && chmod -R u+rw {extract_dir}'
         _, err = await run_command(command)
         if err:
-            bt.logging.error(f"Error unzipping dataset: {err}")
+            #bt.logging.error(f"Error unzipping dataset: {err}")
+            log.dataset.error(f"Error unzipping dataset: {err}")
             raise DatasetManagerException(f"Error unzipping dataset: {err}")
-        bt.logging.info("Dataset unzipped")
+        #bt.logging.info("Dataset unzipped")
+        log.dataset.info("Dataset unzipped")
 
     def set_dataset_handler(self) -> None:
         """Detect dataset type and set handler"""
@@ -126,7 +136,8 @@ class DatasetManager(SerializableManager):
             if direct_csv_path.exists():
                 labels_csv_path = direct_csv_path
                 dataset_root_dir = self.local_extracted_dir
-                bt.logging.info(f"Found CSV file: {csv_name}")
+                #bt.logging.info(f"Found CSV file: {csv_name}")
+                log.dataset.info(f"Found CSV file: {csv_name}")
                 break
         
         # If not found, check in subdirectories
@@ -139,20 +150,23 @@ class DatasetManager(SerializableManager):
                         if potential_csv.exists():
                             labels_csv_path = potential_csv
                             dataset_root_dir = subdir_path
-                            bt.logging.info(f"Found CSV file in subdirectory {subdir_path}: {csv_name}")
+                            #bt.logging.info(f"Found CSV file in subdirectory {subdir_path}: {csv_name}")
+                            log.dataset.info(f"Found CSV file in subdirectory {subdir_path}: {csv_name}")
                             break
                     if labels_csv_path:
                         break
         
         # If still not found, look for any .csv file
         if not labels_csv_path:
-            bt.logging.info("Specific CSV names not found, looking for any .csv file...")
+            #bt.logging.info("Specific CSV names not found, looking for any .csv file...")
+            log.dataset.info("Specific CSV names not found, looking for any .csv file...")
             # Check directly in extracted dir
             for item in os.listdir(self.local_extracted_dir):
                 if item.endswith('.csv'):
                     labels_csv_path = Path(self.local_extracted_dir, item)
                     dataset_root_dir = self.local_extracted_dir
-                    bt.logging.info(f"Found CSV file: {item}")
+                    #bt.logging.info(f"Found CSV file: {item}")
+                    log.dataset.info(f"Found CSV file: {item}")
                     break
             
             # Check in subdirectories
@@ -164,7 +178,8 @@ class DatasetManager(SerializableManager):
                             if subitem.endswith('.csv'):
                                 labels_csv_path = Path(subdir_path, subitem)
                                 dataset_root_dir = subdir_path
-                                bt.logging.info(f"Found CSV file in subdirectory {subdir_path}: {subitem}")
+                                #bt.logging.info(f"Found CSV file in subdirectory {subdir_path}: {subitem}")
+                                log.dataset.info(f"Found CSV file in subdirectory {subdir_path}: {subitem}")
                                 break
                         if labels_csv_path:
                             break
@@ -180,17 +195,25 @@ class DatasetManager(SerializableManager):
 
     async def prepare_dataset(self) -> None:
         """Download dataset, unzip and set dataset handler"""
+        log.set_competition(self.competition_id)
+        
         if self.local_fs_mode:
             self.local_compressed_path = self.hf_filename
         else:
-            bt.logging.info(f"Downloading dataset '{self.competition_id}'")
+            #bt.logging.info(f"Downloading dataset '{self.competition_id}'")
+            log.dataset.info("Downloading dataset")
             await self.download_dataset()
-        bt.logging.info(f"Unzipping dataset '{self.competition_id}'")
+        #bt.logging.info(f"Unzipping dataset '{self.competition_id}'")
+        log.dataset.info("Unzipping dataset")
         await self.unzip_dataset()
-        bt.logging.info(f"Setting dataset handler '{self.competition_id}'")
+        #bt.logging.info(f"Setting dataset handler '{self.competition_id}'")
+        log.dataset.info("Setting dataset handler")
         self.set_dataset_handler()
-        bt.logging.info(f"Preprocessing dataset '{self.competition_id}'")
+        #bt.logging.info(f"Preprocessing dataset '{self.competition_id}'")
+        log.dataset.info("Preprocessing dataset")
         self.data = await self.handler.get_training_data()
+        
+        log.clear_competition()
 
     async def get_data(self) -> Tuple[List, List, List]:
         """Get data from dataset handler"""

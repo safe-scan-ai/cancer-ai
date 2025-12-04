@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 import bittensor as bt
+from cancer_ai.utils.structured_logger import log
 from datetime import datetime, timezone
 
 from cancer_ai.validator.competition_handlers.base_handler import BaseModelEvaluationResult
@@ -155,7 +156,10 @@ class CompetitionResultsStore(BaseModel):
 
         comp_avg_map = self.average_scores[competition_id]
 
-        bt.logging.debug(f"Average scores for competition {competition_id}: {comp_avg_map}")
+        log.set_competition(competition_id)
+        log.statistics.debug(f"Average scores for competition: {comp_avg_map}")
+        log.clear_competition()
+        #bt.logging.debug(f"Average scores for competition {competition_id}: {comp_avg_map}")
 
         positive_avg = { hk: avg for hk, avg in comp_avg_map.items() if avg > 0 }
 
@@ -186,7 +190,10 @@ class CompetitionResultsStore(BaseModel):
                 competitions_to_delete.append(competition_id)
         
         for competition_id in competitions_to_delete:
-            bt.logging.info(f"Deleting inactive competition {competition_id} from results store")
+            log.set_competition(competition_id)
+            log.statistics.info(f"Deleting inactive competition from results store")
+            log.clear_competition()
+            #bt.logging.info(f"Deleting inactive competition {competition_id} from results store")
             del self.score_map[competition_id]
             if competition_id in self.average_scores:
                 del self.average_scores[competition_id]
@@ -220,9 +227,14 @@ class CompetitionResultsStore(BaseModel):
         
         failed_miners = competition_miners - evaluated_miners
         for hotkey in failed_miners:
-            bt.logging.trace(
-                f"Adding score of 0 for hotkey {hotkey} in competition {competition_id} due to model failure or error"
-            )
+            #bt.logging.info(
+            #    f"Adding score of 0 for hotkey {hotkey} in competition {competition_id} due to model failure or error"
+            #)
+            log.set_competition(competition_id)
+            log.set_hotkey(hotkey)
+            log.statistics.debug("Adding score of 0 due to model failure or error")
+            log.clear_competition()
+            log.clear_hotkey()
             self.add_score(competition_id, hotkey, 0.0, date=evaluation_timestamp)
             evaluated_miners.add(hotkey)
         
@@ -230,9 +242,15 @@ class CompetitionResultsStore(BaseModel):
         # Get the winner hotkey for this competition
         try:
             winner_hotkey = self.get_top_hotkey(competition_id)
-            bt.logging.info(f"Competition result for {competition_id}: {winner_hotkey}")
+            log.set_competition(competition_id)
+            log.statistics.info(f"Competition result: {winner_hotkey}")
+            log.clear_competition()
+            #bt.logging.info(f"Competition result for {competition_id}: {winner_hotkey}")
         except ValueError as e:
-            bt.logging.warning(f"Could not determine winner for competition {competition_id}: {e}")
+            #bt.logging.warning(f"Could not determine winner for competition {competition_id}: {e}")
+            log.set_competition(competition_id)
+            log.statistics.warn(f"Could not determine winner: {e}")
+            log.clear_competition()
             winner_hotkey = None
         
         return competition_weights
