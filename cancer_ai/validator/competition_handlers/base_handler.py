@@ -12,6 +12,15 @@ class BaseModelEvaluationResult(BaseModel):
     run_time_s: float = 0.0
     tested_entries: int = 0
 
+    def to_log_dict(self) -> dict:
+        return {
+            "score": self.score,
+            "error": self.error,
+            "run_time_s": self.run_time_s,
+            "tested_entries": self.tested_entries,
+            "predictions_raw": self.predictions_raw,
+        }
+
     class Config:
         arbitrary_types_allowed = True
 

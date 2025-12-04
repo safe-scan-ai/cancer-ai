@@ -90,7 +90,6 @@ class CompetitionResultsStore(BaseModel):
 
         scores = self.score_map[competition_id][hotkey][-MOVING_AVERAGE_LENGTH:]
         scores = [score.score for score in scores]
-        bt.logging.debug(f"Scores used to calculate average for hotkey {hotkey}: {scores}")
         result = sum(score for score in scores) / MOVING_AVERAGE_LENGTH
 
         if competition_id not in self.average_scores:
@@ -221,7 +220,7 @@ class CompetitionResultsStore(BaseModel):
         
         failed_miners = competition_miners - evaluated_miners
         for hotkey in failed_miners:
-            bt.logging.info(
+            bt.logging.trace(
                 f"Adding score of 0 for hotkey {hotkey} in competition {competition_id} due to model failure or error"
             )
             self.add_score(competition_id, hotkey, 0.0, date=evaluation_timestamp)

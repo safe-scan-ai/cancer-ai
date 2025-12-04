@@ -128,8 +128,8 @@ class MockModelManager:
             bt.logging.info(f"Mock deleting model: {hotkey}")
             del self.hotkey_store[hotkey]
     
-    def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> list[str]:
-        return []
+    def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> tuple[list[str], dict[str, str]]:
+        return [], {}
     
     def verify_model_hashes(self, hotkeys: list[str]) -> None:
         bt.logging.info("Mock model hash verification - skipping")
