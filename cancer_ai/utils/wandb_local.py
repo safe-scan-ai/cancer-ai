@@ -167,11 +167,13 @@ async def log_evaluation_results(
     for miner_hotkey, evaluation_result in competition_manager.results:
         # Check if this hotkey has an error and merge it
         error_message = None
-        for error_hotkey, error_msg in competition_manager.error_results:
-            if error_hotkey == miner_hotkey:
-                error_message = error_msg
-                break
-
+        #for error_hotkey, error_msg in competition_manager.error_results:
+        #    if error_hotkey == miner_hotkey:
+        #        error_message = error_msg
+        #        break
+        
+        error_message = evaluation_result.error if hasattr(evaluation_result, 'error') and evaluation_result.error else None
+        
         try:
             model = validator.db_controller.get_latest_model(
                 hotkey=miner_hotkey,
