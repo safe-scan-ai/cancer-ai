@@ -1,4 +1,5 @@
 import bittensor as bt
+from cancer_ai.utils.structured_logger import log
 import os
 import re, traceback
 
@@ -50,7 +51,8 @@ class ModelDBController:
         self.subtensor.substrate.connect = self._ws_connect
 
         ws = self.subtensor.substrate.connect()
-        bt.logging.info(f"Initial WebSocket state: {ws.state}")
+        #bt.logging.info(f"Initial WebSocket state: {ws.state}")
+        log.validation.info(f"Initial WebSocket state: {ws.state}")
 
         self._migrate_database()
 
@@ -66,11 +68,13 @@ class ModelDBController:
             return current
 
         # If socket not open, reconnect
-        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
+        #bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
+        log.validation.warn("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
         try:
             new_ws = self._orig_ws_connect(*args, **kwargs)
         except Exception as e:
-            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
+            #bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
+            log.validation.error(f"Failed to reconnect WebSocket: {e}")
             raise
 
         # Update the substrate.ws attribute so future calls reuse this socket
@@ -85,9 +89,11 @@ class ModelDBController:
             if "model_hash" not in column_names:
                 try:
                     connection.execute("ALTER TABLE models ADD COLUMN model_hash TEXT CHECK(LENGTH(model_hash) <= 8)")
-                    bt.logging.info("Migrated database: Added model_hash column with length constraint to models table")
+                    #bt.logging.info("Migrated database: Added model_hash column with length constraint to models table")
+                    log.validation.info("Migrated database: Added model_hash column with length constraint to models table")
                 except Exception as e:
-                    bt.logging.error(f"Failed to migrate database: {e}")
+                    #bt.logging.error(f"Failed to migrate database: {e}")
+                    log.validation.error(f"Failed to migrate database: {e}")
                     raise
 
 
@@ -100,9 +106,15 @@ class ModelDBController:
                 model_record = self.convert_chain_model_to_db_model(chain_miner_model, hotkey)
                 session.add(model_record)
                 session.commit()
-                bt.logging.debug(f"Added DB model for hotkey {hotkey} (competition {model_record.competition_id}).")
+                #bt.logging.debug(f"Added DB model for hotkey {hotkey} (competition {model_record.competition_id}).")
+                log.set_hotkey(hotkey)
+                log.validation.debug(f"Added DB model (competition {model_record.competition_id})")
+                log.clear_hotkey()
             except Exception as e:
                 session.rollback()
+                log.set_hotkey(hotkey)
+                log.validation.error(f"Failed to add DB model: {e}")
+                log.clear_hotkey()
                 raise e
             finally:
                 session.close()
@@ -134,7 +146,10 @@ class ModelDBController:
                 .first()
             )
         except Exception as e:
-            bt.logging.error(f"Error in get_latest_model for hotkey {hotkey}: {e}\n {traceback.format_exc()}")
+            log.set_hotkey(hotkey)
+            log.validation.error(f"Error in get_latest_model: {e}\n {traceback.format_exc()}")
+            log.clear_hotkey()
+            #bt.logging.error(f"Error in get_latest_model for hotkey {hotkey}: {e}\n {traceback.format_exc()}")
             raise
         finally:
             session.close()
@@ -179,15 +194,24 @@ class ModelDBController:
                 existing_model.model_hash = chain_miner_model.model_hash
 
                 session.commit()
-                bt.logging.debug(f"Successfully updated DB model for hotkey {hotkey}.")
+                #bt.logging.debug(f"Successfully updated DB model for hotkey {hotkey}.")
+                log.set_hotkey(hotkey)
+                log.validation.debug(f"Successfully updated DB model.")
+                log.clear_hotkey()
                 return True
             else:
-                bt.logging.debug(f"No existing DB model found for hotkey {hotkey}. Update skipped.")
+                #bt.logging.debug(f"No existing DB model found for hotkey {hotkey}. Update skipped.")
+                log.set_hotkey(hotkey)
+                log.validation.debug(f"No existing DB model found. Update skipped.")
+                log.clear_hotkey()
                 return False
 
         except Exception as e:
             session.rollback()
-            bt.logging.error(f"Error updating DB model for hotkey {hotkey}: {e}", exc_info=True)
+            #bt.logging.error(f"Error updating DB model for hotkey {hotkey}: {e}", exc_info=True)
+            log.set_hotkey(hotkey)
+            log.validation.error(f"Error updating DB model: {e}")
+            log.clear_hotkey()
             raise e
         finally:
             session.close()
@@ -237,7 +261,10 @@ class ModelDBController:
 
             except Exception as e:
                 session.rollback()
-                bt.logging.error(f"Error processing hotkey {hotkey}: {e}")
+                #bt.logging.error(f"Error processing hotkey {hotkey}: {e}")
+                log.set_hotkey(hotkey)
+                log.validation.error(f"Error processing: {e}")
+                log.clear_hotkey()
 
         try:
             # Delete all records for hotkeys not in the given list
@@ -245,7 +272,8 @@ class ModelDBController:
             session.commit()
         except Exception as e:
             session.rollback()
-            bt.logging.error(f"Error deleting DB records for hotkeys not in list: {e}")
+            #bt.logging.error(f"Error deleting DB records for hotkeys not in list: {e}")
+            log.validation.error(f"Error deleting DB records for hotkeys not in list: {e}")
 
         finally:
             session.close()
@@ -297,12 +325,14 @@ class ModelDBController:
 
             return block_datetime
         except Exception as e:
-            bt.logging.exception(f"Error retrieving block timestamp: {e}")
+            #bt.logging.exception(f"Error retrieving block timestamp: {e}")
+            log.validation.error(f"Error retrieving block timestamp: {e}")
             raise
 
     def close(self):
         try:
-            bt.logging.debug("Closing ModelDBController and websocket connection.")
+            #bt.logging.debug("Closing ModelDBController and websocket connection.")
+            log.validation.debug("Closing ModelDBController and websocket connection.")
             self.subtensor.substrate.close_websocket()
         except Exception:
             pass

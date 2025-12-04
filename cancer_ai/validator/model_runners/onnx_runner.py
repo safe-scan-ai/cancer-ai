@@ -6,6 +6,7 @@ from collections import defaultdict
 from ..exceptions import ModelRunException
 
 from . import BaseRunnerHandler
+from cancer_ai.utils.structured_logger import log
 
 
 class OnnxRunnerHandler(BaseRunnerHandler):
@@ -16,7 +17,8 @@ class OnnxRunnerHandler(BaseRunnerHandler):
     def cleanup(self):
         """Clean up ONNX session and release resources."""
         if self.session:
-            bt.logging.debug("Cleaning up ONNX session.")
+            log.inference.debug("Cleaning up ONNX session.")
+            #bt.logging.debug("Cleaning up ONNX session.")
             self.session = None
     
     def _get_model_input_size(self, session) -> Tuple[int, int]:
@@ -77,10 +79,12 @@ class OnnxRunnerHandler(BaseRunnerHandler):
         try:
             self.session = onnxruntime.InferenceSession(self.model_path)
         except onnxruntime.OnnxRuntimeException as e:
-            bt.logging.error(f"ONNX runtime error when loading model: {e}")
+            log.inference.error(f"ONNX runtime error when loading model: {e}")
+            #bt.logging.error(f"ONNX runtime error when loading model: {e}")
             raise ModelRunException(f"ONNX runtime error when loading model: {e}") from e
         except OSError as e:
-            bt.logging.error(f"File error when loading ONNX model: {e}")
+            log.inference.error(f"File error when loading ONNX model: {e}")
+            #bt.logging.error(f"File error when loading ONNX model: {e}")
             raise ModelRunException(f"File error when loading ONNX model: {e}") from e
 
         # Detect model's expected input size
@@ -126,22 +130,26 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                     input_data = {input_name: chunk}
                 
                 # Run inference with timeout protection
-                bt.logging.debug(f"Running ONNX inference on chunk with shape {chunk.shape}")
+                log.inference.debug(f"Running ONNX inference on chunk with shape {chunk.shape}")
+                #bt.logging.debug(f"Running ONNX inference on chunk with shape {chunk.shape}")
                 # Use asyncio timeout to prevent hanging
                 chunk_results = await asyncio.wait_for(
                     asyncio.to_thread(self.session.run, None, input_data),
                     timeout=120.0  # 2 minutes max per chunk
                 )
                 chunk_results = chunk_results[0]
-                bt.logging.debug(f"ONNX inference completed, got {len(chunk_results)} results")
+                log.inference.debug(f"ONNX inference completed, got {len(chunk_results)} results")
+                #bt.logging.debug(f"ONNX inference completed, got {len(chunk_results)} results")
                 results.extend(chunk_results)
                 
             except asyncio.TimeoutError:
-                bt.logging.error(f"ONNX inference timeout after 120s on chunk")
+                log.inference.error(f"ONNX inference timeout after 120s on chunk")
+                #bt.logging.error(f"ONNX inference timeout after 120s on chunk")
                 error_counter['TimeoutError'] += 1
                 continue
             except Exception as e:
-                bt.logging.error(f"ONNX inference error during chunk processing: {e}", exc_info=True)
+                log.inference.error(f"ONNX inference error during chunk processing: {e}", exc_info=True)
+                #bt.logging.error(f"ONNX inference error during chunk processing: {e}", exc_info=True)
                 error_counter['InferenceError'] += 1
                 continue
 
@@ -149,7 +157,8 @@ class OnnxRunnerHandler(BaseRunnerHandler):
         if error_counter:
             error_summary = "; ".join([f"{count} {error_type.replace('_', ' ')}(s)" 
                                      for error_type, count in error_counter.items()])
-            bt.logging.info(f"ONNX inference completed with issues: {error_summary}")
+            log.inference.info(f"ONNX inference completed with issues: {error_summary}")
+            #bt.logging.info(f"ONNX inference completed with issues: {error_summary}")
             
         if not results:
             raise ModelRunException("No results obtained from model inference")

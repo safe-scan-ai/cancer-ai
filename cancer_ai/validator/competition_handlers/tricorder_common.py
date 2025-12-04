@@ -23,6 +23,7 @@ from sklearn.metrics import (
 
 from cancer_ai.validator.models import WanDBLogModelBase
 from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
+from cancer_ai.utils.structured_logger import log
 
 MAX_INVALID_ENTRIES = 2  # Maximum number of invalid entries allowed in the dataset
 
@@ -339,19 +340,24 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
             if len(validation_errors) > 10:
                 error_summary += f"\n... and {len(validation_errors) - 10} more errors"
 
-            bt.logging.warning(
-                f"TRICORDER COMPETITION WARNING: Dataset validation has issues"
-            )
-            bt.logging.warning(f"Found {len(validation_errors)} validation errors:")
-            bt.logging.warning(error_summary)
+            log.dataset.warn("Dataset validation has issues")
+            log.dataset.warn(f"Found {len(validation_errors)} validation errors:")
+            log.dataset.warn(error_summary)
+            #bt.logging.warning(
+            #    f"TRICORDER COMPETITION WARNING: Dataset validation has issues"
+            #)
+            #bt.logging.warning(f"Found {len(validation_errors)} validation errors:")
+            #bt.logging.warning(error_summary)
 
             if len(validation_errors) > MAX_INVALID_ENTRIES:
-                bt.logging.error(
-                    f"TRICORDER COMPETITION CANCELLED: Not enough valid data to evaluate"
-                )
-                bt.logging.error(
-                    f" {len(validation_errors)} entries are invalid, maximum invalid: {MAX_INVALID_ENTRIES}"
-                )
+                log.dataset.error("COMPETITION CANCELLED: Not enough valid data to evaluate")
+                log.dataset.error(f"{len(validation_errors)} entries are invalid, maximum invalid: {MAX_INVALID_ENTRIES}")
+                #bt.logging.error(
+                #    f"TRICORDER COMPETITION CANCELLED: Not enough valid data to evaluate"
+                #)
+                #bt.logging.error(
+                #    f" {len(validation_errors)} entries are invalid, maximum invalid: {MAX_INVALID_ENTRIES}"
+                #)
                 raise ValueError(f"Not enough valid data to evaluate.")
 
     def _convert_labels(self) -> None:
@@ -396,18 +402,24 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         if not self.preprocessed_data_dir:
             raise ValueError("Preprocessed data directory not set")
 
-        bt.logging.trace(
-            f"Preprocessing {len(X_test)} images for tricorder competition"
-        )
-        bt.logging.trace(f"Using chunk size: {CHUNK_SIZE}")
-        bt.logging.trace(f"Available metadata entries: {len(self.metadata)}")
+        log.dataset.debug(f"Preprocessing {len(X_test)} images for tricorder competition")
+        log.dataset.debug(f"Using chunk size: {CHUNK_SIZE}")
+        log.dataset.debug(f"Available metadata entries: {len(self.metadata)}")
+        #bt.logging.debug(
+        #    f"TRICORDER: Preprocessing {len(X_test)} images for tricorder competition"
+        #)
+        #bt.logging.debug(f"TRICORDER: Using chunk size: {CHUNK_SIZE}")
+        #bt.logging.debug(f"TRICORDER: Available metadata entries: {len(self.metadata)}")
         error_counter = defaultdict(int)
         chunk_paths = []
 
         for i in range(0, len(X_test), CHUNK_SIZE):
-            bt.logging.trace(
+            log.dataset.debug(
                 f"Processing chunk {len(chunk_paths)} - images {i} to {min(i + CHUNK_SIZE, len(X_test))}"
             )
+            #bt.logging.debug(
+            #    f"TRICORDER: Processing chunk {len(chunk_paths)} - images {i} to {min(i + CHUNK_SIZE, len(X_test))}"
+            #)
             chunk_data = []
             chunk_metadata = []
 
@@ -437,7 +449,8 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                     error_counter["IOError"] += 1
                     continue
                 except Exception as e:
-                    bt.logging.debug(f"Unexpected error processing {img_path}: {e}")
+                    log.dataset.debug(f"Unexpected error processing {img_path}: {e}")
+                    #bt.logging.debug(f"Unexpected error processing {img_path}: {e}")
                     error_counter["UnexpectedError"] += 1
                     continue
 
@@ -458,12 +471,16 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                         pickle.dump(chunk_metadata, f)
 
                     chunk_paths.append(str(chunk_file))
-                    bt.logging.trace(
+                    log.dataset.debug(
                         f"Saved chunk with {len(chunk_data)} images and metadata to {chunk_file}"
                     )
+                    #bt.logging.debug(
+                    #    f"TRICORDER: Saved chunk with {len(chunk_data)} images and metadata to {chunk_file}"
+                    #)
 
                 except Exception as e:
-                    bt.logging.error(f"Failed to serialize chunk: {e}")
+                    log.dataset.error(f"Failed to serialize chunk: {e}")
+                    #bt.logging.error(f"TRICORDER: Failed to serialize chunk: {e}")
                     error_counter["SerializationError"] += 1
 
         if error_counter:
@@ -473,14 +490,19 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                     for error_type, count in error_counter.items()
                 ]
             )
-            bt.logging.trace(
+            log.dataset.debug(
                 f"Preprocessing completed with issues: {error_summary}"
             )
+            #bt.logging.debug(
+            #    f"TRICORDER: Preprocessing completed with issues: {error_summary}"
+            #)
 
-        bt.logging.trace(
-            f"Preprocessed data saved in {len(chunk_paths)} chunks"
-        )
-        bt.logging.trace(f"Chunk paths: {chunk_paths}")
+        log.dataset.debug(f"Preprocessed data saved in {len(chunk_paths)} chunks")
+        log.dataset.debug(f"Chunk paths: {chunk_paths}")
+        #bt.logging.debug(
+        #    f"TRICORDER: Preprocessed data saved in {len(chunk_paths)} chunks"
+        #)
+        #bt.logging.debug(f"TRICORDER: Chunk paths: {chunk_paths}")
         self.preprocessed_chunks = chunk_paths
         return chunk_paths
 
@@ -508,7 +530,8 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         """Generator that yields preprocessed data chunks with preprocessed metadata"""
 
         for i, chunk_file in enumerate(self.preprocessed_chunks):
-            bt.logging.trace(f"Processing chunk {i}: {chunk_file}")
+            log.dataset.debug(f"Processing chunk {i}: {chunk_file}")
+            #bt.logging.trace(f"TRICORDER: Processing chunk {i}: {chunk_file}")
             if os.path.exists(chunk_file):
                 try:
                     # Load image data
@@ -523,26 +546,32 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                             chunk_metadata = pickle.load(f)
                     else:
                         # Default metadata if file doesn't exist
-                        bt.logging.warning(
-                            f"Metadata file not found, using defaults"
-                        )
+                        log.dataset.warn("Metadata file not found, using defaults")
+                        #bt.logging.warning(
+                        #    f"TRICORDER: Metadata file not found, using defaults"
+                        #)
                         chunk_metadata = [
                             {"age": None, "gender": None, "location": None}
                             for _ in range(len(chunk_data))
                         ]
 
-                    bt.logging.trace(
+                    log.dataset.debug(
                         f"Yielding chunk {i} with {len(chunk_data)} samples and {len(chunk_metadata)} metadata"
                     )
+                    #bt.logging.debug(
+                    #    f"TRICORDER: Yielding chunk {i} with {len(chunk_data)} samples and {len(chunk_metadata)} metadata"
+                    #)
                     preprocessed_metadata = convert_metadata_to_array(chunk_metadata)
                     yield chunk_data, preprocessed_metadata
                 except Exception as e:
-                    bt.logging.error(
-                        f"Error loading preprocessed chunk {chunk_file}: {e}"
-                    )
+                    log.dataset.error(f"Error loading preprocessed chunk {chunk_file}: {e}")
+                    #bt.logging.error(
+                    #    f"Error loading preprocessed chunk {chunk_file}: {e}"
+                    #)
                     continue
             else:
-                bt.logging.warning(f"Preprocessed chunk file not found: {chunk_file}")
+                log.dataset.warn(f"Preprocessed chunk file not found: {chunk_file}")
+                #bt.logging.warning(f"Preprocessed chunk file not found: {chunk_file}")
 
     def cleanup_preprocessed_data(self) -> None:
         """Clean up preprocessed data files"""
@@ -551,9 +580,11 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
 
             try:
                 shutil.rmtree(self.preprocessed_data_dir)
-                bt.logging.trace("Cleaned up preprocessed data")
+                log.dataset.debug("Cleaned up preprocessed data")
+                #bt.logging.debug("Cleaned up preprocessed data")
             except Exception as e:
-                bt.logging.error(f"Failed to cleanup preprocessed data: {e}")
+                log.dataset.error(f"Failed to cleanup preprocessed data: {e}")
+                #bt.logging.error(f"Failed to cleanup preprocessed data: {e}")
 
     def preprocess_data(self):
         """Legacy method - using preprocess_and_serialize_data instead"""
@@ -622,28 +653,34 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         import bittensor as bt
         
         try:
-            bt.logging.debug(f"calculate_score called with metrics={metrics}")
-            bt.logging.debug(f"Scoring weights - ACCURACY_WEIGHT={ACCURACY_WEIGHT}, WEIGHTED_F1_WEIGHT={WEIGHTED_F1_WEIGHT}, PREDICTION_WEIGHT={PREDICTION_WEIGHT}, EFFICIENCY_WEIGHT={EFFICIENCY_WEIGHT}")
+            log.statistics.debug(f"TRICORDER: calculate_score called with metrics={metrics}")
+            log.statistics.debug(f"TRICORDER: Scoring weights - ACCURACY_WEIGHT={ACCURACY_WEIGHT}, WEIGHTED_F1_WEIGHT={WEIGHTED_F1_WEIGHT}, PREDICTION_WEIGHT={PREDICTION_WEIGHT}, EFFICIENCY_WEIGHT={EFFICIENCY_WEIGHT}")
+            #bt.logging.debug(f"TRICORDER: calculate_score called with metrics={metrics}")
+            #bt.logging.debug(f"TRICORDER: Scoring weights - ACCURACY_WEIGHT={ACCURACY_WEIGHT}, WEIGHTED_F1_WEIGHT={WEIGHTED_F1_WEIGHT}, PREDICTION_WEIGHT={PREDICTION_WEIGHT}, EFFICIENCY_WEIGHT={EFFICIENCY_WEIGHT}")
             
             # Prediction quality (accuracy + weighted F1)
             prediction_score = (
                 ACCURACY_WEIGHT * metrics["accuracy"]
                 + WEIGHTED_F1_WEIGHT * metrics["weighted_f1"]
             )
-            bt.logging.debug(f"prediction_score = {ACCURACY_WEIGHT} * {metrics['accuracy']} + {WEIGHTED_F1_WEIGHT} * {metrics['weighted_f1']} = {prediction_score:.6f}")
+            log.statistics.debug(f"TRICORDER: prediction_score = {ACCURACY_WEIGHT} * {metrics['accuracy']} + {WEIGHTED_F1_WEIGHT} * {metrics['weighted_f1']} = {prediction_score:.6f}")
+            #bt.logging.debug(f"TRICORDER: prediction_score = {ACCURACY_WEIGHT} * {metrics['accuracy']} + {WEIGHTED_F1_WEIGHT} * {metrics['weighted_f1']} = {prediction_score:.6f}")
 
             # Efficiency score
             efficiency_score = metrics.get("efficiency", 1.0)  # Default to max if not set
-            bt.logging.debug(f"efficiency_score from metrics = {efficiency_score:.6f}")
+            log.statistics.debug(f"TRICORDER: efficiency_score from metrics = {efficiency_score:.6f}")
+            #bt.logging.debug(f"TRICORDER: efficiency_score from metrics = {efficiency_score:.6f}")
 
             final_score = (
                 PREDICTION_WEIGHT * prediction_score + EFFICIENCY_WEIGHT * efficiency_score
             )
-            bt.logging.debug(f"final_score = {PREDICTION_WEIGHT} * {prediction_score:.6f} + {EFFICIENCY_WEIGHT} * {efficiency_score:.6f} = {final_score:.6f}")
+            log.statistics.debug(f"TRICORDER: final_score = {PREDICTION_WEIGHT} * {prediction_score:.6f} + {EFFICIENCY_WEIGHT} * {efficiency_score:.6f} = {final_score:.6f}")
+            #bt.logging.debug(f"TRICORDER: final_score = {PREDICTION_WEIGHT} * {prediction_score:.6f} + {EFFICIENCY_WEIGHT} * {efficiency_score:.6f} = {final_score:.6f}")
             
             return final_score
         except Exception as e:
-            bt.logging.error(f"ERROR in calculate_score: {e}, metrics: {metrics}", exc_info=True)
+            log.statistics.error(f"TRICORDER: ERROR in calculate_score: {e}, metrics: {metrics}", exc_info=True)
+            #bt.logging.error(f"TRICORDER: ERROR in calculate_score: {e}, metrics: {metrics}", exc_info=True)
             return 0.0
 
     def get_model_result(
@@ -657,7 +694,8 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         import bittensor as bt
         
         try:
-            bt.logging.debug(f"get_model_result called with y_test len={len(y_test)}, y_pred len={len(y_pred)}, model_size_mb={model_size_mb}")
+            log.inference.debug(f"TRICORDER: get_model_result called with y_test len={len(y_test)}, y_pred len={len(y_pred)}, model_size_mb={model_size_mb}")
+            #bt.logging.debug(f"TRICORDER: get_model_result called with y_test len={len(y_test)}, y_pred len={len(y_pred)}, model_size_mb={model_size_mb}")
             
             # Convert to numpy arrays
             y_test = np.array(y_test)
@@ -712,9 +750,11 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
             weighted_f1 = self._calculate_weighted_f1(category_scores)
 
             # Log important metrics
-            bt.logging.trace(f"Model evaluation results: Accuracy: {accuracy:.4f}, Weighted F1: {weighted_f1:.4f}")
+            log.statistics.info(f"Model evaluation results:: Accuracy: {accuracy:.4f}, Weighted F1: {weighted_f1:.4f}")
+            #bt.logging.info(f"Model evaluation results:: Accuracy: {accuracy:.4f}, Weighted F1: {weighted_f1:.4f}")
             for category, score in category_scores.items():
-                bt.logging.trace(f"- {category.value} F1: {score:.4f}")
+                log.statistics.info(f"- {category.value} F1: {score:.4f}")
+                #bt.logging.info(f"- {category.value} F1: {score:.4f}")
 
         
             efficiency_score = 1.0  # Default to max if size not provided
@@ -729,11 +769,15 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 else:
                     efficiency_score = 0.0  # No efficiency score above MAX MB
 
-                bt.logging.trace(
+                log.statistics.info(
                     f"- Model size: {model_size_mb:.1f}MB, Efficiency score: {efficiency_score:.2f}"
                 )
+                #bt.logging.info(
+                #    f"- Model size: {model_size_mb:.1f}MB, Efficiency score: {efficiency_score:.2f}"
+                #)
             else:
-                bt.logging.trace("No model size provided, using default efficiency=1.0")
+                log.statistics.debug("No model size provided, using default efficiency=1.0")
+                #bt.logging.debug("TRICORDER: No model size provided, using default efficiency=1.0")
 
             # Calculate final score using calculate_score method
             # Round metrics to ensure deterministic scoring across different hardware
@@ -742,13 +786,16 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 "weighted_f1": round(weighted_f1, 6),
                 "efficiency": round(efficiency_score, 6),
             }
-            bt.logging.trace(f"Final metrics before calculate_score: {metrics}")
+            log.statistics.info(f"Final metrics before calculate_score: {metrics}")
+            #bt.logging.info(f"TRICORDER: Final metrics before calculate_score: {metrics}")
             
             score = self.calculate_score(metrics)
-            bt.logging.trace(f"calculate_score returned: {score:.6f}")
+            log.statistics.info(f"calculate_score returned: {score:.6f}")
+            #bt.logging.info(f"TRICORDER: calculate_score returned: {score:.6f}")
             
             # Create result object
-            bt.logging.debug("Creating TricorderEvaluationResult object...")
+            log.statistics.debug("Creating TricorderEvaluationResult object...")
+            #bt.logging.debug("TRICORDER: Creating TricorderEvaluationResult object...")
             result = TricorderEvaluationResult(
                 tested_entries=len(y_test),
                 run_time_s=run_time_s,
@@ -768,22 +815,28 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 score=score,
             )
 
-            bt.logging.trace(f"Result created successfully with score={result.score:.6f}")
+            log.statistics.info(f"Result created successfully with score={result.score:.6f}")
+            #bt.logging.info(f"TRICORDER: Result created successfully with score={result.score:.6f}")
             return result
 
         except Exception as e:
             error_msg = f"Error in get_model_result: {str(e)}"
-            bt.logging.error("EXCEPTION in get_model_result!", exc_info=True)
-            bt.logging.error(f"Exception details - {error_msg}")
-            bt.logging.error(f"y_test available: {'y_test' in locals()}, y_pred available: {'y_pred' in locals()}")
-            bt.logging.error(f"model_size_mb: {model_size_mb}, run_time_s: {run_time_s}")
+            log.inference.error("EXCEPTION in get_model_result!", exc_info=True)
+            log.inference.error(f"Exception details - {error_msg}")
+            log.inference.error(f"y_test available: {'y_test' in locals()}, y_pred available: {'y_pred' in locals()}")
+            log.inference.error(f"model_size_mb: {model_size_mb}, run_time_s: {run_time_s}")
+            #bt.logging.error("TRICORDER: EXCEPTION in get_model_result!", exc_info=True)
+            #bt.logging.error(f"TRICORDER: Exception details - {error_msg}")
+            #bt.logging.error(f"TRICORDER: y_test available: {'y_test' in locals()}, y_pred available: {'y_pred' in locals()}")
+            #bt.logging.error(f"TRICORDER: model_size_mb: {model_size_mb}, run_time_s: {run_time_s}")
             
             result = TricorderEvaluationResult(
                 tested_entries=len(y_test) if "y_test" in locals() else 0,
                 run_time_s=run_time_s,
                 error=error_msg,
             )
-            bt.logging.error(f"Returning error result with score={result.score}")
+            log.inference.error(f"Returning error result with score={result.score}")
+            #bt.logging.error(f"TRICORDER: Returning error result with score={result.score}")
             return result
 
     def get_comparable_result_fields(self) -> tuple[str, ...]:
