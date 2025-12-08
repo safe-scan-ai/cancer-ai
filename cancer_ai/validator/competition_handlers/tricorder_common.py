@@ -192,6 +192,11 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
     )
 
     def to_log_dict(self) -> dict:
+        # Ensure risk_category_scores keys are strings
+        risk_scores = getattr(self, "risk_category_scores", None)
+        if risk_scores:
+            risk_scores = {str(k): v for k, v in risk_scores.items()}
+
         return {
             "tested_entries": self.tested_entries,
             "accuracy": self.accuracy,
@@ -205,7 +210,7 @@ class TricorderEvaluationResult(BaseModelEvaluationResult):
             "weighted_f1": getattr(self, "weighted_f1", None),
             "f1_by_class": getattr(self, "f1_by_class", None),
             "class_weights": getattr(self, "class_weights", None),
-            "risk_category_scores": getattr(self, "risk_category_scores", None),
+            "risk_category_scores": risk_scores,
             "predictions_raw": getattr(self, "predictions_raw", None),
             "score": getattr(self, "score", None),
             "error": getattr(self, "error", None),

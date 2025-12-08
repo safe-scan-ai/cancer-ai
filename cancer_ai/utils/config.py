@@ -138,6 +138,13 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--wandb.project_name",
+        type=str,
+        help="The name of the project where you are sending the new run. By default - the one in dataset ",
+        default=None,
+    )
+
+    parser.add_argument(
         "--wandb.notes",
         type=str,
         help="Notes to add to the wandb run.",
