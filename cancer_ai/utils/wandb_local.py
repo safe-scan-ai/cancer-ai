@@ -74,7 +74,6 @@ class LocalWandbSaver:
     def log_model_evaluation(self, data: Dict[str, Any]):
         """Log model evaluation data."""
         self._append_to_file(self.model_file, data)
-        bt.logging.debug(f"Saved model evaluation to {self.model_file}")
     
     def init_session(self, project: str, group: str):
         """Mock wandb.init() for local saving."""
@@ -143,7 +142,8 @@ async def log_evaluation_results(
             local_wandb.finish()
         
         if not validator.config.wandb.off:
-            wandb.init(project=competition_id, group="competition_evaluation")
+            project_name = validator.config.wandb.project_name if validator.config.wandb.project_name else competition_id
+            wandb.init(project=project_name, group="competition_evaluation")
             wandb.log(winner_log.model_dump())
             wandb.finish()
     except Exception as wandb_error:
@@ -158,72 +158,59 @@ async def log_evaluation_results(
             local_wandb = init_local_wandb(competition_id, "model_evaluation")
         
         if not validator.config.wandb.off:
-            wandb.init(project=competition_id, group="model_evaluation")
+            project_name = validator.config.wandb.project_name if validator.config.wandb.project_name else competition_id
+            wandb.init(project=project_name, group="model_evaluation")
     except Exception as wandb_error:
         import bittensor as bt
         bt.logging.warning(f"Failed to initialize wandb for model evaluation: {wandb_error}")
         
-    # Log successful results and merge any error info
-    for miner_hotkey, evaluation_result in competition_manager.results:
-        # Check if this hotkey has an error and merge it
-        error_message = None
-        for error_hotkey, error_msg in competition_manager.error_results:
-            if error_hotkey == miner_hotkey:
-                error_message = error_msg
-                break
-
-        try:
-            model = validator.db_controller.get_latest_model(
-                hotkey=miner_hotkey,
-                cutoff_time=validator.config.models_query_cutoff,
-            )
-            avg_score: float = 0.0
-            if (
-                data_package.competition_id in validator.competition_results_store.average_scores and 
-                miner_hotkey in validator.competition_results_store.average_scores[competition_id]
-            ):
-                avg_score = validator.competition_results_store.average_scores[competition_id][miner_hotkey]
-            
-            ActualWanDBLogModelEntryClass: type = competition_manager.competition_handler.WanDBLogModelClass
-            model_log: WanDBLogModelBase = ActualWanDBLogModelEntryClass(
+    # Log all model results (both successful and error cases)
+    for miner_hotkey, model_result in competition_manager.results:
+        if model_result.error:
+            # Error case: log as WanDBLogModelErrorEntry
+            model_log: WanDBLogModelErrorEntry = WanDBLogModelErrorEntry(
                 uuid=competition_uuid,
                 competition_id=competition_id,
                 miner_hotkey=miner_hotkey,
                 uid=validator.metagraph.hotkeys.index(miner_hotkey),
                 validator_hotkey=validator.wallet.hotkey.ss58_address,
-                model_url=model.hf_link,
-                code_url=model.hf_code_link,
-                average_score=avg_score,
-                run_time_s=evaluation_result.run_time_s,
                 dataset_filename=data_package.dataset_hf_filename,
-                errors=error_message or "",  # Ensure errors is always a string, never None
-                **evaluation_result.to_log_dict(),
+                errors=model_result.error,
             )
-            
-            if validator.config.wandb.local_save and local_wandb is not None:
-                local_wandb.log_model_evaluation(model_log.model_dump())
-            
-            if not validator.config.wandb.off:
-                wandb.log(model_log.model_dump())
-        except Exception as wandb_error:
-            import bittensor as bt
-            bt.logging.warning(f"Failed to log model results for hotkey {miner_hotkey}: {wandb_error}")
-    
-    # Log errors for models that never ran (no evaluation result exists)
-    processed_hotkeys = {hotkey for hotkey, _ in competition_manager.results}
-    for miner_hotkey, error_message in competition_manager.error_results:
-        if miner_hotkey in processed_hotkeys:
-            continue  # Already merged above
-        
-        model_log: WanDBLogModelErrorEntry = WanDBLogModelErrorEntry(
-            uuid=competition_uuid,
-            competition_id=competition_id,
-            miner_hotkey=miner_hotkey,
-            uid=validator.metagraph.hotkeys.index(miner_hotkey),
-            validator_hotkey=validator.wallet.hotkey.ss58_address,
-            dataset_filename=data_package.dataset_hf_filename,
-            errors=error_message,
-        )
+        else:
+            # Success case: log using competition-specific WanDBLogModelClass
+            try:
+                model = validator.db_controller.get_latest_model(
+                    hotkey=miner_hotkey,
+                    cutoff_time=validator.config.models_query_cutoff,
+                )
+                avg_score: float = 0.0
+                if (
+                    data_package.competition_id in validator.competition_results_store.average_scores and 
+                    miner_hotkey in validator.competition_results_store.average_scores[competition_id]
+                ):
+                    avg_score = validator.competition_results_store.average_scores[competition_id][miner_hotkey]
+                
+                # Get competition-specific metrics from model_result
+                ActualWanDBLogModelEntryClass: type = competition_manager.competition_handler.WanDBLogModelClass
+                model_log: WanDBLogModelBase = ActualWanDBLogModelEntryClass(
+                    uuid=competition_uuid,
+                    competition_id=competition_id,
+                    miner_hotkey=miner_hotkey,
+                    uid=validator.metagraph.hotkeys.index(miner_hotkey),
+                    validator_hotkey=validator.wallet.hotkey.ss58_address,
+                    model_url=model.hf_link,
+                    code_url=model.hf_code_link,
+                    average_score=avg_score,
+                    run_time_s=model_result.run_time_s,
+                    dataset_filename=data_package.dataset_hf_filename,
+                    errors="",  # No errors for successful models
+                    **model_result.to_log_dict(),
+                )
+            except Exception as wandb_error:
+                import bittensor as bt
+                bt.logging.warning(f"Failed to log model results for hotkey {miner_hotkey}: {wandb_error}")
+                continue
         
         if validator.config.wandb.local_save and local_wandb is not None:
             local_wandb.log_model_evaluation(model_log.model_dump())
