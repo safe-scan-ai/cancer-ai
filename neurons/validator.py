@@ -336,25 +336,28 @@ class Validator(BaseValidatorNeuron):
                     #    f"[{comp_id}] Rank {rank} hotkey {hotkey!r} not in metagraph"
                     #)
 
-            # Award minimal scores to remaining miners (beyond top 10)
+            # Award scores to remaining miners (beyond top 10) using formula:
+            # score_i = 0.005 * (k - i + 1) / (k * (k + 1) / 2)
+            # This distributes 0.5% total across positions 11+ in decreasing order
             remaining_hotkeys = sorted_hotkeys[10:]
             k = len(remaining_hotkeys)
             if k > 0:
-                # compute the minimal-value sequence:
-                # index 0 (highest score) → max_min_score,
-                # index k-1 (lowest) → min_min_score
+                # Total score to distribute
+                total_score = 0.005
                 if k > 1:
-                    span = max_min_score - min_min_score
-                    step = span / (k - 1)
+                    # Formula: score_i = S * (k - i + 1) / (k * (k + 1) / 2)
+                    # where S = total_score, k = number of miners, i = rank (1 to k)
+                    # Denominator: sum of arithmetic series 1+2+...+k = k*(k+1)/2
+                    denominator = k * (k + 1) / 2
                     minimal_values = [
-                        max_min_score - i * step
-                        for i in range(k)
+                        total_score * (k-i + 1) / denominator
+                        for i in range(1, k + 1)
                     ]
                 else:
-                    # single runner-up gets the top of the band
-                    minimal_values = [max_min_score]
+                    # Single miner gets all 0.005
+                    minimal_values = [total_score]
 
-                # apply those concrete minimal values (not scaled by weight)
+                # Apply scores (not scaled by weight, will be normalized later)
                 for minimal, hotkey in zip(minimal_values, remaining_hotkeys):
                     if hotkey in self.metagraph.hotkeys:
                         idx = self.metagraph.hotkeys.index(hotkey)
