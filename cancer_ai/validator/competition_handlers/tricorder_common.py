@@ -9,7 +9,6 @@ import pickle
 from pathlib import Path
 from collections import defaultdict
 
-import random
 from pydantic import Field
 import numpy as np
 import bittensor as bt
@@ -402,13 +401,6 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 f"Mismatched lengths: X_test={len(X_test)}, "
                 f"y_test={len(self.y_test)}, metadata={len(self.metadata)}"
             )
-        
-        # Shuffle images, labels, and metadata
-        indices = list(range(len(X_test)))
-        random.shuffle(indices)
-        X_test = [X_test[i] for i in indices]
-        self.y_test = [self.y_test[i] for i in indices]
-        self.metadata = [self.metadata[i] for i in indices]
 
         bt.logging.trace(
             f"Preprocessing {len(X_test)} images for tricorder competition"
