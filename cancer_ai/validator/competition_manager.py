@@ -83,6 +83,7 @@ class CompetitionManager(SerializableManager):
         self.subtensor = subtensor
         self.competition_id = competition_id
         self.results: list[tuple[str, BaseModelEvaluationResult]] = []
+        self.error_results: list[tuple[str, str]] = [] 
         # Initialize model manager based on config
         if hasattr(config, 'mock_models') and config.mock_models:
             self.model_manager = MockModelManager(config, db_controller, subtensor, self)

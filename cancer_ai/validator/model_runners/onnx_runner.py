@@ -100,41 +100,60 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                     
                     # Prepare inputs for ONNX model
                     inputs = self.session.get_inputs()
-                    input_data = {}
+
+                    # Process each image individually
+                    batch_size = chunk.shape[0]
                     
-                    if len(inputs) >= 2:
-                        # Model expects both image and metadata inputs
-                        image_input_name = inputs[0].name
-                        metadata_input_name = inputs[1].name
-                        metadata_array = metadata
+                    for i in range(batch_size):
+                        # Extract single image: (3, 512, 512) -> (1, 3, 512, 512)
+                        single_image = chunk[i:i+1]
+                        # Extract single metadata: (, 3) -> (1, 3)
+                        single_metadata = metadata[i:i+1]
                         
-                        input_data = {
-                            image_input_name: chunk,
-                            metadata_input_name: metadata_array
-                        }
-                    else:
-                        # Model only expects image input (fallback)
-                        input_data = {inputs[0].name: chunk}
+                        # Prepare input for single image
+                        if len(inputs) >= 2:
+                            # Model expects both image and metadata inputs
+                            image_input_name = inputs[0].name
+                            metadata_input_name = inputs[1].name
+                            
+                            input_data = {
+                                image_input_name: single_image,
+                                metadata_input_name: single_metadata
+                            }
+                        else:
+                            # Model only expects image input (fallback)
+                            input_data = {inputs[0].name: single_image}
+                        
+                        bt.logging.debug(f"Running ONNX inference on image {i+1}/{batch_size} with shape {single_image.shape}")
+                        single_result = await asyncio.wait_for(
+                            asyncio.to_thread(self.session.run, None, input_data),
+                            timeout=120.0  # 2 minutes max per image
+                        )
+                        single_result = single_result[0]
+                        if len(single_result.shape) > 1 and single_result.shape[0] == 1:
+                            single_result = np.squeeze(single_result, axis=0)  # Remove batch dimension
+                        results.append(single_result)
+                    
                 else:
                     # Melanoma format: plain numpy array (no metadata)
                     chunk = data
                     
                     # Resize chunk to match model's expected input size
                     chunk = self._resize_image_batch(chunk, model_input_size)
-                    
-                    input_name = self.session.get_inputs()[0].name
-                    input_data = {input_name: chunk}
-                
-                # Run inference with timeout protection
-                bt.logging.debug(f"Running ONNX inference on chunk with shape {chunk.shape}")
-                # Use asyncio timeout to prevent hanging
-                chunk_results = await asyncio.wait_for(
-                    asyncio.to_thread(self.session.run, None, input_data),
-                    timeout=120.0  # 2 minutes max per chunk
-                )
-                chunk_results = chunk_results[0]
-                bt.logging.debug(f"ONNX inference completed, got {len(chunk_results)} results")
-                results.extend(chunk_results)
+                    batch_size = chunk.shape[0]
+                    for i in range(batch_size):
+                        single_image = chunk[i:i+1]
+                        input_name = self.session.get_inputs()[0].name
+                        input_data = {input_name: single_image}
+                        bt.logging.debug(f"Running ONNX inference on image {i+1}/{batch_size} with shape {single_image.shape}")
+                        single_result = await asyncio.wait_for(
+                            asyncio.to_thread(self.session.run, None, input_data),
+                            timeout=120.0  # 2 minutes max per image
+                        )
+                        single_result = single_result[0]
+                        if len(single_result.shape) > 1 and single_result.shape[0] == 1:
+                            single_result = np.squeeze(single_result, axis=0)   # Remove batch dimension
+                        results.append(single_result)
                 
             except asyncio.TimeoutError:
                 bt.logging.error(f"ONNX inference timeout after 120s on chunk")

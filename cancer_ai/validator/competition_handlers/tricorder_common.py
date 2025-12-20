@@ -400,6 +400,12 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         """Preprocess all images with metadata and serialize them to disk in chunks."""
         if not self.preprocessed_data_dir:
             raise ValueError("Preprocessed data directory not set")
+        
+        if len(X_test) != len(self.y_test) or len(X_test) != len(self.metadata):
+            raise ValueError(
+                f"Mismatched lengths: X_test={len(X_test)}, "
+                f"y_test={len(self.y_test)}, metadata={len(self.metadata)}"
+            )
 
         bt.logging.trace(
             f"Preprocessing {len(X_test)} images for tricorder competition"
