@@ -329,11 +329,17 @@ async def check_for_new_dataset_files(
             org_latest_updates[org.organization_id] = max_commit_date
 
         for file_name in new_files:
+            file_release_date = None
+            for f in relevant_files:
+                if f.path == file_name:
+                    file_release_date = f.last_commit.date if f.last_commit else None
+                    break
             results.append(
                 NewDatasetFile(
                     competition_id=org.competition_id,
                     dataset_hf_repo=org.dataset_hf_repo,
                     dataset_hf_filename=file_name,
+                    dataset_release_date=file_release_date,
                 )
             )
 
@@ -392,13 +398,17 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
         if filename.endswith(".zip"):
             filepath = os.path.join(to_be_released_dir, filename)
             try:
+                # Get file modification time before moving
+                file_release_date = datetime.fromtimestamp(os.path.getmtime(filepath))
                 # Move the file to the already_released directory.
-                shutil.move(filepath, os.path.join(already_released_dir, filename))
+                final_path = os.path.join(already_released_dir, filename)
+                shutil.move(filepath, final_path)
                 bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
                 return NewDatasetFile(
                     competition_id=random.choice(["tricorder-3"]), 
                     dataset_hf_repo="local",
-                    dataset_hf_filename=os.path.join(already_released_dir, filename),
+                    dataset_hf_filename=final_path,
+                    dataset_release_date=file_release_date,
                 )
             except Exception as e:
                 bt.logging.error(f"Error processing {filename}: {e}")

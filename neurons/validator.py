@@ -68,9 +68,7 @@ class Validator(BaseValidatorNeuron):
 
     async def concurrent_forward(self):
 
-        coroutines = [
-            # self.refresh_miners(),
-        ]
+        coroutines = []
         if self.config.filesystem_evaluation:
             coroutines.append(self.filesystem_test_evaluation())
         else:
@@ -174,8 +172,9 @@ class Validator(BaseValidatorNeuron):
             dataset_hf_repo="" if local_mode else data_package.dataset_hf_repo,
             dataset_hf_filename=data_package.dataset_hf_filename,
             dataset_hf_repo_type="dataset",
-            db_controller = self.db_controller,
-            test_mode = self.config.test_mode,
+            db_controller=self.db_controller,
+            dataset_release_date=data_package.dataset_release_date,
+            test_mode=self.config.test_mode,
             local_fs_mode=local_mode,
         )
 
