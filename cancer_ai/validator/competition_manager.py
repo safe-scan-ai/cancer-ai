@@ -67,8 +67,8 @@ class CompetitionManager(SerializableManager):
         dataset_hf_repo: str,
         dataset_hf_filename: str,
         dataset_hf_repo_type: str,
-        dataset_release_date: Optional[datetime] = None,
         db_controller: ModelDBController,
+        dataset_release_date: Optional[datetime] = None,
         test_mode: bool = False,
         local_fs_mode: bool = False,
     ) -> None:
