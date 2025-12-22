@@ -173,6 +173,7 @@ class Validator(BaseValidatorNeuron):
             competition_id=competition_id,
             dataset_hf_repo="" if local_mode else data_package.dataset_hf_repo,
             dataset_hf_filename=data_package.dataset_hf_filename,
+            dataset_release_date=data_package.dataset_release_date,
             dataset_hf_repo_type="dataset",
             db_controller = self.db_controller,
             test_mode = self.config.test_mode,

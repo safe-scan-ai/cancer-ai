@@ -53,7 +53,7 @@ class NewDatasetFile(BaseModel):
     competition_id: str = Field(..., min_length=1, description="Competition identifier")
     dataset_hf_repo: str = Field(..., min_length=1, description="Hugging Face repository path for the dataset")
     dataset_hf_filename: str = Field(..., min_length=1, description="Filename for the dataset in the repository")
-
+    dataset_release_date: Optional[datetime] = Field(None, description="Date when the dataset was released/uploaded")
 
 
 class WanDBLogBase(BaseModel):

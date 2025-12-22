@@ -67,6 +67,7 @@ class CompetitionManager(SerializableManager):
         dataset_hf_repo: str,
         dataset_hf_filename: str,
         dataset_hf_repo_type: str,
+        dataset_release_date: Optional[datetime] = None,
         db_controller: ModelDBController,
         test_mode: bool = False,
         local_fs_mode: bool = False,
@@ -88,6 +89,7 @@ class CompetitionManager(SerializableManager):
             self.model_manager = MockModelManager(config, db_controller, subtensor, self)
         else:
             self.model_manager = ModelManager(config, db_controller, subtensor, self)
+            self.model_manager.dataset_release_date = dataset_release_date
         self.dataset_manager = DatasetManager(
             config=self.config,
             competition_id=competition_id,
@@ -105,6 +107,7 @@ class CompetitionManager(SerializableManager):
         self.db_controller = db_controller
         self.test_mode = test_mode
         self.local_fs_mode = local_fs_mode
+        self.dataset_release_date = dataset_release_date
 
         self.competition_handler: Optional[BaseCompetitionHandler] = None
 

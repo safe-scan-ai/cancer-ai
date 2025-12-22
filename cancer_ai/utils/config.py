@@ -148,7 +148,7 @@ def add_args(cls, parser):
         "--models_query_cutoff",
         type=int,
         help="The cutoff for the models query in minutes.",
-        default=30,
+        default=120,  
     )
 
     parser.add_argument(

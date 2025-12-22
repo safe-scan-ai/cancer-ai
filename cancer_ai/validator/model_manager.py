@@ -24,6 +24,7 @@ class ModelManager():
         self.api = HfApi(token=self.config.hf_token)
         self.hotkey_store: dict[str, ModelInfo] = {}
         self.parent = parent
+        self.dataset_release_date: Optional[datetime] = None 
         
         # Retry configuration for HF API calls
         self.hf_max_retries = 4
@@ -218,6 +219,9 @@ class ModelManager():
     def is_model_too_recent(self, file_date, filename, hotkey):
         """Checks if a model file was uploaded too recently based on the cutoff time.
         
+        If dataset_release_date is set, compares model upload date against dataset release date.
+        Otherwise, falls back to comparing against current time.
+        
         Args:
             file_date: The date when the file was uploaded (string or datetime)
             filename: The name of the model file
@@ -239,17 +243,44 @@ class ModelManager():
 
         bt.logging.debug(f"File {filename} was uploaded on: {file_date}")
         
-        # Check if file is newer than our cutoff date (uploaded within last X minutes)
-        now = datetime.now(timezone.utc)  # Get current time in UTC
-        
-        # Calculate time difference in minutes
-        time_diff = (now - file_date).total_seconds() / 60
-        
-        if time_diff < self.config.models_query_cutoff:
-            bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
-            return True, file_date
+        # If dataset_release_date is set, compare against it instead of current time
+        if self.dataset_release_date is not None:
+            # Ensure dataset_release_date has timezone
+            dataset_release = self.dataset_release_date
+            if dataset_release.tzinfo is None:
+                dataset_release = dataset_release.replace(tzinfo=timezone.utc)
             
-        return False, file_date
+            # Check if model was uploaded AFTER dataset release
+            if file_date > dataset_release:
+                bt.logging.warning(
+                    f"Skipping model for hotkey {hotkey} because it was uploaded {file_date} "
+                    f"AFTER dataset release {dataset_release}. This indicates potential data leakage."
+                )
+                return True, file_date
+            
+            # Also check the 30-minute cutoff from dataset release time
+            time_diff = (dataset_release - file_date).total_seconds() / 60
+            if time_diff < self.config.models_query_cutoff:
+                bt.logging.warning(
+                    f"Skipping model for hotkey {hotkey} because it was uploaded "
+                    f"{time_diff:.2f} minutes before dataset release, which is within the cutoff of "
+                    f"{self.config.models_query_cutoff} minutes"
+                )
+                return True, file_date
+            
+            return False, file_date
+        else:
+            # Fallback to old behavior if dataset_release_date is not set
+            now = datetime.now(timezone.utc)  # Get current time in UTC
+            
+            # Calculate time difference in minutes
+            time_diff = (now - file_date).total_seconds() / 60
+            
+            if time_diff < self.config.models_query_cutoff:
+                bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
+                return True, file_date
+                
+            return False, file_date
         
 
     def add_model(
