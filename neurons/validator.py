@@ -69,7 +69,7 @@ class Validator(BaseValidatorNeuron):
     async def concurrent_forward(self):
 
         coroutines = [
-            # self.refresh_miners(),
+            self.refresh_miners(),
         ]
         if self.config.filesystem_evaluation:
             coroutines.append(self.filesystem_test_evaluation())
