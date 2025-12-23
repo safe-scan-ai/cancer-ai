@@ -33,7 +33,6 @@ class ChainMinerModelDB(Base):
     )
 
 
-
 class ModelDBController:
     def __init__(self, subtensor: bt.subtensor = None, config: bt.Config = None):
         self.config = config
