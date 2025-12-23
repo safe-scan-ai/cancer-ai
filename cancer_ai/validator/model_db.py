@@ -32,15 +32,54 @@ class ChainMinerModelDB(Base):
         PrimaryKeyConstraint('date_submitted', 'hotkey', name='pk_date_hotkey'),
     )
 
+def _create_archive_subtensor(archive_node_url: str, archive_node_fallback_url: str) -> bt.subtensor:
+    """
+    Creates an archive subtensor with fallback support.
+    """
+    import argparse
+    
+    try:
+        bt.logging.info(f"Attempting to connect to primary archive node: {archive_node_url}")
+        # bt.config() requires a parser to initialize the config objec
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--subtensor.chain_endpoint", type=str, default=archive_node_url)
+        parser.add_argument("--netuid", type=int, default=1)  # Required but not used for archive
+        config = bt.config(parser=parser)
+        subtensor = bt.subtensor(config=config)
+
+        ws = subtensor.substrate.connect()
+        bt.logging.info(f"Successfully connected to primary archive node. WebSocket state: {ws.state}")
+        return subtensor
+    except Exception as e:
+        bt.logging.warning(f"Failed to connect to primary archive node ({archive_node_url}): {e}")
+        bt.logging.info(f"Attempting fallback archive node: {archive_node_fallback_url}")
+        try:
+            
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--subtensor.chain_endpoint", type=str, default=archive_node_fallback_url)
+            parser.add_argument("--netuid", type=int, default=1)  
+            config = bt.config(parser=parser)
+            subtensor = bt.subtensor(config=config)
+            ws = subtensor.substrate.connect()
+            bt.logging.info(f"Successfully connected to fallback archive node. WebSocket state: {ws.state}")
+            return subtensor
+        except Exception as fallback_error:
+            bt.logging.error(f"Failed to connect to fallback archive node ({archive_node_fallback_url}): {fallback_error}")
+            raise Exception(f"Both primary and fallback archive nodes failed. Primary: {e}, Fallback: {fallback_error}")
+
+
 class ModelDBController:
-    def __init__(self, db_path: str, subtensor: bt.subtensor = None):
+    def __init__(self, db_path: str, subtensor: bt.subtensor = None, archive_node_url: str = None, archive_node_fallback_url: str = None):
         db_url = f"sqlite:///{os.path.abspath(db_path)}"
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
         if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
-            subtensor = bt.subtensor(network="archive")
+            if archive_node_url and archive_node_fallback_url:
+                subtensor = _create_archive_subtensor(archive_node_url, archive_node_fallback_url)
+            else:
+                subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
 
         # Capture the original connect() and override with _ws_connect wrapper

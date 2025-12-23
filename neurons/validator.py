@@ -54,7 +54,12 @@ class Validator(BaseValidatorNeuron):
         print(cancer_ai_logo)
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
-        self.db_controller = ModelDBController(db_path=self.config.db_path, subtensor=self.subtensor)
+        self.db_controller = ModelDBController(
+            db_path=self.config.db_path,
+            subtensor=self.subtensor,
+            archive_node_url=getattr(self.config, 'archive_node_url', None),
+            archive_node_fallback_url=getattr(self.config, 'archive_node_fallback_url', None)
+        )
 
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet

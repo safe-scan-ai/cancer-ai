@@ -331,6 +331,19 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--archive_node_url",
+        type=str,
+        help="The URL of the archive node to use",
+        default="wss://archive.chain.opentensor.ai:443",
+    )
+    parser.add_argument(
+        "--archive_node_fallback_url",
+        type=str,
+        help="The fallback URL of the archive node to use",
+        default=None,
+    )
+
+    parser.add_argument(
         "--wandb_project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
