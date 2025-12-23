@@ -9,7 +9,7 @@ import bittensor as bt
 from huggingface_hub import HfApi, HfFileSystem
 
 from .models import ModelInfo
-from .model_db import _create_archive_subtensor
+from ..chain_models_store import _create_archive_subtensor
 from .exceptions import ModelRunException
 from .utils import decode_params
 from websockets.client import OPEN as WS_OPEN
@@ -33,8 +33,8 @@ class ModelManager():
         self.hf_max_delay = 30
 
         if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
-            archive_node_url = getattr(config, 'archive_node_url', None)
-            archive_node_fallback_url = getattr(config, 'archive_node_fallback_url', None)
+            archive_node_url = config.archive_node_url
+            archive_node_fallback_url = config.archive_node_fallback_url
 
             if archive_node_url and archive_node_fallback_url:
                 subtensor = _create_archive_subtensor(archive_node_url, archive_node_fallback_url)
@@ -282,12 +282,12 @@ class ModelManager():
             
             # Calculate time difference in minutes
             time_diff = (now - file_date).total_seconds() / 60
+        
+        if time_diff < self.config.models_query_cutoff:
+            bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
+            return True, file_date
             
-            if time_diff < self.config.models_query_cutoff:
-                bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
-                return True, file_date
-                
-            return False, file_date
+        return False, file_date
         
 
     def add_model(
