@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstr
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, timezone
-from ..chain_models_store import ChainMinerModel
+from ..chain_models_store import ChainMinerModel, _create_archive_subtensor
 from websockets.client import OPEN as WS_OPEN
 
 from retry import retry
@@ -32,15 +32,19 @@ class ChainMinerModelDB(Base):
         PrimaryKeyConstraint('date_submitted', 'hotkey', name='pk_date_hotkey'),
     )
 
+
 class ModelDBController:
-    def __init__(self, db_path: str, subtensor: bt.subtensor = None):
+    def __init__(self, db_path: str, subtensor: bt.subtensor = None, archive_node_url: str = None, archive_node_fallback_url: str = None):
         db_url = f"sqlite:///{os.path.abspath(db_path)}"
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
         if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
-            subtensor = bt.subtensor(network="archive")
+            if archive_node_url and archive_node_fallback_url:
+                subtensor = _create_archive_subtensor(archive_node_url, archive_node_fallback_url)
+            else:
+                subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
 
         # Capture the original connect() and override with _ws_connect wrapper
