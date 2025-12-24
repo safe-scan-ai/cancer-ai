@@ -134,20 +134,22 @@ class ModelManager():
 
         bt.logging.debug(f"License found for {model_info.hf_repo_id}")
         # List files in the repository and get file date with retry
-        files = None
-        file_date = None
+        
+        file_found = False
         for retry_counter in range(MAX_RETRIES):
             try:
                 files = fs.ls(model_info.hf_repo_id)
                 
                 # Find the specific file and its upload date
+                target_filename = model_info.hf_model_filename.lower()
                 for file in files:
-                    if model_info.hf_model_filename.lower() in file["name"].lower():
-                        # Extract the upload date
-                        file_date = file["last_commit"]["date"]
+                    filename = file["name"].split("/")[-1].lower()
+                    if filename == target_filename:
+                       
+                        file_found = True
                         break
                         
-                if file_date:  # If we found the file, break out of the retry loop
+                if file_found:  # If we found the file, break out of the retry loop
                     break
                 else:
                     # File not found but repository exists, so we'll try again
