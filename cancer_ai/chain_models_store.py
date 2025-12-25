@@ -2,6 +2,8 @@ import functools
 from typing import Optional, Type
 import asyncio
 from functools import wraps
+import argparse
+import sys
 
 import bittensor as bt
 from pydantic import BaseModel, Field
@@ -9,6 +11,41 @@ from retry import retry
 from websockets.client import OPEN as WS_OPEN
 
 
+def _create_archive_subtensor(archive_node_url: str, archive_node_fallback_url: str) -> bt.subtensor:
+    """
+    Creates an archive subtensor with fallback support.
+    """
+    
+    
+    def _create_subtensor(url: str) -> bt.subtensor:
+        parser = argparse.ArgumentParser()
+        bt.subtensor.add_args(parser)
+        
+        original_argv = sys.argv
+        sys.argv = ['', '--subtensor.chain_endpoint', url, '--subtensor.network', '']
+        try:
+            config = bt.config(parser=parser)
+            config.subtensor.network = None
+            return bt.subtensor(config=config)
+        finally:
+            sys.argv = original_argv
+    
+    try:
+        bt.logging.info(f"Attempting to connect to primary archive node: {archive_node_url}")
+        subtensor = _create_subtensor(archive_node_url)
+        subtensor.substrate.connect()
+        bt.logging.info(f"Successfully connected to primary archive node")
+        return subtensor
+    except Exception as e:
+        bt.logging.warning(f"Failed to connect to primary archive node ({archive_node_url}): {e}")
+        bt.logging.info(f"Attempting fallback archive node: {archive_node_fallback_url}")
+        try:
+            subtensor = _create_subtensor(archive_node_fallback_url)
+            subtensor.substrate.connect()
+            bt.logging.info(f"Successfully connected to fallback archive node")
+            return subtensor
+        except Exception as fallback_error:
+            raise Exception(f"Both archive nodes failed. Primary: {e}, Fallback: {fallback_error}")
 
 class ChainMinerModel(BaseModel):
     """Uniquely identifies a trained model"""

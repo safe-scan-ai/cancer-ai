@@ -9,6 +9,7 @@ import bittensor as bt
 from huggingface_hub import HfApi, HfFileSystem
 
 from .models import ModelInfo
+from ..chain_models_store import _create_archive_subtensor
 from .exceptions import ModelRunException
 from .utils import decode_params
 from websockets.client import OPEN as WS_OPEN
@@ -32,7 +33,13 @@ class ModelManager():
         self.hf_max_delay = 30
 
         if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
-            subtensor = bt.subtensor(network="archive")
+            archive_node_url = config.archive_node_url
+            archive_node_fallback_url = config.archive_node_fallback_url
+
+            if archive_node_url and archive_node_fallback_url:
+                subtensor = _create_archive_subtensor(archive_node_url, archive_node_fallback_url)
+            else:
+                subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
 
         # Capture the original connect() and override with _ws_connect wrapper
@@ -110,7 +117,7 @@ class ModelManager():
                 
         fs = HfFileSystem(token=token)
 
-        repo_path = os.path.join(model_info.hf_repo_id, model_info.hf_model_filename)
+        
 
         is_valid, reason = await self.model_license_valid(hotkey)
         if not is_valid:
@@ -127,20 +134,22 @@ class ModelManager():
 
         bt.logging.debug(f"License found for {model_info.hf_repo_id}")
         # List files in the repository and get file date with retry
-        files = None
-        file_date = None
+        
+        file_found = False
         for retry_counter in range(MAX_RETRIES):
             try:
                 files = fs.ls(model_info.hf_repo_id)
                 
                 # Find the specific file and its upload date
+                target_filename = model_info.hf_model_filename.lower()
                 for file in files:
-                    if model_info.hf_model_filename.lower() in file["name"].lower():
-                        # Extract the upload date
-                        file_date = file["last_commit"]["date"]
+                    filename = file["name"].split("/")[-1].lower()
+                    if filename == target_filename:
+                       
+                        file_found = True
                         break
                         
-                if file_date:  # If we found the file, break out of the retry loop
+                if file_found:  # If we found the file, break out of the retry loop
                     break
                 else:
                     # File not found but repository exists, so we'll try again
@@ -161,15 +170,20 @@ class ModelManager():
                     # self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
                     return False
         
-        # We don't need this check anymore since we handle it in the retry loop
             
-        # Parse and check if the model is too recent to download
-        is_too_recent, parsed_date = self.is_model_too_recent(file_date, model_info.hf_model_filename, hotkey)
+        # Check if model is too recent using on-chain block timestamp
+        if model_info.block is None:
+            bt.logging.error(f"Model for hotkey {hotkey} has no block number. Cannot validate submission date.")
+            return False        
+
+        is_too_recent, submission_date = self.is_model_too_recent(
+            model_info.block,  # Use on-chain block instead of HF file date
+            model_info.hf_model_filename, 
+            hotkey
+        )
         if is_too_recent:
-            # self.parent.error_results.append((hotkey, f"Model is too recent"))
+            bt.logging.warning(f"Model for hotkey {hotkey} was submitted too recently (on-chain date: {submission_date})")
             return False
-        
-        file_date = parsed_date
         
         # Download the file with retry
         try:
@@ -216,32 +230,33 @@ class ModelManager():
         bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
         return True
 
-    def is_model_too_recent(self, file_date, filename, hotkey):
-        """Checks if a model file was uploaded too recently based on the cutoff time.
-        
-        If dataset_release_date is set, compares model upload date against dataset release date.
-        Otherwise, falls back to comparing against current time.
-        
-        Args:
-            file_date: The date when the file was uploaded (string or datetime)
-            filename: The name of the model file
-            hotkey: The hotkey of the miner
-            
-        Returns:
-            tuple: (is_too_recent, parsed_date) where is_too_recent is a boolean indicating if the model
-                  is too recent to download, and parsed_date is the parsed datetime object with timezone
-        """
-        # Ensure file_date is a datetime with timezone
-        try:
-            if isinstance(file_date, str):
-                file_date = datetime.fromisoformat(file_date)
-            if file_date.tzinfo is None:
-                file_date = file_date.replace(tzinfo=timezone.utc)
-        except Exception as e:
-            bt.logging.error(f"Failed to parse file date {file_date}: {e}")
-            return True, None
+    def is_model_too_recent(self, block, filename, hotkey):
+        """Checks if a model was submitted too recently based on on-chain block timestamp.
+    
+            Uses the immutable blockchain block timestamp instead of file upload date
+            to prevent manipulation and ensure security.
 
-        bt.logging.debug(f"File {filename} was uploaded on: {file_date}")
+            If dataset_release_date is set, compares model submission date against dataset release date.
+            Otherwise, falls back to comparing against current time.
+
+            Args:
+                block: The block number when the model was submitted on-chain
+                filename: The name of the model file (for logging)
+                hotkey: The hotkey of the miner
+
+            Returns:
+                tuple: (is_too_recent, submission_date) where is_too_recent is a boolean indicating 
+                       if the model is too recent to download, and submission_date is the datetime 
+                       object with timezone
+        """
+        # Get on-chain submission timestamp from block number
+        try:
+            submission_date = self.db_controller.get_block_timestamp(block)
+        except Exception as e:
+            bt.logging.error(f"Failed to get block timestamp: {e}")
+            return True, None  # Reject if we can't get timestamp
+    
+        bt.logging.debug(f"Model {filename} was submitted on-chain on: {submission_date}")
         
         # If dataset_release_date is set, compare against it instead of current time
         if self.dataset_release_date is not None:
@@ -251,36 +266,36 @@ class ModelManager():
                 dataset_release = dataset_release.replace(tzinfo=timezone.utc)
             
             # Check if model was uploaded AFTER dataset release
-            if file_date > dataset_release:
+            if submission_date > dataset_release:
                 bt.logging.warning(
-                    f"Skipping model for hotkey {hotkey} because it was uploaded {file_date} "
+                    f"Skipping model for hotkey {hotkey} because it was submitted {submission_date} "
                     f"AFTER dataset release {dataset_release}. This indicates potential data leakage."
                 )
-                return True, file_date
+                return True, submission_date
             
-            # Also check the 30-minute cutoff from dataset release time
-            time_diff = (dataset_release - file_date).total_seconds() / 60
+            # Also check the 120-minute cutoff from dataset release time
+            time_diff = (dataset_release - submission_date).total_seconds() / 60
             if time_diff < self.config.models_query_cutoff:
                 bt.logging.warning(
-                    f"Skipping model for hotkey {hotkey} because it was uploaded "
+                    f"Skipping model for hotkey {hotkey} because it was submitted "
                     f"{time_diff:.2f} minutes before dataset release, which is within the cutoff of "
                     f"{self.config.models_query_cutoff} minutes"
                 )
-                return True, file_date
+                return True, submission_date
             
-            return False, file_date
+            return False, submission_date
         else:
             # Fallback to old behavior if dataset_release_date is not set
             now = datetime.now(timezone.utc)  # Get current time in UTC
             
             # Calculate time difference in minutes
-            time_diff = (now - file_date).total_seconds() / 60
+            time_diff = (now - submission_date).total_seconds() / 60
+        
+        if time_diff < self.config.models_query_cutoff:
+            bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
+            return True, submission_date
             
-            if time_diff < self.config.models_query_cutoff:
-                bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
-                return True, file_date
-                
-            return False, file_date
+        return False, submission_date
         
 
     def add_model(
