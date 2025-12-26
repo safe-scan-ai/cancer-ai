@@ -42,6 +42,7 @@ from cancer_ai.validator.utils import (
     get_local_dataset,
 )
 from cancer_ai.validator.model_db import ModelDBController
+from cancer_ai.validator.model_manager import ModelManager 
 from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
 from cancer_ai.validator.models import WanDBLogBase
@@ -68,6 +69,11 @@ class Validator(BaseValidatorNeuron):
         self.last_monitor_datasets: float = None
 
         self.hf_api = HfApi()
+        self.model_manager = ModelManager(
+            config=self.config,
+            db_controller=self.db_controller,
+            subtensor=self.subtensor
+        )
 
         self.exit_event = exit_event
 
@@ -98,6 +104,10 @@ class Validator(BaseValidatorNeuron):
         await process_miner_models(self, blacklisted_hotkeys)
         
         self.db_controller.clean_old_records(self.hotkeys)
+
+        # Clean up old model cache files 
+        if self.config.models.cache_cleanup_age_days is not None:
+            self.model_manager.cleanup_old_model_files(self.config.models.cache_cleanup_age_days)
         self.last_miners_refresh = time.time()
         self.save_state()
 
