@@ -247,6 +247,13 @@ def add_common_args(cls, parser):
     )
 
     parser.add_argument(
+        "--models.cache_cleanup_age_days",
+        type=int,
+        help="Age threshold in days for automatic cleanup of cached model files .",
+        default=None,
+    )
+
+    parser.add_argument(
         "--models.dataset_dir",
         type=str,
         help="Path for storing datasets.",

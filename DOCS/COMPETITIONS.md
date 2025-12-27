@@ -29,7 +29,7 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
 - **License**: All models must be licensed under the MIT License to ensure the open nature of the competition and to allow unrestricted use worldwide.
 - **Training Code**: Each submission should include the code used for training the model to ensure transparency and reproducibility.
 - **Upload Process**: Models are to be uploaded to Hugging Face. Miners then submit the Hugging Face repository link on the blockchain for evaluation by validators.
-- **Timing Constraint**: Only models submitted at least 30 minutes before the competition start time are eligible for evaluation. This requirement ensures that models have not been retrained with the new data batch, maintaining fairness and integrity across the competition.
+- **Timing Constraint**: Only models submitted at least 2 hours (120 minutes) before the competition start time are eligible for evaluation. This requirement ensures that models have not been retrained with the new data batch, maintaining fairness and integrity across the competition.
 
 ## Evaluation and Scoring
 

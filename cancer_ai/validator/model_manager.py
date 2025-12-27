@@ -1,6 +1,8 @@
 import os
 import asyncio
 import json
+import time
+from pathlib import Path
 from dataclasses import dataclass, asdict, is_dataclass
 from typing import Optional
 from datetime import datetime, timezone, timedelta
@@ -318,6 +320,57 @@ class ModelManager():
         if hotkey in self.hotkey_store and self.hotkey_store[hotkey].file_path:
             os.remove(self.hotkey_store[hotkey].file_path)
         self.hotkey_store[hotkey] = None
+
+    def cleanup_old_model_files(self, max_age_days: int) -> int:
+        """
+        Delete model files from cache directory older than max_age_days.
+
+        Args:
+            max_age_days: Maximum age in days for cached model files
+
+        Returns:
+            Number of files deleted
+        """
+        if not os.path.exists(self.config.models.model_dir):
+            bt.logging.debug(f"Model cache directory {self.config.models.model_dir} does not exist, skipping cleanup")
+            return 0
+    
+        cache_path = Path(self.config.models.model_dir) / "hub"
+        if not cache_path.exists():
+            bt.logging.debug(f"Model cache hub directory {cache_path} does not exist, skipping cleanup")
+            return 0
+
+        cutoff_time = time.time() - (max_age_days * 24 * 60 * 60)
+        deleted_count = 0
+        total_size_freed = 0
+
+        try:
+            for file_path in cache_path.rglob("*"):
+                if file_path.is_file() and file_path.suffix.lower() == ".onnx":
+                    try:
+                        file_mtime = file_path.stat().st_mtime
+                        file_size = file_path.stat().st_size
+
+                        if file_mtime < cutoff_time:
+                            total_size_freed += file_size
+                            file_path.unlink()
+                            deleted_count += 1
+                            age_days = (time.time() - file_mtime) / (24 * 60 * 60)
+                            bt.logging.debug(f"Deleted old model file: {file_path} (age: {age_days:.1f} days)")
+                    except OSError as e:
+                        bt.logging.warning(f"Failed to delete {file_path}: {e}")
+            if deleted_count > 0:
+                size_mb = total_size_freed / (1024 * 1024)
+                bt.logging.info(
+                    f"Model cache cleanup: Deleted {deleted_count} files older than {max_age_days} days "
+                    f"(freed {size_mb:.2f} MB)"
+                )
+            else:
+                bt.logging.debug(f"Model cache cleanup: No files older than {max_age_days} days found")
+            
+        except Exception as e:
+            bt.logging.error(f"Error during model cache cleanup: {e}", exc_info=True)
+        return deleted_count
 
     def _extract_raw_value(self, fields: list[dict]) -> str:
         """Return the first Raw<n> value from the `fields` list."""
