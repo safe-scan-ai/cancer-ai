@@ -56,7 +56,7 @@ async def process_miner_models(validator, blacklisted_hotkeys: set):
     """Process each miner's model metadata."""
     for i, hotkey in enumerate(validator.hotkeys):
         if hotkey in blacklisted_hotkeys:
-            bt.logging.debug(f"Skipping blacklisted hotkey {hotkey}")
+            bt.logging.info(f"Skipping blacklisted hotkey {hotkey}")
             continue
 
         hotkey = str(hotkey)

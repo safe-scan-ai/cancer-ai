@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstr
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, timezone
-from ..chain_models_store import ChainMinerModel, _create_archive_subtensor
+from ..chain_models_store import ChainMinerModel, get_archive_subtensor
 from websockets.client import OPEN as WS_OPEN
 
 from retry import retry
@@ -34,30 +34,18 @@ class ChainMinerModelDB(Base):
 
 
 class ModelDBController:
-    def __init__(self, db_path: str, subtensor: bt.subtensor = None, config: bt.Config = None, archive_node_url: str = None, archive_node_fallback_url: str = None):
-        db_url = f"sqlite:///{os.path.abspath(db_path)}"
+    def __init__(self, subtensor: bt.subtensor = None, config: bt.Config = None):
+        self.config = config
+        db_url = f"sqlite:///{os.path.abspath(self.config.db_path)}"
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
-        if config:
-            try:
-                if config.archive_node_url is not None:
-                    archive_node_url = config.archive_node_url
-            except AttributeError:
-                pass  
-            
-            try:
-                if config.archive_node_fallback_url is not None:
-                    archive_node_fallback_url = config.archive_node_fallback_url
-            except AttributeError:
-                pass
-        if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
-            if archive_node_url and archive_node_fallback_url:
-                subtensor = _create_archive_subtensor(archive_node_url, archive_node_fallback_url)
-            else:
-                subtensor = bt.subtensor(network="archive")
-        self.subtensor = subtensor
+        self.subtensor = get_archive_subtensor(
+            archive_node_url=self.config.archive_node_url,
+            archive_node_fallback_url=self.config.archive_node_fallback_url,
+            subtensor=subtensor,
+        )
 
         # Capture the original connect() and override with _ws_connect wrapper
         # Substrate-interface calls connect() on every RPC under the hood,

@@ -11,11 +11,10 @@ from retry import retry
 from websockets.client import OPEN as WS_OPEN
 
 
-def _create_archive_subtensor(archive_node_url: str, archive_node_fallback_url: str) -> bt.subtensor:
+def _create_archive_subtensor(archive_node_url: str, archive_node_fallback_url: str|None = None) -> bt.subtensor:
     """
     Creates an archive subtensor with fallback support.
     """
-    
     
     def _create_subtensor(url: str) -> bt.subtensor:
         parser = argparse.ArgumentParser()
@@ -29,23 +28,33 @@ def _create_archive_subtensor(archive_node_url: str, archive_node_fallback_url: 
             return bt.subtensor(config=config)
         finally:
             sys.argv = original_argv
-    
-    try:
-        bt.logging.info(f"Attempting to connect to primary archive node: {archive_node_url}")
-        subtensor = _create_subtensor(archive_node_url)
-        subtensor.substrate.connect()
-        bt.logging.info(f"Successfully connected to primary archive node")
-        return subtensor
-    except Exception as e:
-        bt.logging.warning(f"Failed to connect to primary archive node ({archive_node_url}): {e}")
-        bt.logging.info(f"Attempting fallback archive node: {archive_node_fallback_url}")
+
+    archive_urls = [url for url in [archive_node_url, archive_node_fallback_url] if url is not None]
+    for archive_url in archive_urls:
         try:
-            subtensor = _create_subtensor(archive_node_fallback_url)
+            bt.logging.trace(f"Attempting to connect to archive node: {archive_url}")
+            subtensor = _create_subtensor(archive_url)
             subtensor.substrate.connect()
-            bt.logging.info(f"Successfully connected to fallback archive node")
+            bt.logging.debug(f"Successfully connected to archive node: {archive_url}")
             return subtensor
-        except Exception as fallback_error:
-            raise Exception(f"Both archive nodes failed. Primary: {e}, Fallback: {fallback_error}")
+        except Exception as e:
+            bt.logging.warning(f"Failed to connect to archive node ({archive_url}): {e}")
+
+    bt.logging.error("Failed to connect any archive nodes")
+    raise RuntimeError("Failed to connect to any archive nodes")
+
+
+def get_archive_subtensor(
+    *,
+    archive_node_url: str | None,
+    archive_node_fallback_url: str | None = None,
+    subtensor: bt.subtensor | None = None,
+) -> bt.subtensor:
+    if archive_node_url:
+        return _create_archive_subtensor(archive_node_url, archive_node_fallback_url)
+    if subtensor is not None:
+        return subtensor
+    return bt.subtensor(network="archive")
 
 class ChainMinerModel(BaseModel):
     """Uniquely identifies a trained model"""
@@ -142,7 +151,7 @@ class ChainModelMetadata:
         # If socket not open, reconnect
         bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
         try:
-            new_ws = self._orig_ws_connect(*args, **kwargs)
+            new_ws = self._connect_ws_with_retry(*args, **kwargs)
         except Exception as e:
             bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
             raise
@@ -150,6 +159,10 @@ class ChainModelMetadata:
         # Update the substrate.ws attribute so future calls reuse this socket
         setattr(self.subtensor.substrate, "ws", new_ws)
         return new_ws
+
+    @retry(tries=5, delay=0.5, backoff=2, max_delay=5)
+    def _connect_ws_with_retry(self, *args, **kwargs):
+        return self._orig_ws_connect(*args, **kwargs)
 
     async def store_model_metadata(self, model_id: ChainMinerModel):
         """Stores model metadata on this subnet for a specific wallet."""
