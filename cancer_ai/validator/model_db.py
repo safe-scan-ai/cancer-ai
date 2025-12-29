@@ -34,12 +34,24 @@ class ChainMinerModelDB(Base):
 
 
 class ModelDBController:
-    def __init__(self, db_path: str, subtensor: bt.subtensor = None, archive_node_url: str = None, archive_node_fallback_url: str = None):
+    def __init__(self, db_path: str, subtensor: bt.subtensor = None, config: bt.Config = None, archive_node_url: str = None, archive_node_fallback_url: str = None):
         db_url = f"sqlite:///{os.path.abspath(db_path)}"
         self.engine = create_engine(db_url, echo=False)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
+        if config:
+            try:
+                if config.archive_node_url is not None:
+                    archive_node_url = config.archive_node_url
+            except AttributeError:
+                pass  
+            
+            try:
+                if config.archive_node_fallback_url is not None:
+                    archive_node_fallback_url = config.archive_node_fallback_url
+            except AttributeError:
+                pass
         if subtensor is not None and "test" not in subtensor.chain_endpoint.lower():
             if archive_node_url and archive_node_fallback_url:
                 subtensor = _create_archive_subtensor(archive_node_url, archive_node_fallback_url)

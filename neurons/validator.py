@@ -57,8 +57,7 @@ class Validator(BaseValidatorNeuron):
         self.db_controller = ModelDBController(
             db_path=self.config.db_path,
             subtensor=self.subtensor,
-            archive_node_url=self.config.archive_node_url,
-            archive_node_fallback_url=self.config.archive_node_fallback_url
+            config=self.config
         )
 
         self.chain_models = ChainModelMetadata(
