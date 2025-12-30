@@ -291,13 +291,13 @@ class ModelManager():
             now = datetime.now(timezone.utc)  # Get current time in UTC
             
             # Calculate time difference in minutes
-            time_diff = (now - submission_date).total_seconds() / 60
+            time_diff = (now - file_date).total_seconds() / 60
         
         if time_diff < self.config.models_query_cutoff:
             bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
-            return True, submission_date
+            return True, file_date
             
-        return False, submission_date
+        return False, file_date
         
 
     def add_model(
