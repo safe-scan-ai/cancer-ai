@@ -284,8 +284,9 @@ async def check_for_new_dataset_files(
     For a blank state, it returns the file with the latest commit date.
     On subsequent checks, it returns any file whose commit date is newer than the previously stored update.
     """
-    results = []
+    results: list[NewDatasetFile] = []
     factory = OrganizationDataReferenceFactory.get_instance()
+    updated_latest_updates: dict = dict(org_latest_updates)
 
     for org in factory.organizations:
         files = hf_api.list_repo_tree(
@@ -318,7 +319,7 @@ async def check_for_new_dataset_files(
                     new_files.append(f.path)
                     break
         # if there is any stored update then we implicitly expect that any commit date on the repo is present as well
-        else:
+        elif stored_update is not None:
             for f in relevant_files:
                 commit_date = f.last_commit.date if f.last_commit else None
                 if commit_date and commit_date > stored_update:
@@ -326,7 +327,7 @@ async def check_for_new_dataset_files(
 
         # update the stored latest update for this organization.
         if max_commit_date is not None:
-            org_latest_updates[org.organization_id] = max_commit_date
+            updated_latest_updates[org.organization_id] = max_commit_date
 
         for file_name in new_files:
             file_release_date = None
@@ -343,6 +344,8 @@ async def check_for_new_dataset_files(
                 )
             )
 
+    org_latest_updates.clear()
+    org_latest_updates.update(updated_latest_updates)
     return results
 
 
