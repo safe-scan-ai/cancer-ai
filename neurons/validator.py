@@ -124,7 +124,6 @@ class Validator(BaseValidatorNeuron):
                 < self.config.monitor_datasets_interval
             ):
             return
-        self.last_monitor_datasets = time.time()
         bt.logging.info("Starting monitor_datasets")
 
         # Setup organization data references (cached) - always refresh to ensure latest data
@@ -152,6 +151,8 @@ class Validator(BaseValidatorNeuron):
         except Exception as e:
             bt.logging.error(f"Error checking for new dataset files: {e}\n Stack trace: {traceback.format_exc()}")
             return
+
+        self.last_monitor_datasets = time.time()
         
         if not data_packages:
             bt.logging.info("No new data packages found")
