@@ -3,7 +3,7 @@ import os
 import re, traceback
 
 import traceback
-from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer
+from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, timezone
@@ -21,8 +21,8 @@ class ChainMinerModelDB(Base):
     competition_id = Column(String, nullable=False)
     hf_repo_id = Column(String, nullable=False)
     hf_model_filename = Column(String, nullable=False)
-    hf_repo_type = Column(String, nullable=False)
-    hf_code_filename = Column(String, nullable=False)
+    hf_repo_type = Column(String, nullable=True)
+    hf_code_filename = Column(String, nullable=True)
     date_submitted = Column(DateTime, nullable=False)
     block = Column(Integer, nullable=False)
     hotkey = Column(String, nullable=False)
@@ -88,12 +88,70 @@ class ModelDBController:
             column_names = [row[1] for row in result]
             if "model_hash" not in column_names:
                 try:
-                    connection.execute("ALTER TABLE models ADD COLUMN model_hash TEXT CHECK(LENGTH(model_hash) <= 8)")
+                    connection.execute("ALTER TABLE models ADD COLUMN model_hash TEXT CHECK(LENGTH(model_hash) <= 64)")
                     bt.logging.info("Migrated database: Added model_hash column with length constraint to models table")
                 except Exception as e:
                     bt.logging.error(f"Failed to migrate database: {e}")
                     raise
+            
+            migration_check = connection.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name='models_migrated_v2'")
+            ).fetchone()
 
+            if not migration_check:
+                bt.logging.info("Migrating database: Making hf_repo_type and hf_code_filename nullable...")
+
+                try:
+                    with connection.begin():  # Start transaction for all DDL operations
+                        # Create new table with nullable columns
+                        connection.execute(text("""
+                            CREATE TABLE models_new (
+                                competition_id TEXT NOT NULL,
+                                hf_repo_id TEXT NOT NULL,
+                                hf_model_filename TEXT NOT NULL,
+                                hf_repo_type TEXT,
+                                hf_code_filename TEXT,
+                                date_submitted TIMESTAMP NOT NULL,
+                                block INTEGER NOT NULL,
+                                hotkey TEXT NOT NULL,
+                                model_hash TEXT,
+                                PRIMARY KEY (date_submitted, hotkey)
+                            )
+                        """))
+
+                        # Copy all data from old table to new table
+                        connection.execute(text("""
+                            INSERT INTO models_new 
+                            SELECT 
+                                competition_id,
+                                hf_repo_id,
+                                hf_model_filename,
+                                hf_repo_type,
+                                hf_code_filename,
+                                date_submitted,
+                                block,
+                                hotkey,
+                                model_hash
+                            FROM models
+                        """))
+
+                        # Drop old table
+                        connection.execute(text("DROP TABLE models"))
+
+                        # Rename new table to original name
+                        connection.execute(text("ALTER TABLE models_new RENAME TO models"))
+
+                        # Create migration marker table
+                        connection.execute(text("""
+                            CREATE TABLE models_migrated_v2 (migration_complete INTEGER)
+                        """))
+
+                    # Transaction commits automatically when exiting 'with connection.begin()'
+                    bt.logging.info("Migration complete: hf_repo_type and hf_code_filename are now nullable")
+                except Exception as e:
+                    bt.logging.error(f"Failed to migrate database for nullable fields: {e}")
+                    # Transaction rolls back automatically on exception
+                    raise
 
     
     def add_model(self, chain_miner_model: ChainMinerModel, hotkey: str):

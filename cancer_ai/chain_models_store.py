@@ -4,6 +4,7 @@ import asyncio
 from functools import wraps
 import argparse
 import sys
+from pathlib import Path
 
 import bittensor as bt
 from pydantic import BaseModel, Field
@@ -73,7 +74,7 @@ class ChainMinerModel(BaseModel):
     )
 
     model_hash: Optional[str] = Field(
-        description="8-byte SHA-1 hash of the model file from Hugging Face."
+        description="64-character SHA-256 of the model file from Hugging Face."
     )
 
     class Config:
@@ -81,7 +82,8 @@ class ChainMinerModel(BaseModel):
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
-        return f"{self.hf_repo_id}:{self.hf_model_filename}:{self.hf_code_filename}:{self.competition_id}:{self.hf_repo_type}:{self.model_hash}"
+        model_filename_no_ext = Path(self.hf_model_filename).stem if self.hf_model_filename else ""
+        return f"{self.hf_repo_id}:{model_filename_no_ext}:{self.competition_id}:{self.model_hash}"
 
     @property
     def hf_link(self) -> str:
@@ -91,21 +93,23 @@ class ChainMinerModel(BaseModel):
     @property
     def hf_code_link(self) -> str:
         """Returns the Hugging Face link for the code."""
+        if self.hf_code_filename is None:
+            return ""
         return f"https://huggingface.co/{self.hf_repo_id}/blob/main/{self.hf_code_filename}"
 
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ChainMinerModel"]:
         """Returns an instance of this class from a compressed string representation"""
         tokens = cs.split(":")
-        if len(tokens) != 6:
+        if len(tokens) != 4:
             return None
         return cls(
             hf_repo_id=tokens[0],
             hf_model_filename=tokens[1],
-            hf_code_filename=tokens[2],
-            competition_id=tokens[3],
-            hf_repo_type=tokens[4],
-            model_hash=tokens[5],
+            hf_code_filename=None,
+            competition_id=tokens[2],
+            hf_repo_type=None,
+            model_hash=tokens[3],
             block=None,
         )
 

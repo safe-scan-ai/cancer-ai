@@ -43,10 +43,10 @@ async def retrieve_and_store_model(validator, hotkey: str):
 
 def handle_model_storage_error(error: Exception, hotkey: str, metadata):
     """Handle errors when storing model metadata."""
-    if "CHECK constraint failed: LENGTH(model_hash) <= 8" in str(error):
+    if "CHECK constraint failed: LENGTH(model_hash) <= 64" in str(error):
         bt.logging.error(
             f"Invalid model hash for {hotkey}: "
-            f"Hash '{metadata.model_hash}' exceeds 8-character limit"
+            f"Hash '{metadata.model_hash}' exceeds 64-character limit"
         )
     else:
         bt.logging.error(f"Failed to persist model info for {hotkey}: {error}", exc_info=True)
