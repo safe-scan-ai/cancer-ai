@@ -168,6 +168,17 @@ async def log_evaluation_results(
     for miner_hotkey, model_result in competition_manager.results:
         if model_result.error:
             # Error case: log as WanDBLogModelErrorEntry
+            try:
+                model = validator.db_controller.get_latest_model(
+                    hotkey=miner_hotkey,
+                    cutoff_time=validator.config.models_query_cutoff,
+                )
+                model_url = model.hf_link if model else ""
+                code_url = model.hf_code_link if model else ""
+            except Exception:
+                model_url = ""
+                code_url = ""
+            
             model_log: WanDBLogModelErrorEntry = WanDBLogModelErrorEntry(
                 uuid=competition_uuid,
                 competition_id=competition_id,
@@ -176,6 +187,8 @@ async def log_evaluation_results(
                 validator_hotkey=validator.wallet.hotkey.ss58_address,
                 dataset_filename=data_package.dataset_hf_filename,
                 errors=model_result.error,
+                model_url=model_url,
+                code_url=code_url,
             )
         else:
             # Success case: log using competition-specific WanDBLogModelClass

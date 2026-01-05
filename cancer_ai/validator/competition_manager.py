@@ -217,10 +217,11 @@ class CompetitionManager(SerializableManager):
         bt.logging.info("======== MODEL DOWNLOAD ========")
         
         # Download model
-        model_downloaded = await self.model_manager.download_miner_model(miner_hotkey, token=self.config.hf_token)
+        model_downloaded, download_error = await self.model_manager.download_miner_model(miner_hotkey, token=self.config.hf_token)
         if not model_downloaded:
-            bt.logging.error(f"Failed to download model for hotkey {miner_hotkey}. Skipping.")
-            return self._create_error_result("Failed to download model"), False
+            error_msg = download_error or "Failed to download model"
+            bt.logging.error(f"Failed to download model for hotkey {miner_hotkey}: {error_msg}. Skipping.")
+            return self._create_error_result(error_msg), False
 
         # Verify hash
         computed_hash = self._compute_model_hash(model_info.file_path)
