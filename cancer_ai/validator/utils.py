@@ -1,6 +1,7 @@
 from enum import Enum
 import os
 import json
+import subprocess
 from datetime import datetime
 import asyncio
 import time
@@ -12,6 +13,7 @@ import bittensor as bt
 from retry import retry
 from huggingface_hub import HfApi, hf_hub_download
 from typing import Union
+from pathlib import Path
 
 
 from cancer_ai.chain_models_store import ChainMinerModel
@@ -45,6 +47,44 @@ def log_time(func):
         return result
 
     return wrapper
+
+
+def log_git_info(repo_root: Path = None) -> None:
+    """Log git commit hash and repo cleanliness information."""
+    if repo_root is None:
+        repo_root = Path(__file__).parent.parent.parent
+    
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            cwd=repo_root,
+        )
+        commit_hash = result.stdout.decode().strip()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        commit_hash = "unknown"
+
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            check=True,
+            capture_output=True,
+            cwd=repo_root,
+        )
+        status_output = result.stdout.decode().strip()
+        is_clean = status_output == ""
+        cleanliness = "clean" if is_clean else "dirty"
+        
+        # Get list of uncommitted files if dirty
+        if not is_clean:
+            uncommitted_files = ", ".join([line.split()[1] for line in status_output.split("\n") if line.strip()])
+            cleanliness = f"dirty ({uncommitted_files})"
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        cleanliness = "unknown"
+
+    bt.logging.info(f"Git commit: {commit_hash}")
+    bt.logging.info(f"Repo clean: {cleanliness}")
 
 
 def detect_model_format(file_path) -> ModelType:

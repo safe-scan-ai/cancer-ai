@@ -13,11 +13,19 @@ class OnnxRunnerHandler(BaseRunnerHandler):
         super().__init__(config, model_path)
         self.session = None
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
+
     def cleanup(self):
         """Clean up ONNX session and release resources."""
         if self.session:
             bt.logging.debug("Cleaning up ONNX session.")
             self.session = None
+            import gc
+            gc.collect()
     
     def _get_model_input_size(self, session) -> Tuple[int, int]:
         """Extract expected image input size from ONNX model"""
@@ -124,7 +132,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                             # Model only expects image input (fallback)
                             input_data = {inputs[0].name: single_image}
                         
-                        bt.logging.debug(f"Running ONNX inference on image {i+1}/{batch_size} with shape {single_image.shape}")
+                        bt.logging.trace(f"Running ONNX inference on image {i+1}/{batch_size} with shape {single_image.shape}")
                         single_result = await asyncio.wait_for(
                             asyncio.to_thread(self.session.run, None, input_data),
                             timeout=120.0  # 2 minutes max per image
