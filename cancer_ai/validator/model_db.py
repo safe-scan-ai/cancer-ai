@@ -103,9 +103,11 @@ class ModelDBController:
 
                 try:
                     with connection.begin():  # Start transaction for all DDL operations
+                        # Rename old table to backup
+                        connection.execute(text("ALTER TABLE models RENAME TO models_backup_v1"))
                         # Create new table with nullable columns
                         connection.execute(text("""
-                            CREATE TABLE models_new (
+                            CREATE TABLE models (
                                 competition_id TEXT NOT NULL,
                                 hf_repo_id TEXT NOT NULL,
                                 hf_model_filename TEXT NOT NULL,
@@ -121,7 +123,7 @@ class ModelDBController:
 
                         # Copy all data from old table to new table
                         connection.execute(text("""
-                            INSERT INTO models_new 
+                            INSERT INTO models 
                             SELECT 
                                 competition_id,
                                 hf_repo_id,
@@ -132,14 +134,9 @@ class ModelDBController:
                                 block,
                                 hotkey,
                                 model_hash
-                            FROM models
+                            FROM models_backup_v1
                         """))
 
-                        # Drop old table
-                        connection.execute(text("DROP TABLE models"))
-
-                        # Rename new table to original name
-                        connection.execute(text("ALTER TABLE models_new RENAME TO models"))
 
                         # Create migration marker table
                         connection.execute(text("""
