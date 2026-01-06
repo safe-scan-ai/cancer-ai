@@ -407,6 +407,19 @@ def add_validator_args(cls, parser):
         default=False
     )
 
+    parser.add_argument(
+        "--loki_url",
+        type=str,
+        help="Loki server URL for centralized logging. Leave empty to disable.",
+        default=None,
+    )
+    
+    parser.add_argument(
+        "--validator_name",
+        type=str,
+        help="Unique name for this validator instance (e.g., validator-1). Defaults to hostname if not set.",
+        default=None,
+    )
 
 def path_config(cls=None):
     """
