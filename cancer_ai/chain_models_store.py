@@ -6,7 +6,7 @@ import argparse
 import sys
 
 import bittensor as bt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from retry import retry
 from websockets.client import OPEN as WS_OPEN
 
@@ -59,6 +59,8 @@ def get_archive_subtensor(
 class ChainMinerModel(BaseModel):
     """Uniquely identifies a trained model"""
 
+    model_config = ConfigDict(protected_namespaces=(), arbitrary_types_allowed=True)
+
     competition_id: Optional[str] = Field(description="The competition id")
     hf_repo_id: Optional[str] = Field(description="Hugging Face repository id.")
     hf_model_filename: Optional[str] = Field(description="Hugging Face model filename.")
@@ -75,9 +77,6 @@ class ChainMinerModel(BaseModel):
     model_hash: Optional[str] = Field(
         description="8-byte SHA-1 hash of the model file from Hugging Face."
     )
-
-    class Config:
-        arbitrary_types_allowed = True
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""

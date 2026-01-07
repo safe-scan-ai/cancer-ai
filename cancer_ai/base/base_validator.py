@@ -194,12 +194,6 @@ class BaseValidatorNeuron(BaseNeuron):
         Starts the validator's operations in a background thread upon entering the context.
         This method facilitates the use of the validator in a 'with' statement.
         """
-        bt.logging.info(f"run_in_background_thread called with is_running={self.is_running}")
-        
-        # Get the current call stack to see what's calling run_in_background_thread
-        import traceback
-        stack_trace = traceback.format_stack()
-        bt.logging.info(f"Call stack for run_in_background_thread:\n{''.join(stack_trace)}")
         
         if not self.is_running:
             bt.logging.info("Starting validator in background thread.")

@@ -14,6 +14,8 @@ from retry import retry
 from huggingface_hub import HfApi, hf_hub_download
 from typing import Union
 from pathlib import Path
+import sys
+import platform
 
 
 from cancer_ai.chain_models_store import ChainMinerModel
@@ -49,8 +51,8 @@ def log_time(func):
     return wrapper
 
 
-def log_git_info(repo_root: Path = None) -> None:
-    """Log git commit hash and repo cleanliness information."""
+def log_system_info(repo_root: Path = None) -> None:
+    """Log system and environment information for debugging and instance identification."""
     if repo_root is None:
         repo_root = Path(__file__).parent.parent.parent
     
@@ -76,15 +78,23 @@ def log_git_info(repo_root: Path = None) -> None:
         is_clean = status_output == ""
         cleanliness = "clean" if is_clean else "dirty"
         
-        # Get list of uncommitted files if dirty
         if not is_clean:
             uncommitted_files = ", ".join([line.split()[1] for line in status_output.split("\n") if line.strip()])
             cleanliness = f"dirty ({uncommitted_files})"
     except (FileNotFoundError, subprocess.CalledProcessError):
         cleanliness = "unknown"
 
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    platform_info = platform.platform()
+    hostname = platform.node()
+    processor = platform.processor()
+
     bt.logging.info(f"Git commit: {commit_hash}")
     bt.logging.info(f"Repo clean: {cleanliness}")
+    bt.logging.info(f"Python version: {python_version}")
+    bt.logging.info(f"Platform: {platform_info}")
+    bt.logging.info(f"Hostname: {hostname}")
+    bt.logging.info(f"Processor: {processor}")
 
 
 def detect_model_format(file_path) -> ModelType:

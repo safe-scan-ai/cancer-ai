@@ -39,7 +39,7 @@ from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     check_for_new_dataset_files,
     get_local_dataset,
-    log_git_info,
+    log_system_info,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.model_manager import ModelManager 
@@ -486,7 +486,7 @@ if __name__ == "__main__":
     except:
         pass
 
-    log_git_info()
+    log_system_info()
     
     exit_event = threading.Event()
     with Validator(exit_event=exit_event) as validator:
