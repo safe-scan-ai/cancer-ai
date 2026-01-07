@@ -88,6 +88,12 @@ def log_system_info(repo_root: Path = None) -> None:
     platform_info = platform.platform()
     hostname = platform.node()
     processor = platform.processor()
+    
+    try:
+        result = subprocess.run(["pip", "freeze"], check=True, capture_output=True, text=True)
+        packages = " ".join(result.stdout.strip().split("\n"))
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        packages = "unknown"
 
     bt.logging.info(f"Git commit: {commit_hash}")
     bt.logging.info(f"Repo clean: {cleanliness}")
@@ -95,6 +101,7 @@ def log_system_info(repo_root: Path = None) -> None:
     bt.logging.info(f"Platform: {platform_info}")
     bt.logging.info(f"Hostname: {hostname}")
     bt.logging.info(f"Processor: {processor}")
+    bt.logging.info(f"Installed packages: {packages}")
 
 
 def detect_model_format(file_path) -> ModelType:
