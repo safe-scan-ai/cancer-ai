@@ -410,14 +410,28 @@ def add_validator_args(cls, parser):
     parser.add_argument(
         "--loki_url",
         type=str,
-        help="Loki server URL for centralized logging. Leave empty to disable.",
+        help="Loki server URL for centralized logging.",
         default=None,
     )
     
     parser.add_argument(
         "--validator_name",
         type=str,
-        help="Unique name for this validator instance (e.g., validator-1). Defaults to hostname if not set.",
+        help="Unique name for this validator instance. Defaults to hostname if not set.",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--loki_username",
+        type=str,
+        help="Username for Loki auth.",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--loki_password",
+        type=str,
+        help="Password for Loki auth.",
         default=None,
     )
 

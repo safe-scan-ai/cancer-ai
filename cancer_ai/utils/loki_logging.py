@@ -48,12 +48,14 @@ class LokiLoggingHandler:
         wallet_name: Optional[str] = None,
         hotkey: Optional[str] = None,
         additional_tags: Optional[Dict[str, str]] = None,
+        auth: Optional[tuple] = None,
     ):
         self.loki_url = loki_url
         self.validator_name = validator_name or socket.gethostname()
-        self.wallet_name = wallet_name or "unknown"
-        self.hotkey = hotkey or "unknown"
+        self.wallet_name = wallet_name
+        self.hotkey = hotkey
         self.additional_tags = additional_tags or {}
+        self.auth = auth
         self.handler: Optional[logging.Handler] = None
     
     def get_tags(self) -> Dict[str, str]:
@@ -84,6 +86,7 @@ class LokiLoggingHandler:
                 url=url,
                 tags=self.get_tags(),
                 version="1",
+                auth=self.auth,
             )
             
             # Set formatter
@@ -122,12 +125,16 @@ def setup_loki_logging(config: "bt.Config") -> Optional[logging.Handler]:
     wallet_name = config.wallet.name
     hotkey = config.wallet.hotkey
     
-    
+    auth = None
+    if config.loki_username and config.loki_password:
+        auth = (config.loki_username, config.loki_password)
+
     loki_handler = LokiLoggingHandler(
         loki_url=config.loki_url,
         validator_name=validator_name,
         wallet_name=wallet_name,
         hotkey=hotkey,
+        auth=auth
     )
     
     handler = loki_handler.create_handler()
