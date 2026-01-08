@@ -4,6 +4,7 @@ Sends logs directly to Grafana Loki without requiring Promtail.
 """
 
 import os
+import sys
 import logging
 import socket
 from typing import Optional, Dict, Any
@@ -44,15 +45,13 @@ class LokiLoggingHandler:
     def __init__(
         self,
         loki_url: str,
-        validator_name: Optional[str] = None,
-        wallet_name: Optional[str] = None,
+        validator_name: str,
         hotkey: Optional[str] = None,
         additional_tags: Optional[Dict[str, str]] = None,
         auth: Optional[tuple] = None,
     ):
         self.loki_url = loki_url
-        self.validator_name = validator_name or socket.gethostname()
-        self.wallet_name = wallet_name
+        self.validator_name = validator_name
         self.hotkey = hotkey
         self.additional_tags = additional_tags or {}
         self.auth = auth
@@ -63,9 +62,7 @@ class LokiLoggingHandler:
         tags = {
             "job": "cancer_ai_validator",
             "validator": self.validator_name,
-            "wallet": self.wallet_name,
             "hotkey": self.hotkey[:16] if len(self.hotkey) > 16 else self.hotkey,
-            "hostname": socket.gethostname(),
         }
         tags.update(self.additional_tags)
         return tags
@@ -128,7 +125,12 @@ def setup_loki_logging(config: "bt.Config") -> Optional[logging.Handler]:
     
     # Get validator identification
     validator_name = config.validator_name
-    wallet_name = config.wallet.name
+    if not validator_name:
+        bt.logging.error(
+            "--validator_name is required when --loki_url is set. "
+        )
+        sys.exit(1)
+
     hotkey = config.wallet.hotkey
     
     auth = None
@@ -138,7 +140,6 @@ def setup_loki_logging(config: "bt.Config") -> Optional[logging.Handler]:
     loki_handler = LokiLoggingHandler(
         loki_url=config.loki_url,
         validator_name=validator_name,
-        wallet_name=wallet_name,
         hotkey=hotkey,
         auth=auth
     )
@@ -150,8 +151,7 @@ def setup_loki_logging(config: "bt.Config") -> Optional[logging.Handler]:
         root_logger.addHandler(handler)
         
         bt.logging.info(
-            f"Loki logging enabled: {config.loki_url} "
-            f"(validator={validator_name or 'auto'}, wallet={wallet_name})"
+            f"Loki logging enabled: {config.loki_url} (validator={validator_name})"
         )
     
     return handler
