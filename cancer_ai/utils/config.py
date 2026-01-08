@@ -380,7 +380,7 @@ def add_validator_args(cls, parser):
 
 
     parser.add_argument(
-        "--miners_refresh_interval",
+        "--miners_refresh_interval", # not used 
         type=int,
         help="The interval at which to refresh the miners in minutes",
         default=60,
@@ -390,7 +390,7 @@ def add_validator_args(cls, parser):
         "--monitor_datasets_interval",
         type=int,
         help="The interval at which to monitor the datasets in seconds",
-        default=20,
+        default=600, # 10 min
     )
 
     parser.add_argument(
@@ -403,7 +403,7 @@ def add_validator_args(cls, parser):
     parser.add_argument(
         "--filesystem_evaluation",
         type=bool,
-        help="Should use local datasets instead of HF? Use together with --local_dataset_dir",
+        help="Use local datasets instead of HF? Use together with --local_dataset_dir",
         default=False
     )
 

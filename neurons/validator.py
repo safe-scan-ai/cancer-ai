@@ -26,7 +26,6 @@ import json
 import threading
 import datetime
 import csv
-import zipfile
 from uuid import uuid4
 
 import bittensor as bt
@@ -40,6 +39,7 @@ from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     check_for_new_dataset_files,
     get_local_dataset,
+    log_system_info,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.model_manager import ModelManager 
@@ -110,7 +110,7 @@ class Validator(BaseValidatorNeuron):
         time.sleep(5)
         data_package = get_local_dataset(self.config.local_dataset_dir)
         if not data_package:
-            bt.logging.info("No new data packages found.")
+            bt.logging.trace("No new data packages found.")
             return
         
         await self.run_competition_for_data_package(data_package, local_mode=True)
@@ -209,6 +209,8 @@ class Validator(BaseValidatorNeuron):
                     )
                     wandb.log(error_log.model_dump())
                     wandb.finish()
+                else:
+                    bt.logging.info("WANDB is off, don't log")
             except Exception as wandb_error:
                 bt.logging.warning(f"Failed to log to wandb: {wandb_error}")
             return
@@ -483,6 +485,8 @@ if __name__ == "__main__":
         bt.logging.disable_third_party_loggers()
     except:
         pass
+
+    log_system_info()
     
     exit_event = threading.Event()
     with Validator(exit_event=exit_event) as validator:

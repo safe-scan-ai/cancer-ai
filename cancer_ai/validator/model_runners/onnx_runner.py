@@ -7,17 +7,29 @@ from ..exceptions import ModelRunException
 
 from . import BaseRunnerHandler
 
+ONNX_INFERENCE_TIMEOUT = 20.0
+
 
 class OnnxRunnerHandler(BaseRunnerHandler):
+    _inference_semaphore = asyncio.Semaphore(1)
+    
     def __init__(self, config, model_path):
         super().__init__(config, model_path)
         self.session = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
 
     def cleanup(self):
         """Clean up ONNX session and release resources."""
         if self.session:
             bt.logging.debug("Cleaning up ONNX session.")
             self.session = None
+            import gc
+            gc.collect()
     
     def _get_model_input_size(self, session) -> Tuple[int, int]:
         """Extract expected image input size from ONNX model"""
@@ -35,7 +47,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
         """Resize image batch to target size using PIL for quality"""
         from PIL import Image
         
-        batch_size, channels, height, width = chunk.shape
+        batch_size, _, height, width = chunk.shape
         target_h, target_w = target_size
         
         if (height, width) == target_size:
@@ -75,13 +87,17 @@ class OnnxRunnerHandler(BaseRunnerHandler):
         error_counter = defaultdict(int)
 
         try:
-            self.session = onnxruntime.InferenceSession(self.model_path)
-        except onnxruntime.OnnxRuntimeException as e:
-            bt.logging.error(f"ONNX runtime error when loading model: {e}")
-            raise ModelRunException(f"ONNX runtime error when loading model: {e}") from e
-        except OSError as e:
-            bt.logging.error(f"File error when loading ONNX model: {e}")
-            raise ModelRunException(f"File error when loading ONNX model: {e}") from e
+            session_options = onnxruntime.SessionOptions()
+            session_options.intra_op_num_threads = 1
+            session_options.inter_op_num_threads = 1
+            self.session = onnxruntime.InferenceSession(self.model_path, session_options)
+        except (OSError, RuntimeError) as e:
+            if isinstance(e, OSError):
+                bt.logging.error(f"File error when loading ONNX model: {e}")
+                raise ModelRunException(f"File error when loading ONNX model: {e}") from e
+            else:
+                bt.logging.error(f"ONNX runtime error when loading model: {e}")
+                raise ModelRunException(f"ONNX runtime error when loading model: {e}") from e
 
         # Detect model's expected input size
         model_input_size = self._get_model_input_size(self.session)
@@ -104,6 +120,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                     # Process each image individually
                     batch_size = chunk.shape[0]
                     
+                    bt.logging.trace(f"Running ONNX inference seprately on on {batch_size} images ")
                     for i in range(batch_size):
                         # Extract single image: (3, 512, 512) -> (1, 3, 512, 512)
                         single_image = chunk[i:i+1]
@@ -124,14 +141,15 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                             # Model only expects image input (fallback)
                             input_data = {inputs[0].name: single_image}
                         
-                        bt.logging.debug(f"Running ONNX inference on image {i+1}/{batch_size} with shape {single_image.shape}")
-                        single_result = await asyncio.wait_for(
-                            asyncio.to_thread(self.session.run, None, input_data),
-                            timeout=120.0  # 2 minutes max per image
-                        )
+                        
+                        async with self._inference_semaphore:
+                            single_result = await asyncio.wait_for(
+                                asyncio.to_thread(self.session.run, None, input_data),
+                                timeout=ONNX_INFERENCE_TIMEOUT
+                            )
                         single_result = single_result[0]
                         if len(single_result.shape) > 1 and single_result.shape[0] == 1:
-                            single_result = np.squeeze(single_result, axis=0)  # Remove batch dimension
+                            single_result = np.squeeze(single_result, axis=0)
                         results.append(single_result)
                     
                 else:
@@ -141,25 +159,27 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                     # Resize chunk to match model's expected input size
                     chunk = self._resize_image_batch(chunk, model_input_size)
                     batch_size = chunk.shape[0]
+                    bt.logging.trace(f"Running ONNX inference seprately on on {batch_size} images ")
                     for i in range(batch_size):
                         single_image = chunk[i:i+1]
                         input_name = self.session.get_inputs()[0].name
                         input_data = {input_name: single_image}
-                        bt.logging.debug(f"Running ONNX inference on image {i+1}/{batch_size} with shape {single_image.shape}")
-                        single_result = await asyncio.wait_for(
-                            asyncio.to_thread(self.session.run, None, input_data),
-                            timeout=120.0  # 2 minutes max per image
-                        )
+                        
+                        async with self._inference_semaphore:
+                            single_result = await asyncio.wait_for(
+                                asyncio.to_thread(self.session.run, None, input_data),
+                                timeout=ONNX_INFERENCE_TIMEOUT
+                            )
                         single_result = single_result[0]
                         if len(single_result.shape) > 1 and single_result.shape[0] == 1:
-                            single_result = np.squeeze(single_result, axis=0)   # Remove batch dimension
+                            single_result = np.squeeze(single_result, axis=0)
                         results.append(single_result)
                 
             except asyncio.TimeoutError:
-                bt.logging.error(f"ONNX inference timeout after 120s on chunk")
+                bt.logging.error(f"ONNX inference timeout after {ONNX_INFERENCE_TIMEOUT}s on chunk")
                 error_counter['TimeoutError'] += 1
                 continue
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError) as e:
                 bt.logging.error(f"ONNX inference error during chunk processing: {e}", exc_info=True)
                 error_counter['InferenceError'] += 1
                 continue
