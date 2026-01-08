@@ -7,6 +7,7 @@ import os
 import sys
 import logging
 import socket
+import requests
 from typing import Optional, Dict, Any
 
 import bittensor as bt
@@ -85,6 +86,20 @@ class LokiLoggingHandler:
                 auth_type, token = self.auth
                 headers["Authorization"] = f"{auth_type} {token}"
 
+            # Test credentials with a minimal request
+            test_payload = {"streams": [{"stream": {}, "values": []}]}
+            try:
+
+                response = requests.post(url, json=test_payload, headers=headers, timeout=5)
+                if response.status_code == 401:
+                    bt.logging.error(
+                            "Loki authentication failed: Invalid token."
+                        )
+                    sys.exit(1)
+            except requests.RequestException:
+                # Pass if network error
+                pass
+
             self.handler = logging_loki.LokiHandler(
                 url=url,
                 tags=self.get_tags(),
@@ -123,6 +138,7 @@ def setup_loki_logging(config: "bt.Config") -> Optional[logging.Handler]:
     if not config.loki_url:
         return None
     
+    bt.logging.info("Starting Loki logging setup.")
     # Get validator identification
     validator_name = config.validator_name
     if not validator_name:
