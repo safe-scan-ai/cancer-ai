@@ -422,16 +422,9 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--loki_username",
+        "--loki_token",
         type=str,
-        help="Username for Loki auth.",
-        default=None,
-    )
-
-    parser.add_argument(
-        "--loki_password",
-        type=str,
-        help="Password for Loki auth.",
+        help="Bearer token for Loki authentication.",
         default=None,
     )
 

@@ -82,11 +82,17 @@ class LokiLoggingHandler:
             if not url.endswith('/loki/api/v1/push'):
                 url = f"{url}/loki/api/v1/push"
             
+
+            headers = {}
+            if self.auth:
+                auth_type, token = self.auth
+                headers["Authorization"] = f"{auth_type} {token}"
+
             self.handler = logging_loki.LokiHandler(
                 url=url,
                 tags=self.get_tags(),
                 version="1",
-                auth=self.auth,
+                headers=headers if headers else None,
             )
             
             # Set formatter
@@ -126,8 +132,8 @@ def setup_loki_logging(config: "bt.Config") -> Optional[logging.Handler]:
     hotkey = config.wallet.hotkey
     
     auth = None
-    if config.loki_username and config.loki_password:
-        auth = (config.loki_username, config.loki_password)
+    if config.loki_token:
+        auth = ("Bearer", config.loki_token)
 
     loki_handler = LokiLoggingHandler(
         loki_url=config.loki_url,
