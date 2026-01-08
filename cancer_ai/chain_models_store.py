@@ -1,60 +1,14 @@
-import functools
 from typing import Optional, Type
-import asyncio
-from functools import wraps
 import argparse
 import sys
+import asyncio
 
 import bittensor as bt
 from pydantic import BaseModel, Field, ConfigDict
 from retry import retry
 from websockets.client import OPEN as WS_OPEN
+from .utils.archive_node import get_archive_subtensor, WebSocketManager
 
-
-def _create_archive_subtensor(archive_node_url: str, archive_node_fallback_url: str|None = None) -> bt.subtensor:
-    """
-    Creates an archive subtensor with fallback support.
-    """
-    
-    def _create_subtensor(url: str) -> bt.subtensor:
-        parser = argparse.ArgumentParser()
-        bt.subtensor.add_args(parser)
-        
-        original_argv = sys.argv
-        sys.argv = ['', '--subtensor.chain_endpoint', url, '--subtensor.network', '']
-        try:
-            config = bt.config(parser=parser)
-            config.subtensor.network = None
-            return bt.subtensor(config=config)
-        finally:
-            sys.argv = original_argv
-
-    archive_urls = [url for url in [archive_node_url, archive_node_fallback_url] if url is not None]
-    for archive_url in archive_urls:
-        try:
-            bt.logging.trace(f"Attempting to connect to archive node: {archive_url}")
-            subtensor = _create_subtensor(archive_url)
-            subtensor.substrate.connect()
-            bt.logging.debug(f"Successfully connected to archive node: {archive_url}")
-            return subtensor
-        except Exception as e:
-            bt.logging.warning(f"Failed to connect to archive node ({archive_url}): {e}")
-
-    bt.logging.error("Failed to connect any archive nodes")
-    raise RuntimeError("Failed to connect to any archive nodes")
-
-
-def get_archive_subtensor(
-    *,
-    archive_node_url: str | None,
-    archive_node_fallback_url: str | None = None,
-    subtensor: bt.subtensor | None = None,
-) -> bt.subtensor:
-    if archive_node_url:
-        return _create_archive_subtensor(archive_node_url, archive_node_fallback_url)
-    if subtensor is not None:
-        return subtensor
-    return bt.subtensor(network="archive")
 
 class ChainMinerModel(BaseModel):
     """Uniquely identifies a trained model"""
@@ -119,56 +73,18 @@ class ChainModelMetadata:
         wallet: Optional[bt.wallet] = None,
     ):
         self.subtensor = subtensor
-        self.wallet = (
-            wallet  # Wallet is only needed to write to the chain, not to read.
-        )
+        self.wallet = wallet  # Wallet is only needed to write to the chain, not to read.
         self.netuid = netuid
-
-        self._orig_ws_connect = self.subtensor.substrate.connect
-        self.subtensor.substrate.connect = self._ws_connect
-
-        try:
-            ws = self.subtensor.substrate.connect()
-            bt.logging.info(f"[ChainModelMetadata] Initial WS state: {ws.state}")
-        except Exception as e:
-            bt.logging.error("Initial WS connect failed: %s", e, exc_info=True)
-
+        
+        # Use WebSocketManager for connection management
+        self.ws_manager = WebSocketManager(subtensor)
         self.subnet_metadata = self.subtensor.metagraph(self.netuid)
-
-
-    def _ws_connect(self, *args, **kwargs):
-        """
-        Replacement for substrate.connect().
-        Reuses existing WebSocketClientProtocol if State.OPEN;
-        otherwise performs a fresh handshake via original connect().
-        """
-        # Check current socket
-        current = getattr(self.subtensor.substrate, "ws", None)
-        if current is not None and current.state == WS_OPEN:
-            return current
-
-        # If socket not open, reconnect
-        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
-        try:
-            new_ws = self._connect_ws_with_retry(*args, **kwargs)
-        except Exception as e:
-            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
-            raise
-
-        # Update the substrate.ws attribute so future calls reuse this socket
-        setattr(self.subtensor.substrate, "ws", new_ws)
-        return new_ws
-
-    @retry(tries=5, delay=0.5, backoff=2, max_delay=5)
-    def _connect_ws_with_retry(self, *args, **kwargs):
-        return self._orig_ws_connect(*args, **kwargs)
 
     async def store_model_metadata(self, model_id: ChainMinerModel):
         """Stores model metadata on this subnet for a specific wallet."""
         if self.wallet is None:
             raise ValueError("No wallet available to write to the chain.")
 
-        # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
         self.subtensor.commit(
             self.wallet,
             self.netuid,
@@ -177,7 +93,7 @@ class ChainModelMetadata:
 
     async def retrieve_model_metadata(self, hotkey: str, uid: int) -> ChainMinerModel:
         """Retrieves model metadata on this subnet for specific hotkey"""
-        await asyncio.sleep(2) # temp fix for 429
+        await asyncio.sleep(2)  # temp fix for 429
         
         metadata = get_metadata(self.subtensor, self.netuid, hotkey)
 
@@ -203,11 +119,8 @@ class ChainModelMetadata:
         return model
     
     def close(self):
-        try:
-            bt.logging.debug("Closing ModelDBController and websocket connection.")
-            self.subtensor.substrate.close_websocket()
-        except Exception:
-            pass
+        """Close the WebSocket connection."""
+        self.ws_manager.close()
 
 @retry(tries=12, delay=1, backoff=2, max_delay=30)
 def get_metadata(subtensor, netuid, hotkey):

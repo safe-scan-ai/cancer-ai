@@ -11,7 +11,7 @@ import bittensor as bt
 from huggingface_hub import HfApi, HfFileSystem, hf_hub_download
 
 from .models import ModelInfo
-from ..chain_models_store import _create_archive_subtensor
+from ..utils.archive_node import _create_archive_subtensor_with_fallback as _create_archive_subtensor, WebSocketManager
 from .exceptions import ModelRunException
 from .utils import decode_params
 from websockets.client import OPEN as WS_OPEN
@@ -44,37 +44,8 @@ class ModelManager():
                 subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
 
-        # Capture the original connect() and override with _ws_connect wrapper
-        # Substrate-interface calls connect() on every RPC under the hood,
-        # so we wrap it to reuse the same socket unless it's truly closed.
-        self._orig_ws_connect = self.subtensor.substrate.connect
-        self.subtensor.substrate.connect = self._ws_connect
-
-        ws = self.subtensor.substrate.connect()
-        bt.logging.info(f"Initial WebSocket state: {ws.state}")
-
-    def _ws_connect(self, *args, **kwargs):
-        """
-        Replacement for substrate.connect().
-        Reuses existing WebSocketClientProtocol if State.OPEN;
-        otherwise performs a fresh handshake via original connect().
-        """
-        # Check current socket
-        current = getattr(self.subtensor.substrate, "ws", None)
-        if current is not None and current.state == WS_OPEN:
-            return current
-
-        # If socket not open, reconnect
-        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
-        try:
-            new_ws = self._orig_ws_connect(*args, **kwargs)
-        except Exception as e:
-            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
-            raise
-
-        # Update the substrate.ws attribute so future calls reuse this socket
-        setattr(self.subtensor.substrate, "ws", new_ws)
-        return new_ws
+        # Use WebSocketManager for connection management
+        self.ws_manager = WebSocketManager(subtensor)
 
     async def _hf_api_call_with_retry(self, api_call, *args, **kwargs):
         """Wrapper for HF API calls with exponential backoff retry logic."""
