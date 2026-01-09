@@ -46,6 +46,7 @@ from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
 from cancer_ai.validator.models import WanDBLogBase
 from cancer_ai.validator.validator_helpers import setup_organization_data_references
+from cancer_ai.validator.utils import log_system_info
 from huggingface_hub import HfApi
 
 class Validator(BaseValidatorNeuron):
