@@ -425,7 +425,7 @@ def add_validator_args(cls, parser):
         "--axiom_dataset",
         type=str,
         help="Axiom dataset name for logs.",
-        default="sn76_validators",
+        default="76_prod",
     )
 
     parser.add_argument(
