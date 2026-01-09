@@ -26,6 +26,10 @@ import bittensor as bt
 
 from abc import ABC, abstractmethod
 
+from cancer_ai.utils.axiom_logging import setup_axiom_logging
+from cancer_ai.utils.structured_logger import log as slog
+from cancer_ai.validator.utils import log_system_info
+
 # Sync calls set weights and also resyncs the metagraph.
 from ..utils.config import check_config, add_args, path_config
 from ..utils.misc import ttl_get_block
@@ -68,6 +72,14 @@ class BaseNeuron(ABC):
         self.config = self.config()
         self.config.merge(base_config)
         self.check_config(self.config)
+
+        slog.install_bittensor_logger_bridge()
+
+        # set up axiom logging
+        setup_axiom_logging(self.config)
+
+        # log system information
+        log_system_info()
 
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)

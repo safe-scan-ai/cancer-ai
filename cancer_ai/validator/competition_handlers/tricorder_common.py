@@ -13,6 +13,12 @@ from pydantic import Field
 import numpy as np
 import bittensor as bt
 from PIL import Image
+try:
+    from PIL.Image import Resampling
+    LANCZOS = Resampling.LANCZOS
+except ImportError:
+    # Older Pillow versions
+    LANCZOS = Image.LANCZOS
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -22,7 +28,8 @@ from sklearn.metrics import (
 )
 
 from cancer_ai.validator.models import WanDBLogModelBase
-from .base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
+from cancer_ai.validator.competition_handlers.base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
+from cancer_ai.utils.structured_logger import log
 
 MAX_INVALID_ENTRIES = 2  # Maximum number of invalid entries allowed in the dataset
 
@@ -344,17 +351,17 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
             if len(validation_errors) > 10:
                 error_summary += f"\n... and {len(validation_errors) - 10} more errors"
 
-            bt.logging.warning(
+            log.competition.warn(
                 f"TRICORDER COMPETITION WARNING: Dataset validation has issues"
             )
-            bt.logging.warning(f"Found {len(validation_errors)} validation errors:")
-            bt.logging.warning(error_summary)
+            log.competition.warn(f"Found {len(validation_errors)} validation errors:")
+            log.competition.warn(error_summary)
 
             if len(validation_errors) > MAX_INVALID_ENTRIES:
-                bt.logging.error(
+                log.competition.error(
                     f"TRICORDER COMPETITION CANCELLED: Not enough valid data to evaluate"
                 )
-                bt.logging.error(
+                log.competition.error(
                     f" {len(validation_errors)} entries are invalid, maximum invalid: {MAX_INVALID_ENTRIES}"
                 )
                 raise ValueError(f"Not enough valid data to evaluate.")
@@ -407,16 +414,16 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 f"y_test={len(self.y_test)}, metadata={len(self.metadata)}"
             )
 
-        bt.logging.trace(
+        log.competition.trace(
             f"Preprocessing {len(X_test)} images for tricorder competition"
         )
-        bt.logging.trace(f"Using chunk size: {CHUNK_SIZE}")
-        bt.logging.trace(f"Available metadata entries: {len(self.metadata)}")
+        log.competition.trace(f"Using chunk size: {CHUNK_SIZE}")
+        log.competition.trace(f"Available metadata entries: {len(self.metadata)}")
         error_counter = defaultdict(int)
         chunk_paths = []
 
         for i in range(0, len(X_test), CHUNK_SIZE):
-            bt.logging.trace(
+            log.competition.trace(
                 f"Processing chunk {len(chunk_paths)} - images {i} to {min(i + CHUNK_SIZE, len(X_test))}"
             )
             chunk_data = []
@@ -448,7 +455,7 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                     error_counter["IOError"] += 1
                     continue
                 except Exception as e:
-                    bt.logging.debug(f"Unexpected error processing {img_path}: {e}")
+                    log.competition.debug(f"Unexpected error processing {img_path}: {e}")
                     error_counter["UnexpectedError"] += 1
                     continue
 
@@ -469,12 +476,12 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                         pickle.dump(chunk_metadata, f)
 
                     chunk_paths.append(str(chunk_file))
-                    bt.logging.trace(
+                    log.competition.trace(
                         f"Saved chunk with {len(chunk_data)} images and metadata to {chunk_file}"
                     )
 
                 except Exception as e:
-                    bt.logging.error(f"Failed to serialize chunk: {e}")
+                    log.competition.error(f"Failed to serialize chunk: {e}")
                     error_counter["SerializationError"] += 1
 
         if error_counter:
@@ -484,21 +491,21 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                     for error_type, count in error_counter.items()
                 ]
             )
-            bt.logging.trace(
+            log.competition.trace(
                 f"Preprocessing completed with issues: {error_summary}"
             )
 
-        bt.logging.trace(
+        log.competition.trace(
             f"Preprocessed data saved in {len(chunk_paths)} chunks"
         )
-        bt.logging.trace(f"Chunk paths: {chunk_paths}")
+        log.competition.trace(f"Chunk paths: {chunk_paths}")
         self.preprocessed_chunks = chunk_paths
         return chunk_paths
 
     def _preprocess_single_image(self, img: Image.Image) -> np.ndarray:
         """Preprocess a single PIL image for tricorder competition"""
         # Resize to target size using a deterministic algorithm
-        img = img.resize(TARGET_SIZE, Image.LANCZOS)
+        img = img.resize(TARGET_SIZE, LANCZOS)
 
         # Convert to numpy array and normalize
         img_array = np.array(img, dtype=np.float32) / NORMALIZATION_FACTOR
@@ -519,7 +526,7 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         """Generator that yields preprocessed data chunks with preprocessed metadata"""
 
         for i, chunk_file in enumerate(self.preprocessed_chunks):
-            bt.logging.trace(f"Processing chunk {i}: {chunk_file}")
+            log.competition.trace(f"Processing chunk {i}: {chunk_file}")
             if os.path.exists(chunk_file):
                 try:
                     # Load image data
@@ -534,7 +541,7 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                             chunk_metadata = pickle.load(f)
                     else:
                         # Default metadata if file doesn't exist
-                        bt.logging.warning(
+                        log.competition.warn(
                             f"Metadata file not found, using defaults"
                         )
                         chunk_metadata = [
@@ -542,18 +549,18 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                             for _ in range(len(chunk_data))
                         ]
 
-                    bt.logging.trace(
+                    log.competition.trace(
                         f"Yielding chunk {i} with {len(chunk_data)} samples and {len(chunk_metadata)} metadata"
                     )
                     preprocessed_metadata = convert_metadata_to_array(chunk_metadata)
                     yield chunk_data, preprocessed_metadata
                 except Exception as e:
-                    bt.logging.error(
+                    log.competition.error(
                         f"Error loading preprocessed chunk {chunk_file}: {e}"
                     )
                     continue
             else:
-                bt.logging.warning(f"Preprocessed chunk file not found: {chunk_file}")
+                log.competition.warn(f"Preprocessed chunk file not found: {chunk_file}")
 
     def cleanup_preprocessed_data(self) -> None:
         """Clean up preprocessed data files"""
@@ -562,9 +569,9 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
 
             try:
                 shutil.rmtree(self.preprocessed_data_dir)
-                bt.logging.trace("Cleaned up preprocessed data")
+                log.competition.trace("Cleaned up preprocessed data")
             except Exception as e:
-                bt.logging.error(f"Failed to cleanup preprocessed data: {e}")
+                log.competition.error(f"Failed to cleanup preprocessed data: {e}")
 
     def preprocess_data(self):
         """Legacy method - using preprocess_and_serialize_data instead"""
@@ -633,28 +640,28 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         import bittensor as bt
         
         try:
-            bt.logging.debug(f"calculate_score called with metrics={metrics}")
-            bt.logging.debug(f"Scoring weights - ACCURACY_WEIGHT={ACCURACY_WEIGHT}, WEIGHTED_F1_WEIGHT={WEIGHTED_F1_WEIGHT}, PREDICTION_WEIGHT={PREDICTION_WEIGHT}, EFFICIENCY_WEIGHT={EFFICIENCY_WEIGHT}")
+            log.competition.debug(f"calculate_score called with metrics={metrics}")
+            log.competition.debug(f"Scoring weights - ACCURACY_WEIGHT={ACCURACY_WEIGHT}, WEIGHTED_F1_WEIGHT={WEIGHTED_F1_WEIGHT}, PREDICTION_WEIGHT={PREDICTION_WEIGHT}, EFFICIENCY_WEIGHT={EFFICIENCY_WEIGHT}")
             
             # Prediction quality (accuracy + weighted F1)
             prediction_score = (
                 ACCURACY_WEIGHT * metrics["accuracy"]
                 + WEIGHTED_F1_WEIGHT * metrics["weighted_f1"]
             )
-            bt.logging.debug(f"prediction_score = {ACCURACY_WEIGHT} * {metrics['accuracy']} + {WEIGHTED_F1_WEIGHT} * {metrics['weighted_f1']} = {prediction_score:.6f}")
+            log.competition.debug(f"prediction_score = {ACCURACY_WEIGHT} * {metrics['accuracy']} + {WEIGHTED_F1_WEIGHT} * {metrics['weighted_f1']} = {prediction_score:.6f}")
 
             # Efficiency score
             efficiency_score = metrics.get("efficiency", 1.0)  # Default to max if not set
-            bt.logging.debug(f"efficiency_score from metrics = {efficiency_score:.6f}")
+            log.competition.debug(f"efficiency_score from metrics = {efficiency_score:.6f}")
 
             final_score = (
                 PREDICTION_WEIGHT * prediction_score + EFFICIENCY_WEIGHT * efficiency_score
             )
-            bt.logging.debug(f"final_score = {PREDICTION_WEIGHT} * {prediction_score:.6f} + {EFFICIENCY_WEIGHT} * {efficiency_score:.6f} = {final_score:.6f}")
+            log.competition.debug(f"final_score = {PREDICTION_WEIGHT} * {prediction_score:.6f} + {EFFICIENCY_WEIGHT} * {efficiency_score:.6f} = {final_score:.6f}")
             
             return final_score
         except Exception as e:
-            bt.logging.error(f"ERROR in calculate_score: {e}, metrics: {metrics}", exc_info=True)
+            log.competition.error(f"ERROR in calculate_score: {e}, metrics: {metrics}")
             return 0.0
 
     def get_model_result(
@@ -668,7 +675,7 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
         import bittensor as bt
         
         try:
-            bt.logging.debug(f"get_model_result called with y_test len={len(y_test)}, y_pred len={len(y_pred)}, model_size_mb={model_size_mb}")
+            log.competition.debug(f"get_model_result called with y_test len={len(y_test)}, y_pred len={len(y_pred)}, model_size_mb={model_size_mb}")
             
             # Convert to numpy arrays
             y_test = np.array(y_test)
@@ -717,34 +724,30 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 y_test, y_pred_classes, labels=labels, average=None, zero_division=0
             )
 
-            # Calculate risk category scores and weighted F1
-            category_scores = self._calculate_risk_category_scores(f1_scores)
-            
-            weighted_f1 = self._calculate_weighted_f1(category_scores)
-
-            # Log important metrics
-            bt.logging.trace(f"Model evaluation results: Accuracy: {accuracy:.4f}, Weighted F1: {weighted_f1:.4f}")
-            for category, score in category_scores.items():
-                bt.logging.trace(f"- {category.value} F1: {score:.4f}")
-
-        
+            # Calculate efficiency score
             efficiency_score = 1.0  # Default to max if size not provided
             if model_size_mb is not None:
                 if model_size_mb <= MIN_MODEL_SIZE_MB:
-                    efficiency_score = 1.0  # Full efficiency score
-                elif model_size_mb <= MAX_MODEL_SIZE_MB:
-                    # Linear decay from 1.0 to 0.0 between MIN and MAX MB
-                    efficiency_score = (
-                        MAX_MODEL_SIZE_MB - model_size_mb
-                    ) / EFFICIENCY_RANGE_MB
+                    efficiency_score = 1.0
+                elif model_size_mb >= MAX_MODEL_SIZE_MB:
+                    efficiency_score = 0.0
                 else:
-                    efficiency_score = 0.0  # No efficiency score above MAX MB
-
-                bt.logging.trace(
-                    f"- Model size: {model_size_mb:.1f}MB, Efficiency score: {efficiency_score:.2f}"
-                )
+                    # Linear interpolation between min and max size
+                    efficiency_score = 1.0 - (
+                        (model_size_mb - MIN_MODEL_SIZE_MB)
+                        / (MAX_MODEL_SIZE_MB - MIN_MODEL_SIZE_MB)
+                    )
             else:
-                bt.logging.trace("No model size provided, using default efficiency=1.0")
+                log.competition.trace("No model size provided, using default efficiency=1.0")
+
+            # Calculate risk category scores and weighted F1
+            category_scores = self._calculate_risk_category_scores(f1_scores)
+            weighted_f1 = self._calculate_weighted_f1(category_scores)
+
+            # Log important metrics
+            log.competition.trace(f"Model evaluation results: Accuracy: {accuracy:.4f}, Weighted F1: {weighted_f1:.4f}")
+            for category, score in category_scores.items():
+                log.competition.trace(f"- {category.value} F1: {score:.4f}")
 
             # Calculate final score using calculate_score method
             # Round metrics to ensure deterministic scoring across different hardware
@@ -753,13 +756,13 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 "weighted_f1": round(weighted_f1, 6),
                 "efficiency": round(efficiency_score, 6),
             }
-            bt.logging.trace(f"Final metrics before calculate_score: {metrics}")
+            log.competition.trace(f"Final metrics before calculate_score: {json.dumps(metrics)}")
             
             score = self.calculate_score(metrics)
-            bt.logging.trace(f"calculate_score returned: {score:.6f}")
+            log.competition.trace(f"Final calculated score: {round(score, 6)}")
             
             # Create result object
-            bt.logging.debug("Creating TricorderEvaluationResult object...")
+            log.competition.debug("Creating TricorderEvaluationResult object...")
             result = TricorderEvaluationResult(
                 tested_entries=len(y_test),
                 run_time_s=run_time_s,
@@ -779,22 +782,26 @@ class BaseTricorderCompetitionHandler(BaseCompetitionHandler, ABC):
                 score=score,
             )
 
-            bt.logging.trace(f"Result created successfully with score={result.score:.6f}")
+            log.competition.trace(f"Result created successfully with score={result.score:.6f}")
             return result
 
         except Exception as e:
             error_msg = f"Error in get_model_result: {str(e)}"
-            bt.logging.error("EXCEPTION in get_model_result!", exc_info=True)
-            bt.logging.error(f"Exception details - {error_msg}")
-            bt.logging.error(f"y_test available: {'y_test' in locals()}, y_pred available: {'y_pred' in locals()}")
-            bt.logging.error(f"model_size_mb: {model_size_mb}, run_time_s: {run_time_s}")
+            error_context = {
+                'error': error_msg,
+                'y_test_available': 'y_test' in locals(),
+                'y_pred_available': 'y_pred' in locals(),
+                'model_size_mb': model_size_mb,
+                'run_time_s': run_time_s
+            }
+            log.competition.error(f"EXCEPTION in get_model_result! {json.dumps(error_context)}")
             
             result = TricorderEvaluationResult(
                 tested_entries=len(y_test) if "y_test" in locals() else 0,
                 run_time_s=run_time_s,
                 error=error_msg,
             )
-            bt.logging.error(f"Returning error result with score={result.score}")
+            log.competition.error(f"Returning error result with score={result.score}")
             return result
 
     def get_comparable_result_fields(self) -> tuple[str, ...]:

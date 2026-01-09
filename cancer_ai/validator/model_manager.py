@@ -14,6 +14,7 @@ from .models import ModelInfo
 from ..utils.archive_node import _create_archive_subtensor_with_fallback as _create_archive_subtensor, WebSocketManager
 from .exceptions import ModelRunException
 from .utils import decode_params
+from ..utils.structured_logger import log
 from websockets.client import OPEN as WS_OPEN
 
 
@@ -54,35 +55,50 @@ class ModelManager():
                 return api_call(*args, **kwargs)
             except Exception as e:
                 if attempt == self.hf_max_retries - 1:
-                    bt.logging.error(f"HF API call failed after {self.hf_max_retries} attempts. Error: {e}")
+                    # Log essential error context only
+                    current_hotkey = getattr(log.context, 'miner_hotkey', None)
+                    current_validator = getattr(log.context, 'validator_hotkey', None)
+                    
+                    error_context = {
+                        'error': str(e),
+                        'miner_hotkey': current_hotkey or 'unknown',
+                        'validator': current_validator or 'unknown'
+                    }
+                    
+                    log.competition.error(f"HF API failed: {json.dumps(error_context)}")
                     raise
                 
                 delay = min(self.hf_initial_delay * (2 ** attempt), self.hf_max_delay)
-                bt.logging.warning(f"HF API call attempt {attempt + 1}/{self.hf_max_retries} failed. Retrying in {delay}s. Error: {e}")
+                log.competition.warn(f"HF API call attempt {attempt + 1}/{self.hf_max_retries} failed. Retrying in {delay}s. Error: {e}")
                 await asyncio.sleep(delay)
 
     async def model_license_valid(self, hotkey) -> tuple[bool, Optional[str]]:
-        hf_id = self.hotkey_store[hotkey].hf_repo_id
-        
+        log.set_miner_hotkey(hotkey)
         try:
-            model_info = await self._hf_api_call_with_retry(self.hf_api.model_info, hf_id, timeout=30)
-        except Exception as e:
-            return False, f"HF API ERROR: {e}"
+            hf_id = self.hotkey_store[hotkey].hf_repo_id
+            
+            try:
+                model_info = await self._hf_api_call_with_retry(self.hf_api.model_info, hf_id, timeout=30)
+            except Exception as e:
+                return False, f"HF API ERROR: {e}"
 
-        meta_license = None
-        if model_info.card_data:
-            meta_license = model_info.card_data.get("license")
+            meta_license = None
+            if model_info.card_data:
+                meta_license = model_info.card_data.get("license")
 
-        if meta_license and "mit" in meta_license.lower():
-            return True, None
+            if meta_license and "mit" in meta_license.lower():
+                return True, None
 
-        return False, "NOT_MIT"
+            return False, "NOT_MIT"
+        finally:
+            log.set_miner_hotkey("")
 
     async def download_miner_model(self, hotkey, token: Optional[str] = None) -> tuple[bool, Optional[str]]:
         """Downloads the newest model from Hugging Face and saves it to disk.
         Returns:
             tuple: (success: bool, error_reason: Optional[str])
         """
+        log.set_miner_hotkey(hotkey)
         MAX_RETRIES = 3
         RETRY_DELAY = 2  # seconds
         
@@ -167,7 +183,14 @@ class ModelManager():
                 token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
             )
         except Exception as e:
-            bt.logging.error(f"Failed to download model file: {e}")
+            error_context = {
+                'error': str(e),
+                'miner_hotkey': hotkey,
+                'hf_repo_id': model_info.hf_repo_id,
+                'hf_model_filename': model_info.hf_model_filename,
+                'block': model_info.block,
+            }
+            log.competition.error(f"Failed to download model file: {json.dumps(error_context, indent=2)}")
             return False, f"Failed to download model file: {e}"
 
         # Verify the downloaded file exists

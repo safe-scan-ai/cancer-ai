@@ -7,7 +7,7 @@ import hashlib
 
 from dotenv import load_dotenv
 
-# from cancer_ai.utils.structured_logger import log, LogCategory
+from cancer_ai.utils.structured_logger import log
 
 from .manager import SerializableManager
 from .model_manager import ModelManager
@@ -107,6 +107,9 @@ class CompetitionManager(SerializableManager):
         self.hotkeys = hotkeys
         self.validator_hotkey = validator_hotkey
         self.db_controller = db_controller
+        # Store dataset info for logging context
+        self.dataset_hf_repo = dataset_hf_repo
+        self.dataset_hf_filename = dataset_hf_filename
         self.test_mode = test_mode
         self.local_fs_mode = local_fs_mode
         self.dataset_release_date = dataset_release_date
@@ -212,6 +215,11 @@ class CompetitionManager(SerializableManager):
         Returns:
             tuple of (model_result or None, should_slash)
         """
+        log.set_competition(self.competition_id)
+        log.set_competition_action("evaluate")
+        log.set_dataset(self.dataset_hf_repo, self.dataset_hf_filename)
+        log.set_miner_hotkey(miner_hotkey)
+
         bt.logging.info("======== START EVALUATION ========")
         bt.logging.info(f"Evaluating {evaluation_counter}/{models_amount} hotkey: {miner_hotkey}")
         bt.logging.info("======== MODEL DOWNLOAD ========")
@@ -271,9 +279,14 @@ class CompetitionManager(SerializableManager):
             bt.logging.error(f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}", exc_info=True)
             bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error. error: {e}")
             return self._create_error_result(f"Error evaluating model: {e}"), False
+        finally:
+            log.set_miner_hotkey("")
+            log.set_dataset("", "")  # Clear dataset context to avoid leakage
 
     async def evaluate(self) -> Tuple[str | None, BaseModelEvaluationResult | None]:
         """Returns hotkey and competition id of winning model miner"""
+        log.set_competition(self.competition_id)
+        log.set_competition_action("evaluate")
         bt.logging.info(f"Start of evaluation of {self.competition_id}")
         
         hotkeys_to_slash = []
@@ -316,10 +329,12 @@ class CompetitionManager(SerializableManager):
             if WHITELIST_HOTKEYS and miner_hotkey not in WHITELIST_HOTKEYS:
                 continue
             
+            log.set_miner_hotkey(miner_hotkey)
             evaluation_counter += 1
             model_result, should_slash = await self._evaluate_single_model(
                 miner_hotkey, model_info, y_test, evaluation_counter, models_amount
             )
+            log.set_miner_hotkey("")
             
             if model_result is not None:
                 self.results.append((miner_hotkey, model_result))
@@ -381,6 +396,7 @@ class CompetitionManager(SerializableManager):
         # Cleanup preprocessed data
         self.competition_handler.cleanup_preprocessed_data()
         self.dataset_manager.delete_dataset()
+        log.clear_all_context()
         return winning_hotkey, winning_model_result
 
 

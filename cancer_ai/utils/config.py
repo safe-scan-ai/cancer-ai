@@ -408,13 +408,6 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--loki_url",
-        type=str,
-        help="Loki server URL for centralized logging.",
-        default=None,
-    )
-    
-    parser.add_argument(
         "--validator_name",
         type=str,
         help="Unique name for this validator instance. Defaults to hostname if not set.",
@@ -422,10 +415,24 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
-        "--loki_token",
+        "--logs_axiom_enabled",
+        type=bool,
+        help="Enable Axiom logging for centralized log aggregation.",
+        default=False,
+    )
+
+    parser.add_argument(
+        "--axiom_dataset",
         type=str,
-        help="Bearer token for Loki authentication.",
-        default=None,
+        help="Axiom dataset name for logs.",
+        default="sn76_validators",
+    )
+
+    parser.add_argument(
+        "--axiom_url",
+        type=str,
+        help="Axiom API base URL (deployment/region). You can also set AXIOM_URL env var.",
+        default="https://eu-central-1.aws.edge.axiom.co",
     )
 
 def path_config(cls=None):
