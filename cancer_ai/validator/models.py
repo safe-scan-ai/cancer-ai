@@ -1,5 +1,5 @@
-from typing import List, ClassVar, Optional, ClassVar, Optional
-from pydantic import BaseModel, EmailStr, Field, ValidationError
+from typing import List, ClassVar, Optional
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -69,6 +69,8 @@ class WanDBLogBase(BaseModel):
     run_time_s: float = 0.0
 
 class WanDBLogModelBase(WanDBLogBase):
+    model_config = ConfigDict(protected_namespaces=())
+    
     log_type: str = "model_results"
     uid: int
     miner_hotkey: str

@@ -8,10 +8,10 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 import bittensor as bt
-from huggingface_hub import HfApi, HfFileSystem
+from huggingface_hub import HfApi, HfFileSystem, hf_hub_download
 
 from .models import ModelInfo
-from ..chain_models_store import _create_archive_subtensor
+from ..utils.archive_node import _create_archive_subtensor_with_fallback as _create_archive_subtensor, WebSocketManager
 from .exceptions import ModelRunException
 from .utils import decode_params
 from websockets.client import OPEN as WS_OPEN
@@ -24,7 +24,7 @@ class ModelManager():
 
         if not os.path.exists(self.config.models.model_dir):
             os.makedirs(self.config.models.model_dir)
-        self.api = HfApi(token=self.config.hf_token)
+        self.hf_api = HfApi(token=self.config.hf_token)
         self.hotkey_store: dict[str, ModelInfo] = {}
         self.parent = parent
         self.dataset_release_date: Optional[datetime] = None 
@@ -44,37 +44,8 @@ class ModelManager():
                 subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
 
-        # Capture the original connect() and override with _ws_connect wrapper
-        # Substrate-interface calls connect() on every RPC under the hood,
-        # so we wrap it to reuse the same socket unless it's truly closed.
-        self._orig_ws_connect = self.subtensor.substrate.connect
-        self.subtensor.substrate.connect = self._ws_connect
-
-        ws = self.subtensor.substrate.connect()
-        bt.logging.info(f"Initial WebSocket state: {ws.state}")
-
-    def _ws_connect(self, *args, **kwargs):
-        """
-        Replacement for substrate.connect().
-        Reuses existing WebSocketClientProtocol if State.OPEN;
-        otherwise performs a fresh handshake via original connect().
-        """
-        # Check current socket
-        current = getattr(self.subtensor.substrate, "ws", None)
-        if current is not None and current.state == WS_OPEN:
-            return current
-
-        # If socket not open, reconnect
-        bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
-        try:
-            new_ws = self._orig_ws_connect(*args, **kwargs)
-        except Exception as e:
-            bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
-            raise
-
-        # Update the substrate.ws attribute so future calls reuse this socket
-        setattr(self.subtensor.substrate, "ws", new_ws)
-        return new_ws
+        # Use WebSocketManager for connection management
+        self.ws_manager = WebSocketManager(subtensor)
 
     async def _hf_api_call_with_retry(self, api_call, *args, **kwargs):
         """Wrapper for HF API calls with exponential backoff retry logic."""
@@ -94,7 +65,7 @@ class ModelManager():
         hf_id = self.hotkey_store[hotkey].hf_repo_id
         
         try:
-            model_info = await self._hf_api_call_with_retry(self.api.model_info, hf_id, timeout=30)
+            model_info = await self._hf_api_call_with_retry(self.hf_api.model_info, hf_id, timeout=30)
         except Exception as e:
             return False, f"HF API ERROR: {e}"
 
@@ -107,10 +78,10 @@ class ModelManager():
 
         return False, "NOT_MIT"
 
-    async def download_miner_model(self, hotkey, token: Optional[str] = None) -> bool:
+    async def download_miner_model(self, hotkey, token: Optional[str] = None) -> tuple[bool, Optional[str]]:
         """Downloads the newest model from Hugging Face and saves it to disk.
         Returns:
-            bool: True if the model was downloaded successfully, False otherwise.
+            tuple: (success: bool, error_reason: Optional[str])
         """
         MAX_RETRIES = 3
         RETRY_DELAY = 2  # seconds
@@ -127,11 +98,11 @@ class ModelManager():
 
             if reason.startswith("HF API ERROR"):
                 bt.logging.error(f"Could not verify license for {hf_id}: {reason.split(':', 1)[1]}")
-                # self.parent.error_results.append((hotkey, "Couldn't verify license due to HF API error"))
+                return False, "Could not verify license due to HF API error"
             else:
                 bt.logging.error(f"License for {hf_id} not found or invalid")
-                # self.parent.error_results.append((hotkey, "MIT license not found or invalid"))
-            return False
+                return False, "MIT license not found or invalid"
+            return False, reason
 
 
         bt.logging.debug(f"License found for {model_info.hf_repo_id}")
@@ -160,8 +131,7 @@ class ModelManager():
                         await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))
                     else:
                         bt.logging.error(f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts")
-                        # self.parent.error_results.append((hotkey, f"File {model_info.hf_model_filename} not found in repository {model_info.hf_repo_id}"))
-                        return False
+                        return False, f"File {model_info.hf_model_filename} not found in repository"
                         
             except Exception as e:
                 if retry_counter < MAX_RETRIES - 1:
@@ -169,14 +139,13 @@ class ModelManager():
                     await asyncio.sleep(RETRY_DELAY * (retry_counter + 1))  # Exponential backoff
                 else:
                     bt.logging.error(f"Failed to list files in repository {model_info.hf_repo_id} after {MAX_RETRIES} attempts: {e}")
-                    # self.parent.error_results.append((hotkey, f"Cannot list files in repo {model_info.hf_repo_id}"))
-                    return False
+                    return False, f"Cannot list files in repository: {e}"
         
             
         # Check if model is too recent using on-chain block timestamp
         if model_info.block is None:
             bt.logging.error(f"Model for hotkey {hotkey} has no block number. Cannot validate submission date.")
-            return False        
+            return False, "Model has no block number"        
 
         is_too_recent, submission_date = self.is_model_too_recent(
             model_info.block,  # Use on-chain block instead of HF file date
@@ -185,27 +154,26 @@ class ModelManager():
         )
         if is_too_recent:
             bt.logging.warning(f"Model for hotkey {hotkey} was submitted too recently (on-chain date: {submission_date})")
-            return False
+            return False, "Model was submitted too recently"
         
         # Download the file with retry
         try:
             model_info.file_path = await self._hf_api_call_with_retry(
-                self.api.hf_hub_download,
+                hf_hub_download,
                 repo_id=model_info.hf_repo_id,
-                repo_type="model",
                 filename=model_info.hf_model_filename,
-                cache_dir=self.config.models.model_dir,
+                local_dir=self.config.models.model_dir,
+                force_download=True,
                 token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
             )
         except Exception as e:
             bt.logging.error(f"Failed to download model file: {e}")
-            return False
+            return False, f"Failed to download model file: {e}"
 
         # Verify the downloaded file exists
         if not os.path.exists(model_info.file_path):
             bt.logging.error(f"Downloaded file does not exist at {model_info.file_path}")
-            # self.parent.error_results.append((hotkey, f"Downloaded file does not exist at {model_info.file_path}"))
-            return False
+            return False, "Downloaded file does not exist"
         
         # Check model size for efficiency scoring
         model_size_bytes = os.path.getsize(model_info.file_path)
@@ -230,7 +198,7 @@ class ModelManager():
             )
         
         bt.logging.info(f"Successfully downloaded model file to {model_info.file_path}")
-        return True
+        return True, None
 
     def is_model_too_recent(self, block, filename, hotkey):
         """Checks if a model was submitted too recently based on on-chain block timestamp.
@@ -291,13 +259,13 @@ class ModelManager():
             now = datetime.now(timezone.utc)  # Get current time in UTC
             
             # Calculate time difference in minutes
-            time_diff = (now - file_date).total_seconds() / 60
+            time_diff = (now - submission_date).total_seconds() / 60
         
-        if time_diff < self.config.models_query_cutoff:
-            bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
-            return True, file_date
-            
-        return False, file_date
+            if time_diff < self.config.models_query_cutoff:
+                bt.logging.warning(f"Skipping model for hotkey {hotkey} because it was uploaded {time_diff:.2f} minutes ago, which is within the cutoff of {self.config.models_query_cutoff} minutes")
+                return True, submission_date
+                
+            return False, submission_date
         
 
     def add_model(

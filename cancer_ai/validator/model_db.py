@@ -7,10 +7,9 @@ from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstr
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta, timezone
-from ..chain_models_store import ChainMinerModel, get_archive_subtensor
+from ..chain_models_store import ChainMinerModel
+from ..utils.archive_node import ArchiveNodeWrapper, get_archive_subtensor
 from websockets.client import OPEN as WS_OPEN
-
-from retry import retry
 
 Base = declarative_base()
 
@@ -47,6 +46,11 @@ class ModelDBController:
             subtensor=subtensor,
         )
 
+        self.archive_wrapper = ArchiveNodeWrapper(
+            archive_node_url=self.config.archive_node_url,
+            archive_node_fallback_url=self.config.archive_node_fallback_url
+        )
+
         # Capture the original connect() and override with _ws_connect wrapper
         # Substrate-interface calls connect() on every RPC under the hood,
         # so we wrap it to reuse the same socket unless it's truly closed.
@@ -63,16 +67,20 @@ class ModelDBController:
         Replacement for substrate.connect().
         Reuses existing WebSocketClientProtocol if State.OPEN;
         otherwise performs a fresh handshake via original connect().
+        Enhanced to work with dynamic fallback system.
         """
         # Check current socket
         current = getattr(self.subtensor.substrate, "ws", None)
-        if current is not None and current.state == WS_OPEN:
+        if current is not None and hasattr(current, 'state') and current.state == WS_OPEN:
             return current
 
-        # If socket not open, reconnect
+        # If socket not open, reconnect (this will trigger fallback logic if needed)
         bt.logging.warning("⚠️ Subtensor WebSocket not OPEN—reconnecting…")
         try:
             new_ws = self._orig_ws_connect(*args, **kwargs)
+            # Log current connection info if available
+            if hasattr(self.subtensor, '_current_url'):
+                bt.logging.info(f"Connected to archive node: {self.subtensor._current_url}")
         except Exception as e:
             bt.logging.error("Failed to reconnect WebSocket: %s", e, exc_info=True)
             raise
@@ -333,31 +341,22 @@ class ModelDBController:
             model_hash=model_record.model_hash,
         )
     
-    @retry(tries=10, delay=1, backoff=2, max_delay=30)
     def get_block_timestamp(self, block_number) -> datetime:
-        """Gets the timestamp of a given block."""
-        try:
-            block_hash = self.subtensor.get_block_hash(block_number)
+        """Gets the timestamp of a given block using the archive node wrapper with fallback support."""
+        # Use the archive wrapper which handles all fallback logic and retries
+        block_hash = self.archive_wrapper.get_block_hash(block_number)
+        timestamp_info = self.archive_wrapper.query_storage(
+            module="Timestamp",
+            storage_function="Now", 
+            block_hash=block_hash
+        )
 
-            if block_hash is None:
-                raise ValueError(f"Block hash not found for block number {block_number}")
+        if timestamp_info is None:
+            raise ValueError(f"Timestamp not found for block hash {block_hash}")
 
-            timestamp_info = self.subtensor.substrate.query(
-                module="Timestamp",
-                storage_function="Now",
-                block_hash=block_hash
-            )
-
-            if timestamp_info is None:
-                raise ValueError(f"Timestamp not found for block hash {block_hash}")
-
-            timestamp_ms = timestamp_info.value
-            block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
-
-            return block_datetime
-        except Exception as e:
-            bt.logging.exception(f"Error retrieving block timestamp: {e}")
-            raise
+        timestamp_ms = timestamp_info.value
+        block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
+        return block_datetime
 
     def close(self):
         try:
