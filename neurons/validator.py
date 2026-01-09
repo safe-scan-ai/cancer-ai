@@ -36,7 +36,6 @@ from cancer_ai.chain_models_store import ChainModelMetadata
 from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION
 from cancer_ai.base.base_validator import BaseValidatorNeuron
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
-from cancer_ai.validator.utils import log_system_info
 from cancer_ai.validator.utils import (
     check_for_new_dataset_files,
     get_local_dataset,

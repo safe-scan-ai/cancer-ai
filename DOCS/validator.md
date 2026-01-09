@@ -87,36 +87,6 @@ python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-ho
 pm2 start scripts/start_validator.py --name start_validator -- --wallet.name=default --wallet.hotkey=default --logging.trace 1 --netuid 76
 ```
 
-### Save the PM2 configuration
-```bash
-pm2 save
-```
-
-### View validator status
-```bash
-pm2 status
-```
-
-### View logs
-```bash
-pm2 logs start_validator
-```
-
-### Stop the validator
-```bash
-pm2 stop start_validator
-```
-
-### Restart the validator
-```bash
-pm2 restart start_validator
-```
-
-### Delete from PM2
-```bash
-pm2 delete start_validator
-```
-
 # TLDR Installation script from fresh Ubuntu 24.04
 
 ```bash
