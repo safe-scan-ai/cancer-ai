@@ -407,6 +407,33 @@ def add_validator_args(cls, parser):
         default=False
     )
 
+    parser.add_argument(
+        "--validator_name",
+        type=str,
+        help="Unique name for this validator instance. Defaults to hostname if not set.",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--logs_axiom_enabled",
+        type=bool,
+        help="Enable Axiom logging for centralized log aggregation.",
+        default=False,
+    )
+
+    parser.add_argument(
+        "--axiom_dataset",
+        type=str,
+        help="Axiom dataset name for logs.",
+        default="76_prod",
+    )
+
+    parser.add_argument(
+        "--axiom_url",
+        type=str,
+        help="Axiom API base URL (deployment/region). You can also set AXIOM_URL env var.",
+        default="https://eu-central-1.aws.edge.axiom.co",
+    )
 
 def path_config(cls=None):
     """

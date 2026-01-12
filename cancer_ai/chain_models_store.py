@@ -1,13 +1,11 @@
 from typing import Optional, Type
-import argparse
-import sys
 import asyncio
 
 import bittensor as bt
 from pydantic import BaseModel, Field, ConfigDict
 from retry import retry
-from websockets.client import OPEN as WS_OPEN
-from .utils.archive_node import get_archive_subtensor, WebSocketManager
+from .utils.archive_node import WebSocketManager
+from .utils.structured_logger import log
 
 
 class ChainMinerModel(BaseModel):
@@ -116,6 +114,19 @@ class ChainModelMetadata:
         
         # The block id at which the metadata is stored
         model.block = metadata["block"]
+        
+        # Set structured logger context for sync operations
+        log.set_competition_action("sync")
+        log.set_miner_hotkey(hotkey)
+        if model.competition_id:
+            log.set_competition(model.competition_id)
+        
+        bt.logging.info(f"Retrieved model metadata for hotkey {hotkey}, competition {model.competition_id}")
+        
+        # Clear miner-specific context after sync to avoid leaking
+        log.set_miner_hotkey("")
+        log.set_competition_action("")
+        
         return model
     
     def close(self):

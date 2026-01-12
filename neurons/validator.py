@@ -39,7 +39,6 @@ from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     check_for_new_dataset_files,
     get_local_dataset,
-    log_system_info,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.model_manager import ModelManager 
@@ -47,6 +46,7 @@ from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
 from cancer_ai.validator.models import WanDBLogBase
 from cancer_ai.validator.validator_helpers import setup_organization_data_references
+from cancer_ai.validator.utils import log_system_info
 from huggingface_hub import HfApi
 
 class Validator(BaseValidatorNeuron):
