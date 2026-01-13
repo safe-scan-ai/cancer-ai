@@ -449,13 +449,13 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
 
     if not os.path.exists(to_be_released_dir):
         bt.logging.warning(f"Directory {to_be_released_dir} does not exist.")
-        return []
+        return None
 
     if not os.path.exists(already_released_dir):
         os.makedirs(already_released_dir, exist_ok=True)
 
     for filename in os.listdir(to_be_released_dir):
-        if filename.endswith(".zip"):
+        if filename.endswith(".zip") or filename.endswith(".encrypted"):
             filepath = os.path.join(to_be_released_dir, filename)
             try:
                 # Get file modification time before moving

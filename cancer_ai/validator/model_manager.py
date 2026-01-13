@@ -12,6 +12,7 @@ from huggingface_hub import HfApi, HfFileSystem, hf_hub_download
 
 from .models import ModelInfo
 from ..utils.archive_node import _create_archive_subtensor_with_fallback as _create_archive_subtensor, WebSocketManager
+from ..utils.dataset_encryption import EncryptedDatasetManager
 from .exceptions import ModelRunException
 from .utils import decode_params
 from ..utils.structured_logger import log
@@ -44,6 +45,15 @@ class ModelManager():
             else:
                 subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
+
+        self.encrypted_manager = None
+        if config.use_encrypted_datasets:
+            self.encrypted_manager = EncryptedDatasetManager(
+                wallet_name=config.wallet.name,
+                hotkey_name=config.wallet.hotkey,
+                hf_repo=config.encrypted_datasets_repo,
+                hf_token=config.hf_token
+            )
 
         # Use WebSocketManager for connection management
         self.ws_manager = WebSocketManager(subtensor)
@@ -93,6 +103,17 @@ class ModelManager():
         finally:
             log.set_miner_hotkey("")
 
+    async def prepare_dataset(self):
+        """Download and prepare dataset."""
+        # If using encrypted datasets
+        if self.encrypted_manager:
+            bt.logging.info("Using encrypted dataset")
+            dataset_dir = self.encrypted_manager.download_and_decrypt_dataset(
+                competition_id=self.competition_id,
+                dataset_filename=self.dataset_filename
+            )
+            # Process decrypted dataset
+            return dataset_dir
     async def download_miner_model(self, hotkey, token: Optional[str] = None) -> tuple[bool, Optional[str]]:
         """Downloads the newest model from Hugging Face and saves it to disk.
         Returns:
