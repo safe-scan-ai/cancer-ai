@@ -416,7 +416,7 @@ def add_validator_args(cls, parser):
 
     parser.add_argument(
         "--logs_axiom_enabled",
-        type=bool,
+        action="store_true",
         help="Enable Axiom logging for centralized log aggregation.",
         default=False,
     )
