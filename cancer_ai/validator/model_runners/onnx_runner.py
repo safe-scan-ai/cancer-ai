@@ -4,6 +4,7 @@ import bittensor as bt
 import asyncio
 from collections import defaultdict
 from ..exceptions import ModelRunException
+from cancer_ai.utils.structured_logger import log
 
 from . import BaseRunnerHandler
 
@@ -26,7 +27,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
     def cleanup(self):
         """Clean up ONNX session and release resources."""
         if self.session:
-            bt.logging.debug("Cleaning up ONNX session.")
+            log.inference.debug("Cleaning up ONNX session.")
             self.session = None
             import gc
             gc.collect()
@@ -93,10 +94,10 @@ class OnnxRunnerHandler(BaseRunnerHandler):
             self.session = onnxruntime.InferenceSession(self.model_path, session_options)
         except (OSError, RuntimeError) as e:
             if isinstance(e, OSError):
-                bt.logging.error(f"File error when loading ONNX model: {e}")
+                log.inference.error(f"File error when loading ONNX model: {e}")
                 raise ModelRunException(f"File error when loading ONNX model: {e}") from e
             else:
-                bt.logging.error(f"ONNX runtime error when loading model: {e}")
+                log.inference.error(f"ONNX runtime error when loading model: {e}")
                 raise ModelRunException(f"ONNX runtime error when loading model: {e}") from e
 
         # Detect model's expected input size
@@ -120,7 +121,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                     # Process each image individually
                     batch_size = chunk.shape[0]
                     
-                    bt.logging.trace(f"Running ONNX inference seprately on on {batch_size} images ")
+                    log.inference.trace(f"Running ONNX inference separately on {batch_size} images ")
                     for i in range(batch_size):
                         # Extract single image: (3, 512, 512) -> (1, 3, 512, 512)
                         single_image = chunk[i:i+1]
@@ -159,7 +160,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                     # Resize chunk to match model's expected input size
                     chunk = self._resize_image_batch(chunk, model_input_size)
                     batch_size = chunk.shape[0]
-                    bt.logging.trace(f"Running ONNX inference seprately on on {batch_size} images ")
+                    log.inference.trace(f"Running ONNX inference separately on {batch_size} images ")
                     for i in range(batch_size):
                         single_image = chunk[i:i+1]
                         input_name = self.session.get_inputs()[0].name
@@ -176,11 +177,11 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                         results.append(single_result)
                 
             except asyncio.TimeoutError:
-                bt.logging.error(f"ONNX inference timeout after {ONNX_INFERENCE_TIMEOUT}s on chunk")
+                log.inference.error(f"ONNX inference timeout after {ONNX_INFERENCE_TIMEOUT}s on chunk")
                 error_counter['TimeoutError'] += 1
                 continue
             except (RuntimeError, ValueError, OSError) as e:
-                bt.logging.error(f"ONNX inference error during chunk processing: {e}", exc_info=True)
+                log.inference.error(f"ONNX inference error during chunk processing: {e}", exc_info=True)
                 error_counter['InferenceError'] += 1
                 continue
 
@@ -188,7 +189,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
         if error_counter:
             error_summary = "; ".join([f"{count} {error_type.replace('_', ' ')}(s)" 
                                      for error_type, count in error_counter.items()])
-            bt.logging.info(f"ONNX inference completed with issues: {error_summary}")
+            log.inference.info(f"ONNX inference completed with issues: {error_summary}")
             
         if not results:
             raise ModelRunException("No results obtained from model inference")

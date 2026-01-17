@@ -5,7 +5,7 @@ Provides categorized logging with competition and hotkey context.
 
 import logging
 import threading
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 from enum import Enum
 from datetime import datetime
 from pathlib import Path
@@ -43,11 +43,9 @@ class LogContext:
     def set_competition_action(self, action: Optional[str]) -> None:
         self._local.competition_action = action
 
+
     def set_miner_hotkey(self, hotkey: Optional[str]) -> None:
         self._local.miner_hotkey = hotkey
-
-    def set_hotkey(self, hotkey: Optional[str]) -> None:
-        self._local.hotkey = hotkey
 
     def set_dataset(self, dataset_hf_repo: Optional[str], dataset_hf_filename: Optional[str]) -> None:
         if dataset_hf_repo and dataset_hf_filename:
@@ -60,15 +58,14 @@ class LogContext:
             "competition_id": getattr(self._local, "competition_id", None) or "",
             "competition_action": getattr(self._local, "competition_action", None) or "",
             "miner_hotkey": getattr(self._local, "miner_hotkey", None) or "",
-            "hotkey": getattr(self._local, "hotkey", None) or "",
             "dataset": getattr(self._local, "dataset", None) or "",
         }
 
     def clear(self) -> None:
         self._local.competition_id = None
         self._local.competition_action = None
+        self._local.validator_hotkey = None
         self._local.miner_hotkey = None
-        self._local.hotkey = None
         self._local.dataset = None
 
 
@@ -80,9 +77,6 @@ class StructuredFormatter(logging.Formatter):
         self._context = context
 
     def format(self, record: logging.LogRecord) -> str:
-        # Get context information
-        context = self._context.get_context()
-
         # Build the structured log line
         timestamp = datetime.fromtimestamp(record.created).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -97,12 +91,11 @@ class StructuredFormatter(logging.Formatter):
         category = getattr(record, "category", LogCategory.VALIDATION.value)
         message = record.getMessage()
 
-        # Single identifier: prefer hotkey, fall back to competition id
-        identifier = context["hotkey"] or context["competition_id"] or ""
+        miner_hotkey = getattr(record, "miner_hotkey", "")
 
         return (
             f"{timestamp} | {level:4} | {category:11} | "
-            f"{identifier} | {message}"
+            f"{miner_hotkey} | {message}"
         )
 
 
@@ -148,6 +141,9 @@ class StructuredLogger:
             def warn(self, message: str, **kwargs: Any) -> None:
                 self._parent.warn(self._category, message, **kwargs)
 
+            def warning(self, message: str, **kwargs: Any) -> None:
+                self._parent.warn(self._category, message, **kwargs)
+
             def info(self, message: str, **kwargs: Any) -> None:
                 self._parent.info(self._category, message, **kwargs)
 
@@ -156,6 +152,9 @@ class StructuredLogger:
 
             def trace(self, message: str, **kwargs: Any) -> None:
                 self._parent.trace(self._category, message, **kwargs)
+                
+            def exception(self, message: str, **kwargs: Any) -> None:
+                self._parent.exception(self._category, message, **kwargs)
 
         self.validation = _CategoryLogger(self, LogCategory.VALIDATION)
         self.bittensor = _CategoryLogger(self, LogCategory.BITTENSOR)
@@ -187,29 +186,55 @@ class StructuredLogger:
             extra["competition_action"] = context["competition_action"]
         if context["miner_hotkey"]:
             extra["miner_hotkey"] = context["miner_hotkey"]
-        if context["hotkey"]:
-            extra["hotkey"] = context["hotkey"]
 
         user_extra = kwargs.pop("extra", None)
         if isinstance(user_extra, dict):
             extra.update(user_extra)
 
-        self.logger.log(log_level, message, extra=extra, **kwargs)
+        self.logger.log(log_level, message, extra=extra, stacklevel=3, **kwargs)
 
-    def error(self, category: LogCategory, message: str, **kwargs: Any) -> None:
-        self._log(LogLevel.ERROR, category, message, **kwargs)
+    # Logging methods with optional category parameter
+    def error(self, message_or_category: Union[str, LogCategory], message: Optional[str] = None, **kwargs: Any) -> None:
+        if isinstance(message_or_category, LogCategory) and message is not None:
+            # Category-specific logging
+            self._log(LogLevel.ERROR, message_or_category, message, **kwargs)
+        else:
+            # Default category logging
+            self._log(LogLevel.ERROR, LogCategory.VALIDATION, message_or_category, **kwargs)
+        
+    def warn(self, message_or_category: Union[str, LogCategory], message: Optional[str] = None, **kwargs: Any) -> None:
+        if isinstance(message_or_category, LogCategory) and message is not None:
+            self._log(LogLevel.WARN, message_or_category, message, **kwargs)
+        else:
+            self._log(LogLevel.WARN, LogCategory.VALIDATION, message_or_category, **kwargs)
 
-    def warn(self, category: LogCategory, message: str, **kwargs: Any) -> None:
-        self._log(LogLevel.WARN, category, message, **kwargs)
+    def warning(self, message_or_category: Union[str, LogCategory], message: Optional[str] = None, **kwargs: Any) -> None:
+        self.warn(message_or_category, message, **kwargs)
 
-    def info(self, category: LogCategory, message: str, **kwargs: Any) -> None:
-        self._log(LogLevel.INFO, category, message, **kwargs)
+    def info(self, message_or_category: Union[str, LogCategory], message: Optional[str] = None, **kwargs: Any) -> None:
+        if isinstance(message_or_category, LogCategory) and message is not None:
+            self._log(LogLevel.INFO, message_or_category, message, **kwargs)
+        else:
+            self._log(LogLevel.INFO, LogCategory.VALIDATION, message_or_category, **kwargs)
 
-    def trace(self, category: LogCategory, message: str, **kwargs: Any) -> None:
-        self._log(LogLevel.TRACE, category, message, **kwargs)
+    def trace(self, message_or_category: Union[str, LogCategory], message: Optional[str] = None, **kwargs: Any) -> None:
+        if isinstance(message_or_category, LogCategory) and message is not None:
+            self._log(LogLevel.TRACE, message_or_category, message, **kwargs)
+        else:
+            self._log(LogLevel.TRACE, LogCategory.VALIDATION, message_or_category, **kwargs)
 
-    def debug(self, category: LogCategory, message: str, **kwargs: Any) -> None:
-        self._log(LogLevel.DEBUG, category, message, **kwargs)
+    def debug(self, message_or_category: Union[str, LogCategory], message: Optional[str] = None, **kwargs: Any) -> None:
+        if isinstance(message_or_category, LogCategory) and message is not None:
+            self._log(LogLevel.DEBUG, message_or_category, message, **kwargs)
+        else:
+            self._log(LogLevel.DEBUG, LogCategory.VALIDATION, message_or_category, **kwargs)
+
+    def exception(self, message_or_category: Union[str, LogCategory], message: Optional[str] = None, **kwargs: Any) -> None:
+        kwargs.setdefault("exc_info", True)
+        if isinstance(message_or_category, LogCategory) and message is not None:
+            self._log(LogLevel.ERROR, message_or_category, message, **kwargs)
+        else:
+            self._log(LogLevel.ERROR, LogCategory.VALIDATION, message_or_category, **kwargs)
 
     def set_competition(self, competition_id: str) -> None:
         self.context.set_competition(competition_id)
@@ -229,8 +254,8 @@ class StructuredLogger:
     def clear_competition(self) -> None:
         self.context.set_competition(None)
 
-    def clear_hotkey(self) -> None:
-        self.context.set_hotkey(None)
+    def clear_miner_hotkey(self) -> None:
+        self.context.set_miner_hotkey(None)
 
     def clear_all_context(self) -> None:
         self.context.clear()
@@ -256,8 +281,6 @@ class _ContextInjectionFilter(logging.Filter):
             record.competition_action = ctx["competition_action"]
         if ctx["miner_hotkey"] and not hasattr(record, "miner_hotkey"):
             record.miner_hotkey = ctx["miner_hotkey"]
-        if ctx["hotkey"] and not hasattr(record, "hotkey"):
-            record.hotkey = ctx["hotkey"]
         return True
 
 
