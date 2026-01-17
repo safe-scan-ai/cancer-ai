@@ -433,14 +433,13 @@ class CompetitionManager(SerializableManager):
                     result.error = "Slashing model copier - setting score to 0.0"
 
     def _compute_model_hash(self, file_path) -> str:
-        """Compute a 64-character hexadecimal SHA-256 hash of the model file."""
-        sha256 = hashlib.sha256()
+        """Compute an 8-character hexadecimal SHA-1 hash of the model file."""
+        sha1 = hashlib.sha1()
         try:
             with open(file_path, 'rb') as f:
                 while chunk := f.read(8192):
-                    sha256.update(chunk)
-                    sha256.hexdigest()
-            full_hash = sha256.hexdigest()
+                    sha1.update(chunk)
+            full_hash = sha1.hexdigest()
             truncated_hash = full_hash[:8]
             log.info(f"Computed 8-character hash: {truncated_hash}")
             return truncated_hash
