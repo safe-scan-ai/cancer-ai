@@ -7,12 +7,10 @@ import json
 from huggingface_hub import HfApi
 import bittensor as bt
 
-import asyncio
-from ..utils.hotkey_crypto import decrypt_file_with_hotkey, load_hotkey_from_file
 from .manager import SerializableManager
-from .exceptions import DatasetManagerException
 from .utils import run_command, log_time
 from .dataset_handlers.image_csv import DatasetImagesCSV
+from .exceptions import DatasetManagerException
 from ..utils.structured_logger import log
 
 class DatasetManager(SerializableManager):
@@ -50,85 +48,24 @@ class DatasetManager(SerializableManager):
         self.data: Tuple[List, List] = ()
         self.handler = None
         self.local_fs_mode = local_fs_mode
-        self.wallet_name = config.wallet.name
-        self.hotkey_name = config.wallet.hotkey
-        self.hotkey_ss58 = None  
-        self.encrypted_cache_dir = Path(config.neuron.full_path) / "encrypted_datasets"
-        self.encrypted_cache_dir.mkdir(parents=True, exist_ok=True)
 
     def get_state(self) -> dict:
         return {}
 
     def set_state(self, state: dict):
         return {}
-    
-    def _get_hotkey_ss58(self) -> str:
-        """Get validator's SS58 address from hotkey file."""
-        if self.hotkey_ss58:
-            return self.hotkey_ss58
-
-        try:
-            hotkey = load_hotkey_from_file(self.wallet_name, self.hotkey_name)
-            self.hotkey_ss58 = hotkey.ss58_address
-            bt.logging.info(f"Loaded validator hotkey: {self.hotkey_ss58[:16]}...")
-            return self.hotkey_ss58
-        except Exception as e:
-            bt.logging.error(f"Failed to load hotkey: {e}")
-            raise ValueError(f"Cannot load validator hotkey for decryption: {e}")
 
     @log_time
     async def download_dataset(self):
         if not os.path.exists(self.local_extracted_dir):
             os.makedirs(self.local_extracted_dir)
-        
-        # Get validator's hotkey SS58
-        hotkey_ss58 = self._get_hotkey_ss58()
-        
-        # Path format: {competition_id}/{validator_hotkey}/{filename}
-        hf_path = f"{self.competition_id}/{hotkey_ss58}/{self.hf_filename}"
-        
-        bt.logging.info(f"Downloading encrypted dataset.")
-        bt.logging.info(f"Repo: {self.hf_repo_id}.")
-        bt.logging.info(f"Path: {hf_path}.")
-        bt.logging.info(f"Validator: {hotkey_ss58}.")
 
-        try:    
-            self.local_compressed_path = await asyncio.to_thread(
-                HfApi(token=self.config.hf_token).hf_hub_download,
-                self.hf_repo_id,
-                hf_path,
-                cache_dir=self.encrypted_cache_dir,
-                repo_type=self.hf_repo_type,
-            )
-            bt.logging.info(f"Downloaded encrypted dataset to: {self.local_compressed_path}")
-        except Exception as e:
-            bt.logging.error(f"Failed to download encrypted dataset: {e}")
-            raise
-    
-    @log_time
-    async def decrypt_dataset(self) -> None:
-        """Decrypt the downloaded encrypted dataset."""
-        if not self.local_compressed_path:
-            raise DatasetManagerException("No encrypted dataset downloaded")
-        
-        bt.logging.info(f"Encrypted file: {self.local_compressed_path}")
-        bt.logging.info(f"Using hotkey: {self.hotkey_name}")
-        
-        try:
-            # Decrypt using validator's private key
-            decrypted_path = await asyncio.to_thread(
-                decrypt_file_with_hotkey,
-                self.local_compressed_path,
-                self.wallet_name,
-                self.hotkey_name
-            )
-            
-            # Update local_compressed_path to point to decrypted file
-            self.local_compressed_path = decrypted_path
-            bt.logging.info(f"Decrypted to: {decrypted_path}")
-            
-        except ValueError as e:
-            bt.logging.error("Dataset was not encrypted!")
+        self.local_compressed_path = HfApi(token=self.config.hf_token).hf_hub_download(
+            self.hf_repo_id,
+            self.hf_filename,
+            cache_dir=Path(self.config.models.dataset_dir),
+            repo_type=self.hf_repo_type,
+        )
 
     def delete_dataset(self) -> None:
         """Delete dataset from disk"""
@@ -247,28 +184,9 @@ class DatasetManager(SerializableManager):
         """Download dataset, unzip and set dataset handler"""
         if self.local_fs_mode:
             self.local_compressed_path = self.hf_filename
-
-            if self.hf_filename.endswith(".encrypted"):
-                bt.logging.info(f"Detected encrypted file in local mode. Decrypting '{self.competition_id}'")
-                try:
-                    decrypted_path = await asyncio.to_thread(
-                        decrypt_file_with_hotkey,
-                        self.hf_filename,
-                        self.wallet_name,
-                        self.hotkey_name
-                    )
-                    # Update path to decrypted file
-                    self.local_compressed_path = decrypted_path
-                    bt.logging.info(f"Decrypted to: {decrypted_path}")
-                except Exception as e:
-                    bt.logging.error(f"Failed to decrypt encrypted dataset: {e}")
-                    raise DatasetManagerException(f"Failed to decrypt encrypted dataset: {e}")
         else:
             bt.logging.info(f"Downloading dataset '{self.competition_id}'")
             await self.download_dataset()
-            bt.logging.info(f"Decrypting dataset '{self.competition_id}'")
-            await self.decrypt_dataset()
-
         bt.logging.info(f"Unzipping dataset '{self.competition_id}'")
         await self.unzip_dataset()
         bt.logging.info(f"Setting dataset handler '{self.competition_id}'")

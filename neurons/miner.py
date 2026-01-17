@@ -170,21 +170,20 @@ class MinerManagerCLI:
         bt.logging.info(f"Code zip path: {self.code_zip_path}")
 
     def _compute_model_hash(self, repo_id, model_filename):
-        """Compute an 8-character hexadecimal SHA-1 hash of the model file from Hugging Face."""
+        """Compute a 64-character hexadecimal SHA-256 hash of the model file from Hugging Face."""
         try:
             model_path = huggingface_hub.hf_hub_download(
                 repo_id=repo_id,
                 filename=model_filename,
                 repo_type="model",
             )
-            sha1 = hashlib.sha1()
+            sha256 = hashlib.sha256()
             with open(model_path, 'rb') as f:
                 while chunk := f.read(8192):
-                    sha1.update(chunk)
-            full_hash = sha1.hexdigest()
-            truncated_hash = full_hash[:8]  # Take the first 8 characters of the hex digest
-            bt.logging.info(f"Computed 8-character hash: {truncated_hash}")
-            return truncated_hash
+                    sha256.update(chunk)
+            full_hash = sha256.hexdigest()  # SHA-256 gives 64 chars
+            bt.logging.info(f"Computed 64-character hash: {full_hash}")
+            return full_hash
         except Exception as e:
             bt.logging.error(f"Failed to compute model hash: {e}")
             return None

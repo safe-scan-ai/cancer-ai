@@ -11,7 +11,6 @@ from huggingface_hub import HfApi, HfFileSystem, hf_hub_download
 
 from .models import ModelInfo
 from ..utils.archive_node import _create_archive_subtensor_with_fallback as _create_archive_subtensor, WebSocketManager
-from ..utils.dataset_encryption import EncryptedDatasetManager
 from .exceptions import ModelRunException
 from .utils import decode_params
 from ..utils.structured_logger import log
@@ -44,15 +43,6 @@ class ModelManager():
                 subtensor = bt.subtensor(network="archive")
         self.subtensor = subtensor
 
-        self.encrypted_manager = None
-        if config.use_encrypted_datasets:
-            self.encrypted_manager = EncryptedDatasetManager(
-                wallet_name=config.wallet.name,
-                hotkey_name=config.wallet.hotkey,
-                hf_repo=config.encrypted_datasets_repo,
-                hf_token=config.hf_token
-            )
-
         # Use WebSocketManager for connection management
         self.ws_manager = WebSocketManager(subtensor)
 
@@ -64,21 +54,11 @@ class ModelManager():
             except Exception as e:
                 # Catch all exceptions for HF API resilience - network errors, auth errors, rate limits, etc.
                 if attempt == self.hf_max_retries - 1:
-                    # Log essential error context only
-                    current_hotkey = getattr(log.context, 'miner_hotkey', None)
-                    current_validator = getattr(log.context, 'validator_hotkey', None)
-                    
-                    error_context = {
-                        'error': str(e),
-                        'miner_hotkey': current_hotkey or 'unknown',
-                        'validator': current_validator or 'unknown'
-                    }
-                    
-                    log.competition.error(f"HF API failed: {json.dumps(error_context)}")
+                    bt.logging.error(f"HF API call failed after {self.hf_max_retries} attempts. Error: {e}")
                     raise
                 
                 delay = min(self.hf_initial_delay * (2 ** attempt), self.hf_max_delay)
-                log.competition.warn(f"HF API call attempt {attempt + 1}/{self.hf_max_retries} failed. Retrying in {delay}s. Error: {e}")
+                bt.logging.warning(f"HF API call attempt {attempt + 1}/{self.hf_max_retries} failed. Retrying in {delay}s. Error: {e}")
                 await asyncio.sleep(delay)
 
     async def model_license_valid(self, hotkey) -> tuple[bool, Optional[str]]:
@@ -100,17 +80,6 @@ class ModelManager():
 
         return False, "NOT_MIT"
 
-    async def prepare_dataset(self):
-        """Download and prepare dataset."""
-        # If using encrypted datasets
-        if self.encrypted_manager:
-            bt.logging.info("Using encrypted dataset")
-            dataset_dir = self.encrypted_manager.download_and_decrypt_dataset(
-                competition_id=self.competition_id,
-                dataset_filename=self.dataset_filename
-            )
-            # Process decrypted dataset
-            return dataset_dir
     async def download_miner_model(self, hotkey, token: Optional[str] = None) -> tuple[bool, Optional[str]]:
         """Downloads the newest model from Hugging Face and saves it to disk.
         Returns:
@@ -201,14 +170,7 @@ class ModelManager():
                 token=self.config.hf_token if hasattr(self.config, "hf_token") else None,
             )
         except Exception as e:
-            error_context = {
-                'error': str(e),
-                'miner_hotkey': hotkey,
-                'hf_repo_id': model_info.hf_repo_id,
-                'hf_model_filename': model_info.hf_model_filename,
-                'block': model_info.block,
-            }
-            log.competition.error(f"Failed to download model file: {json.dumps(error_context, indent=2)}")
+            bt.logging.error(f"Failed to download model file: {e}")
             return False, f"Failed to download model file: {e}"
 
         # Verify the downloaded file exists
