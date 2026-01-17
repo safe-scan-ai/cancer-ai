@@ -7,7 +7,7 @@ import hashlib
 
 from dotenv import load_dotenv
 
-# from cancer_ai.utils.structured_logger import log, LogCategory
+from cancer_ai.utils.structured_logger import log, LogCategory
 
 from .manager import SerializableManager
 from .model_manager import ModelManager
@@ -110,7 +110,8 @@ class CompetitionManager(SerializableManager):
         self.test_mode = test_mode
         self.local_fs_mode = local_fs_mode
         self.dataset_release_date = dataset_release_date
-
+        self.dataset_hf_repo = dataset_hf_repo
+        self.dataset_hf_filename = dataset_hf_filename
         self.competition_handler: Optional[BaseCompetitionHandler] = None
 
     def __repr__(self) -> str:
@@ -437,8 +438,9 @@ class CompetitionManager(SerializableManager):
         try:
             with open(file_path, 'rb') as f:
                 while chunk := f.read(8192):
-                    sha1.update(chunk)
-            full_hash = sha1.hexdigest()
+                    sha256.update(chunk)
+                    sha256.hexdigest()
+            full_hash = sha256.hexdigest()
             truncated_hash = full_hash[:8]
             log.info(f"Computed 8-character hash: {truncated_hash}")
             return truncated_hash

@@ -320,7 +320,7 @@ def add_validator_args(cls, parser):
         # Note: the validator needs to serve an Axon with their IP or they may
         #   be blacklisted by the firewall of serving peers on the network.
         help="Set this flag to not attempt to serve an Axon.",
-        default=True,
+        default=False,
     )
 
     parser.add_argument(
@@ -433,6 +433,20 @@ def add_validator_args(cls, parser):
         type=str,
         help="Axiom API base URL (deployment/region). You can also set AXIOM_URL env var.",
         default="https://eu-central-1.aws.edge.axiom.co",
+    )
+
+    parser.add_argument(
+        "--enable_p2p_collection",
+        action="store_true",
+        default=False,
+        help="Enable P2P result collection from other validators"
+    )
+
+    parser.add_argument(
+        "--test_validator_uids",
+        type=str,
+        default="",
+        help="Comma-separated list of validator UIDs to query in P2P test mode"
     )
 
 def path_config(cls=None):
