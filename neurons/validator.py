@@ -96,6 +96,10 @@ class Validator(BaseValidatorNeuron):
                 wallet=self.wallet,
                 config=self.config
             )
+            
+            # Test P2P connection on startup
+            asyncio.get_event_loop().run_until_complete(self.p2p_collector.test_connection())
+    
     async def concurrent_forward(self):
 
         coroutines = []
@@ -242,13 +246,9 @@ class Validator(BaseValidatorNeuron):
 
                     if getattr(self.config, 'enable_p2p_collection', False) and self.p2p_collector:
                         cycle_id = f"{competition_id}-{int(time.time())}"
-                        use_test_uids = getattr(self.config, 'test_validator_uids', '') != ''
-                        
-
                         peer_results = await self.p2p_collector.collect_results(
                             competition_id=competition_id,
-                            cycle_id=cycle_id,
-                            use_test_uids=use_test_uids
+                            cycle_id=cycle_id
                         )
 
                         if peer_results:
