@@ -320,7 +320,7 @@ def add_validator_args(cls, parser):
         # Note: the validator needs to serve an Axon with their IP or they may
         #   be blacklisted by the firewall of serving peers on the network.
         help="Set this flag to not attempt to serve an Axon.",
-        default=True,
+        default=False,
     )
 
     parser.add_argument(
@@ -438,14 +438,14 @@ def add_validator_args(cls, parser):
     parser.add_argument(
         "--enable_p2p_collection",
         action="store_true",
-        default=False,
+        default=True,
         help="Enable P2P result collection from other validators"
     )
 
     parser.add_argument(
         "--test_validator_uids",
         type=str,
-        default="",
+        default="18,132",
         help="Comma-separated list of validator UIDs to query in P2P test mode"
     )
 
