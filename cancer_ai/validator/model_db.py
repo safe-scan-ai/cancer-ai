@@ -1,15 +1,18 @@
 import bittensor as bt
 import os
 import re, traceback
-
+from datetime import datetime, timedelta, timezone
+from websockets.client import OPEN as WS_OPEN
 import traceback
 from sqlalchemy import create_engine, Column, String, DateTime, PrimaryKeyConstraint, Integer, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta, timezone
+
+from retry import retry
+
 from ..chain_models_store import ChainMinerModel
 from ..utils.archive_node import ArchiveNodeWrapper, get_archive_subtensor
-from websockets.client import OPEN as WS_OPEN
+
 
 Base = declarative_base()
 
@@ -341,22 +344,31 @@ class ModelDBController:
             model_hash=model_record.model_hash,
         )
     
+    @retry(tries=4, delay=1, backoff=2, max_delay=30)
     def get_block_timestamp(self, block_number) -> datetime:
-        """Gets the timestamp of a given block using the archive node wrapper with fallback support."""
-        # Use the archive wrapper which handles all fallback logic and retries
-        block_hash = self.archive_wrapper.get_block_hash(block_number)
-        timestamp_info = self.archive_wrapper.query_storage(
-            module="Timestamp",
-            storage_function="Now", 
-            block_hash=block_hash
-        )
+        """Gets the timestamp of a given block."""
+        try:
+            block_hash = self.subtensor.get_block_hash(block_number)
 
-        if timestamp_info is None:
-            raise ValueError(f"Timestamp not found for block hash {block_hash}")
+            if block_hash is None:
+                raise ValueError(f"Block hash not found for block number {block_number}")
 
-        timestamp_ms = timestamp_info.value
-        block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
-        return block_datetime
+            timestamp_info = self.subtensor.substrate.query(
+                module="Timestamp",
+                storage_function="Now",
+                block_hash=block_hash
+            )
+
+            if timestamp_info is None:
+                raise ValueError(f"Timestamp not found for block hash {block_hash}")
+
+            timestamp_ms = timestamp_info.value
+            block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
+
+            return block_datetime
+        except Exception as e:
+            bt.logging.exception(f"Error retrieving block timestamp: {e}")
+            raise
 
     def close(self):
         try:

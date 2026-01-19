@@ -26,6 +26,10 @@ import bittensor as bt
 
 from abc import ABC, abstractmethod
 
+from cancer_ai.utils.axiom_logging import setup_axiom_logging
+from cancer_ai.utils.structured_logger import log as slog
+from cancer_ai.validator.utils import log_system_info
+
 # Sync calls set weights and also resyncs the metagraph.
 from ..utils.config import check_config, add_args, path_config
 from ..utils.misc import ttl_get_block
@@ -69,6 +73,14 @@ class BaseNeuron(ABC):
         self.config.merge(base_config)
         self.check_config(self.config)
 
+        slog.install_bittensor_logger_bridge()
+
+        # set up axiom logging
+        self._axiom_handler = setup_axiom_logging(self.config)
+
+        # log system information
+        log_system_info()
+
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
 
@@ -91,6 +103,12 @@ class BaseNeuron(ABC):
             self.wallet = bt.wallet(config=self.config)
             self.subtensor = bt.subtensor(config=self.config)
             self.metagraph = self.subtensor.metagraph(self.config.netuid)
+
+        if self._axiom_handler is not None:
+            try:
+                setattr(self._axiom_handler, "_hotkey", self.wallet.hotkey.ss58_address)
+            except Exception:
+                pass
 
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")

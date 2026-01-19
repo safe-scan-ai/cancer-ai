@@ -7,7 +7,7 @@ import hashlib
 
 from dotenv import load_dotenv
 
-# from cancer_ai.utils.structured_logger import log, LogCategory
+from cancer_ai.utils.structured_logger import log
 
 from .manager import SerializableManager
 from .model_manager import ModelManager
@@ -80,7 +80,7 @@ class CompetitionManager(SerializableManager):
         config (dict): Config dictionary.
         competition_id (str): Unique identifier for the competition.
         """
-        bt.logging.trace(f"Initializing Competition: {competition_id}")
+        log.trace(f"Initializing Competition: {competition_id}")
         self.config = config
         self.subtensor = subtensor
         self.competition_id = competition_id
@@ -107,6 +107,9 @@ class CompetitionManager(SerializableManager):
         self.hotkeys = hotkeys
         self.validator_hotkey = validator_hotkey
         self.db_controller = db_controller
+        # Store dataset info for logging context
+        self.dataset_hf_repo = dataset_hf_repo
+        self.dataset_hf_filename = dataset_hf_filename
         self.test_mode = test_mode
         self.local_fs_mode = local_fs_mode
         self.dataset_release_date = dataset_release_date
@@ -143,7 +146,7 @@ class CompetitionManager(SerializableManager):
         self, chain_miner_model: ChainMinerModel
     ) -> ModelInfo:
         if chain_miner_model.competition_id != self.competition_id:
-            bt.logging.debug(
+            log.debug(
                 f"Chain miner model {chain_miner_model.to_compressed_str()} does not belong to this competition"
             )
             raise ValueError("Chain miner model does not belong to this competition")
@@ -166,8 +169,8 @@ class CompetitionManager(SerializableManager):
         """
         Updates hotkeys and downloads information of models from the chain
         """
-        bt.logging.info("Selecting models for competition")
-        bt.logging.info(f"Amount of hotkeys: {len(self.hotkeys)}")
+        log.info("Selecting models for competition")
+        log.info(f"Amount of hotkeys: {len(self.hotkeys)}")
 
         latest_models = self.db_controller.get_latest_models(
             self.hotkeys, self.competition_id, self.config.models_query_cutoff
@@ -175,19 +178,19 @@ class CompetitionManager(SerializableManager):
         if hasattr(self.config, 'mock_models') and self.config.mock_models:
             for hotkey, model_info in latest_models.items():
                 self.model_manager.hotkey_store[hotkey] = model_info
-            bt.logging.info(
+            log.info(
                 f"Amount of hotkeys with valid mock models: {len(self.model_manager.hotkey_store)}"
             )
             return
         for hotkey, model in latest_models.items():
             model_info = chain_miner_to_model_info(model)
             if model_info.competition_id != self.competition_id:
-                bt.logging.warning(
+                log.warning(
                     f"Miner {hotkey} with competition id {model.competition_id} does not belong to {self.competition_id} competition, skipping"
                 )
                 continue
             self.model_manager.hotkey_store[hotkey] = model_info
-        bt.logging.info(
+        log.info(
             f"Amount of hotkeys with valid models: {len(self.model_manager.hotkey_store)}"
         )
 
@@ -212,26 +215,31 @@ class CompetitionManager(SerializableManager):
         Returns:
             tuple of (model_result or None, should_slash)
         """
-        bt.logging.info("======== START EVALUATION ========")
-        bt.logging.info(f"Evaluating {evaluation_counter}/{models_amount} hotkey: {miner_hotkey}")
-        bt.logging.info("======== MODEL DOWNLOAD ========")
+        log.set_competition(self.competition_id)
+        log.set_competition_action("evaluate")
+        log.set_dataset(self.dataset_hf_repo, self.dataset_hf_filename)
+        log.set_miner_hotkey(miner_hotkey)
+
+        log.info("======== START EVALUATION ========")
+        log.info(f"Evaluating {evaluation_counter}/{models_amount} hotkey: {miner_hotkey}")
+        log.info("======== MODEL DOWNLOAD ========")
         
         # Download model
         model_downloaded, download_error = await self.model_manager.download_miner_model(miner_hotkey, token=self.config.hf_token)
         if not model_downloaded:
             error_msg = download_error or "Failed to download model"
-            bt.logging.error(f"Failed to download model for hotkey {miner_hotkey}: {error_msg}. Skipping.")
+            log.error(f"Failed to download model for hotkey {miner_hotkey}: {error_msg}. Skipping.")
             return self._create_error_result(error_msg), False
 
         # Verify hash
         computed_hash = self._compute_model_hash(model_info.file_path)
         if not computed_hash:
-            bt.logging.info("Could not determine model hash. Skipping.")
+            log.info("Could not determine model hash. Skipping.")
             return self._create_error_result("Could not determine model hash"), False
     
         if computed_hash != model_info.model_hash:
             hf_info = f"{model_info.hf_repo_id}/{model_info.hf_model_filename}" if model_info.hf_repo_id and model_info.hf_model_filename else "unknown"
-            bt.logging.info(f"The hash of model uploaded by {miner_hotkey} ({hf_info}) does not match hash of model submitted on-chain. Slashing.")
+            log.info(f"The hash of model uploaded by {miner_hotkey} ({hf_info}) does not match hash of model submitted on-chain. Slashing.")
             return self._create_error_result("The hash of model uploaded does not match hash of model submitted on-chain"), True
 
         # Run inference
@@ -244,13 +252,13 @@ class CompetitionManager(SerializableManager):
             )
             # Get fresh preprocessed data generator for each model
             preprocessed_data_gen = self.competition_handler.get_preprocessed_data_generator()
-            bt.logging.info("======== MODEL INFERENCE ========")
+            log.info("======== MODEL INFERENCE ========")
             y_pred = await model_manager.run(preprocessed_data_gen)
         except ModelRunException as e:
-            bt.logging.error(f"Model hotkey: {miner_hotkey} failed to run. Skipping. error: {e}")
+            log.competition.error(f"Model hotkey: {miner_hotkey} failed to run. Skipping. error: {e}")
             return self._create_error_result(f"Failed to run model: {e}"), False
         finally:
-            bt.logging.info("======== CLEANUP ========")
+            log.info("======== CLEANUP ========")
             # Clean up
             if model_manager and hasattr(model_manager, 'handler') and hasattr(model_manager.handler, 'cleanup'):
                 try:
@@ -268,20 +276,25 @@ class CompetitionManager(SerializableManager):
             )
             return model_result, False
         except Exception as e:
-            bt.logging.error(f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}", exc_info=True)
-            bt.logging.info(f"Skipping model {miner_hotkey} due to evaluation error. error: {e}")
+            log.competition.error(f"Error evaluating model for hotkey: {miner_hotkey}. Error: {str(e)}", exc_info=True)
+            log.competition.info(f"Skipping model {miner_hotkey} due to evaluation error. error: {e}")
             return self._create_error_result(f"Error evaluating model: {e}"), False
+        finally:
+            log.set_miner_hotkey("")
+            log.set_dataset("", "")  # Clear dataset context to avoid leakage
 
     async def evaluate(self) -> Tuple[str | None, BaseModelEvaluationResult | None]:
         """Returns hotkey and competition id of winning model miner"""
-        bt.logging.info(f"Start of evaluation of {self.competition_id}")
+        log.set_competition(self.competition_id)
+        log.set_competition_action("evaluate")
+        log.info(f"Start of evaluation of {self.competition_id}")
         
         hotkeys_to_slash = []
         # TODO add mock models functionality
 
         await self.update_miner_models()
         if len(self.model_manager.hotkey_store) == 0:
-            bt.logging.error("No models to evaluate")
+            log.error("No models to evaluate")
             return None, None
 
         
@@ -305,7 +318,7 @@ class CompetitionManager(SerializableManager):
         y_test = self.competition_handler.prepare_y_pred(y_test)
         evaluation_counter = 0 
         models_amount = len(self.model_manager.hotkey_store.items())
-        bt.logging.info(f"Evaluating {models_amount} models")
+        log.info(f"Evaluating {models_amount} models")
 
         # Local testing whitelist
         WHITELIST_HOTKEYS = {
@@ -316,10 +329,12 @@ class CompetitionManager(SerializableManager):
             if WHITELIST_HOTKEYS and miner_hotkey not in WHITELIST_HOTKEYS:
                 continue
             
+            log.set_miner_hotkey(miner_hotkey)
             evaluation_counter += 1
             model_result, should_slash = await self._evaluate_single_model(
                 miner_hotkey, model_info, y_test, evaluation_counter, models_amount
             )
+            log.set_miner_hotkey("")
             
             if model_result is not None:
                 self.results.append((miner_hotkey, model_result))
@@ -328,12 +343,12 @@ class CompetitionManager(SerializableManager):
                 hotkeys_to_slash.append(miner_hotkey)
 
         if len(self.results) == 0:
-            bt.logging.error("No models were able to run")
+            log.error("No models were able to run")
             return None, None
         
         # Validate final scores - check for suspicious zero scores
 
-        bt.logging.info("======== VALIDATING FINAL SCORES ========")
+        log.info("======== VALIDATING FINAL SCORES ========")
         
         if self.competition_id in ["tricorder-3", "tricorder-2"]:
             zero_score_models = []
@@ -349,38 +364,43 @@ class CompetitionManager(SerializableManager):
                     })
             
             if zero_score_models:
-                bt.logging.warning(f"Found {len(zero_score_models)} models with zero score but no error!")
+                log.warning(f"Found {len(zero_score_models)} models with zero score but no error!")
                 for model_info in zero_score_models:
-                    bt.logging.warning(f"Zero score model: {model_info}")
-                    bt.logging.warning(f"This may indicate a scoring calculation bug!")
+                    log.warning(f"Zero score model: {model_info}")
+                    log.warning(f"This may indicate a scoring calculation bug!")
         
-        bt.logging.info("======== PROCESSING DUPLICATE DETECTION ========")
+        log.info("======== PROCESSING DUPLICATE DETECTION ========")
         # Process duplicate detection separately from other slashing reasons
         duplicate_hotkeys_to_slash = self._process_duplicate_detection(hotkeys_to_slash)
         
-        bt.logging.info(f"======== DUPLICATE HOTKEYS TO SLASH: {duplicate_hotkeys_to_slash} ========")
+        log.info(f"======== DUPLICATE HOTKEYS TO SLASH: {duplicate_hotkeys_to_slash} ========")
         
         # Combine all hotkeys to slash (from hash mismatches and duplicate detection)
         all_hotkeys_to_slash = hotkeys_to_slash + duplicate_hotkeys_to_slash
         
         # Final deduplication to prevent multiple slashing entries
         all_hotkeys_to_slash = list(set(all_hotkeys_to_slash))
-        bt.logging.info(f"======== ALL HOTKEYS TO SLASH: {all_hotkeys_to_slash} ========")
+        log.info(f"======== ALL HOTKEYS TO SLASH: {all_hotkeys_to_slash} ========")
+        for hotkey in all_hotkeys_to_slash:
+            log.set_miner_hotkey(hotkey)
+            log.info(f"Slashing model copier: {hotkey}")
+            log.clear_miner_hotkey()
         self.slash_model_copiers(all_hotkeys_to_slash)
         
         winning_hotkey, winning_model_result = sorted(
             self.results, key=lambda x: x[1].score, reverse=True
         )[0]
         
-        bt.logging.info(f"======== WINNING MODEL: {winning_hotkey} with score {winning_model_result.score} ========")
+        log.info(f"======== WINNING MODEL: {winning_hotkey} with score {winning_model_result.score} ========")
 
-        bt.logging.info(
+        log.info(
             f"Winning hotkey for competition {self.competition_id}: {winning_hotkey}"
         )
         
         # Cleanup preprocessed data
         self.competition_handler.cleanup_preprocessed_data()
         self.dataset_manager.delete_dataset()
+        log.clear_all_context()
         return winning_hotkey, winning_model_result
 
 
@@ -413,7 +433,9 @@ class CompetitionManager(SerializableManager):
                 model_info = self.model_manager.hotkey_store.get(hotkey)
                 hf_info = f"{model_info.hf_repo_id}/{model_info.hf_model_filename}" if model_info and model_info.hf_repo_id and model_info.hf_model_filename else "unknown"
                 
-                bt.logging.info(f"Slashing model copier for hotkey: {hotkey} ({hf_info}) - setting score to 0.0")
+                log.set_miner_hotkey(hotkey)
+                log.info(f"Slashing model copier for hotkey: {hotkey} ({hf_info}) - setting score to 0.0")
+                log.clear_miner_hotkey()
                 result.score = 0.0
                 if not result.error:
                     result.error = "Slashing model copier - setting score to 0.0"
@@ -429,7 +451,7 @@ class CompetitionManager(SerializableManager):
             bt.logging.info(f"Computed 64-character hash: {full_hash}")
             return full_hash
         except Exception as e:
-            bt.logging.error(f"Error computing hash for {file_path}: {e}", exc_info=True)
+            log.competition.error(f"Error computing hash for {file_path}: {e}", exc_info=True)
             return None
     
     def _process_duplicate_detection(self, hotkeys_to_slash: list) -> list:
@@ -438,7 +460,7 @@ class CompetitionManager(SerializableManager):
         
         # see if there are any duplicate scores, slash the copied models owners
         grouped_duplicated_hotkeys = self.group_duplicate_scores(hotkeys_to_slash)
-        bt.logging.info(f"duplicated models: {grouped_duplicated_hotkeys}")
+        log.info(f"duplicated models: {grouped_duplicated_hotkeys}")
         if len(grouped_duplicated_hotkeys) > 0:
             pioneer_models_hotkeys, validation_errors = self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
             
@@ -449,7 +471,7 @@ class CompetitionManager(SerializableManager):
                         if h == hotkey:
                             result.error = error_msg
                             result.score = 0.0
-                            bt.logging.info(f"Setting validation error for {hotkey}: {error_msg}")
+                            log.info(f"Setting validation error for {hotkey}: {error_msg}")
             
             # Log pioneer vs copies for better traceability while keeping slashing logs unchanged
             for group in grouped_duplicated_hotkeys:
@@ -470,9 +492,12 @@ class CompetitionManager(SerializableManager):
                         copy_hf = f"{copy_info.hf_repo_id}/{copy_info.hf_model_filename}" if copy_info and copy_info.hf_repo_id and copy_info.hf_model_filename else "unknown"
                         copy_hf_info.append(f"{copy_hotkey} ({copy_hf})")
                     
-                    bt.logging.info(
-                        f"Duplicate prediction-signature group - pioneer: {pioneer_hotkey} ({pioneer_hf}), copies: {copy_hf_info}"
-                    )
+                    for copy_hotkey in copies:
+                        log.set_miner_hotkey(copy_hotkey)
+                        log.info(
+                            f"Duplicate prediction-signature group - pioneer: {pioneer_hotkey} ({pioneer_hf}), copies: {copy_hf_info}"
+                        )
+                        log.clear_miner_hotkey()
             duplicate_hotkeys_to_slash = [hotkey for group in grouped_duplicated_hotkeys for hotkey in group if hotkey not in pioneer_models_hotkeys]
         
         return duplicate_hotkeys_to_slash

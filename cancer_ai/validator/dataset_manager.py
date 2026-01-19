@@ -2,6 +2,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import List, Tuple
+import json
 
 from huggingface_hub import HfApi
 import bittensor as bt
@@ -10,6 +11,7 @@ from .manager import SerializableManager
 from .utils import run_command, log_time
 from .dataset_handlers.image_csv import DatasetImagesCSV
 from .exceptions import DatasetManagerException
+from ..utils.structured_logger import log
 
 class DatasetManager(SerializableManager):
     def __init__(
@@ -191,6 +193,25 @@ class DatasetManager(SerializableManager):
         self.set_dataset_handler()
         bt.logging.info(f"Preprocessing dataset '{self.competition_id}'")
         self.data = await self.handler.get_training_data()
+        
+        # Log dataset information
+        if self.data and len(self.data) >= 2:
+            x_train, y_train = self.data[0], self.data[1]
+            import numpy as np
+            
+            # Calculate class distribution
+            unique_classes, class_counts = np.unique(y_train, return_counts=True)
+            class_distribution = dict(zip(unique_classes.tolist(), class_counts.tolist()))
+            
+            dataset_info = {
+                'hf_repo': self.hf_repo_id,
+                'hf_filename': self.hf_filename,
+                'total_samples': len(x_train),
+                'class_distribution': class_distribution,
+                'num_classes': len(unique_classes)
+            }
+            
+            log.dataset.info(f"Dataset loaded: {json.dumps(dataset_info, indent=2)}")
 
     async def get_data(self) -> Tuple[List, List, List]:
         """Get data from dataset handler"""

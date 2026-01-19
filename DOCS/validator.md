@@ -80,6 +80,13 @@ python3 scripts/start_validator.py --wallet.name=my-wallet --wallet.hotkey=my-ho
 - **Local Changes**: If you have made local changes to the codebase, the auto-update feature will attempt to preserve them. However, conflicts might require manual resolution.
 - **Environment**: The script uses the environment from which it is executed, so ensure all necessary environment variables and dependencies are correctly configured.
 
+## PM2 Commands
+
+### Start the validator
+```bash
+pm2 start scripts/start_validator.py --name start_validator -- --wallet.name=default --wallet.hotkey=default --logging.trace 1 --netuid 76
+```
+
 # TLDR Installation script from fresh Ubuntu 24.04
 
 ```bash

@@ -2,9 +2,9 @@
 
 import json
 import time
-import bittensor as bt
 
 from cancer_ai.utils.config import BLACKLIST_FILE_PATH, BLACKLIST_FILE_PATH_TESTNET
+from cancer_ai.utils.structured_logger import log
 
 
 def should_refresh_miners(last_miners_refresh, miners_refresh_interval) -> bool:
@@ -30,7 +30,7 @@ async def retrieve_and_store_model(validator, hotkey: str):
         uid = validator.metagraph.hotkeys.index(hotkey)
         chain_model_metadata = await validator.chain_models.retrieve_model_metadata(hotkey, uid)
     except Exception as e:
-        bt.logging.warning(f"Cannot get miner model for {hotkey}: {e}")
+        log.validation.warn(f"Cannot get miner model for {hotkey}: {e}")
         return None
 
     try:
@@ -44,33 +44,35 @@ async def retrieve_and_store_model(validator, hotkey: str):
 def handle_model_storage_error(error: Exception, hotkey: str, metadata):
     """Handle errors when storing model metadata."""
     if "CHECK constraint failed: LENGTH(model_hash) <= 64" in str(error):
-        bt.logging.error(
+        log.validation.error(
             f"Invalid model hash for {hotkey}: "
             f"Hash '{metadata.model_hash}' exceeds 64-character limit"
         )
     else:
-        bt.logging.error(f"Failed to persist model info for {hotkey}: {error}", exc_info=True)
+        log.validation.error(f"Failed to persist model info for {hotkey}: {error}", exc_info=True)
 
 
 async def process_miner_models(validator, blacklisted_hotkeys: set):
     """Process each miner's model metadata."""
     for i, hotkey in enumerate(validator.hotkeys):
         if hotkey in blacklisted_hotkeys:
-            bt.logging.info(f"Skipping blacklisted hotkey {hotkey}")
+            log.validation.info(f"Skipping blacklisted hotkey {hotkey}")
             continue
 
         hotkey = str(hotkey)
-        bt.logging.debug(f"Processing {i+1}/{len(validator.hotkeys)}: {hotkey}")
+        log.set_miner_hotkey(hotkey)
+        log.validation.debug(f"Processing {i+1}/{len(validator.hotkeys)}: {hotkey}")
         
         await retrieve_and_store_model(validator, hotkey)
+        
+        # Clear miner hotkey after processing
+        log.set_miner_hotkey("")
 
 
 async def setup_organization_data_references(validator):
     """Setup organization data references by fetching, syncing, and returning instance."""
     from cancer_ai.validator.utils import fetch_organization_data_references, sync_organizations_data_references
     from cancer_ai.validator.utils import OrganizationDataReferenceFactory
-    
-    import bittensor as bt
     
     raw_data = await fetch_organization_data_references(
         validator.config.datasets_config_hf_repo_id,
