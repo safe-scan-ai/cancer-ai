@@ -27,6 +27,7 @@ import threading
 import datetime
 import csv
 from uuid import uuid4
+from typing import Dict
 
 import bittensor as bt
 import numpy as np
@@ -39,39 +40,50 @@ from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     check_for_new_dataset_files,
     get_local_dataset,
+    log_system_info
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.model_manager import ModelManager 
 from cancer_ai.validator.competition_manager import CompetitionManager
-from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile
-from cancer_ai.validator.models import WanDBLogBase
+from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile, WanDBLogBase
 from cancer_ai.validator.validator_helpers import setup_organization_data_references
-from cancer_ai.validator.utils import log_system_info
 from cancer_ai.utils.structured_logger import log
+from cancer_ai.utils.wandb_local import log_state_to_wandb, log_evaluation_results
 from huggingface_hub import HfApi
 
 class Validator(BaseValidatorNeuron):
     
-    def __init__(self, config=None, exit_event=None):
+    def __init__(self, config=None, validator_exit_event=None):
         print(cancer_ai_logo)
+        
+        # Store validator_exit_event early for potential use in load_state
+        self._validator_exit_event = validator_exit_event
+        
         super(Validator, self).__init__(config=config)
         self.hotkey = self.wallet.hotkey.ss58_address
+        self.exit_event = validator_exit_event
         self.db_controller = ModelDBController(subtensor=self.subtensor, config=self.config)
 
         self.chain_models = ChainModelMetadata(
             self.subtensor, self.config.netuid, self.wallet
         )
-        self.last_miners_refresh: float = None
-        self.last_monitor_datasets: float = None
+        self.last_miners_refresh = None
+        self.last_monitor_datasets = None
 
         self.hf_api = HfApi()
+        
+        # Log validator initialization with hotkey
+        log_state_to_wandb(
+            validator_hotkey=self.hotkey,
+            config=self.config
+        )
         self.model_manager = ModelManager(
             config=self.config,
             db_controller=self.db_controller,
             subtensor=self.subtensor
         )
 
-        self.exit_event = exit_event
+        self.exit_event = validator_exit_event
 
     async def concurrent_forward(self):
 
@@ -200,6 +212,7 @@ class Validator(BaseValidatorNeuron):
             stack_trace = traceback.format_exc()
             log.error(f"Cannot run {competition_id}: {stack_trace}")
             try:
+                # TODO move to wandb_local.py
                 if not self.config.wandb.off:
                     wandb.init(project=competition_id, group="competition_evaluation")
                     error_log = WanDBLogBase(
@@ -260,7 +273,6 @@ class Validator(BaseValidatorNeuron):
         await self.log_results_to_csv(csv_filename, data_package, winning_hotkey, competition_manager.results)
 
         # Log evaluation results to wandb/local files
-        from cancer_ai.utils.wandb_local import log_evaluation_results
         await log_evaluation_results(
             self, competition_id, competition_uuid, data_package, competition_manager,
             winning_hotkey, winning_model_link, average_winning_hotkey, competition_start_time
@@ -402,6 +414,7 @@ class Validator(BaseValidatorNeuron):
         state_dict = {
             'scores': scores_list,
             'hotkeys': hotkeys_list,
+            'validator_hotkey': getattr(self, 'hotkey', None),
             'organizations_data_references': self.organizations_data_references.model_dump(),
             'org_latest_updates': self.org_latest_updates,
             'competition_results_store': self.competition_results_store.model_dump()
@@ -417,6 +430,9 @@ class Validator(BaseValidatorNeuron):
             # Atomically move the temporary file to the final destination
             os.rename(temp_state_path, state_path)
             log.debug(f"Validator state saved to {state_path}")
+            
+            log_state_to_wandb(validator_hotkey=getattr(self, 'hotkey', None), config=self.config)
+            
         except Exception as e:
             log.error(f"Error saving validator state: {e}", exc_info=True)
             # Clean up the temporary file if it exists
@@ -457,6 +473,10 @@ class Validator(BaseValidatorNeuron):
                 self.competition_results_store = CompetitionResultsStore.model_validate(
                     state['competition_results_store']
                 )
+                
+                # Log loaded state to wandb
+                log_state_to_wandb(validator_hotkey=getattr(self, 'hotkey', None), config=self.config)
+                
             except (json.JSONDecodeError, KeyError, TypeError) as e:
                 log.error(f"Error loading or parsing state file: {e}. Resetting to a clean state.")
                 self.create_empty_state()
@@ -490,7 +510,7 @@ if __name__ == "__main__":
         pass
     
     exit_event = threading.Event()
-    with Validator(exit_event=exit_event) as validator:
+    with Validator(validator_exit_event=exit_event) as validator:
         while True:
             time.sleep(5)
             if exit_event.is_set():
