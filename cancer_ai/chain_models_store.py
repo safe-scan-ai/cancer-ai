@@ -58,12 +58,13 @@ class ChainMinerModel(BaseModel):
         tokens = cs.split(":")
         if len(tokens) != 4:
             return None
+        base_filename = tokens[1]
         return cls(
             hf_repo_id=tokens[0],
-            hf_model_filename=tokens[1],
-            hf_code_filename=None,
+            hf_model_filename=f"{base_filename}.onnx",
+            hf_code_filename=f"{base_filename}.zip",
             competition_id=tokens[2],
-            hf_repo_type=None,
+            hf_repo_type="model",
             model_hash=tokens[3],
             block=None,
         )
