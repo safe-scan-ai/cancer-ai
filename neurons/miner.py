@@ -232,6 +232,10 @@ class MinerManagerCLI:
         if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_code_filename, self.config.hf_repo_type):
             return
 
+        if Path(self.config.hf_code_filename).stem != Path(self.config.hf_model_name).stem:
+            bt.logging.error("hf_model_filename and hf_code_filename must have the same name")
+            return
+
         model_hash = self._compute_model_hash(
             self.config.hf_repo_id, self.config.hf_model_name
         )

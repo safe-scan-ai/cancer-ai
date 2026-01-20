@@ -163,7 +163,10 @@ class Validator(BaseValidatorNeuron):
         
         # Refresh miners to get latest models before competition evaluation
         bt.logging.info("Refreshing miners for new competition evaluation")
-        await self.refresh_miners()
+        if self.config.debug.dont_refresh_miners:
+            bt.logging.info("Skipping miners refresh")
+        else:
+            await self.refresh_miners()
         for data_package in data_packages:
             await self.run_competition_for_data_package(data_package)
 

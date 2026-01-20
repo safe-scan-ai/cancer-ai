@@ -435,6 +435,14 @@ def add_validator_args(cls, parser):
         default="https://eu-central-1.aws.edge.axiom.co",
     )
 
+    ## Debugging variables
+    parser.add_argument(
+        "--debug.dont_refresh_miners",
+        action="store_true",
+        help="Don't refresh miners",
+        default=False,
+    )
+
 def path_config(cls=None):
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.

@@ -464,7 +464,7 @@ class CompetitionManager(SerializableManager):
         if len(grouped_duplicated_hotkeys) > 0:
             pioneer_models_hotkeys, validation_errors = self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
             
-            # Apply validation errors to results
+            # Apply validation errors to results and delete invalid models from DB
             if validation_errors:
                 for hotkey, error_msg in validation_errors.items():
                     for h, result in self.results:
@@ -472,6 +472,14 @@ class CompetitionManager(SerializableManager):
                             result.error = error_msg
                             result.score = 0.0
                             log.info(f"Setting validation error for {hotkey}: {error_msg}")
+                    
+                    model_record = self.db_controller.get_model(hotkey)
+                    if model_record:
+                        try:
+                            self.db_controller.delete_model(model_record.date_submitted, hotkey)
+                            log.info(f"Deleted invalid model from DB for hotkey {hotkey}: {error_msg}")
+                        except Exception as e:
+                            log.error(f"Failed to delete invalid model from DB for hotkey {hotkey}: {e}")
             
             # Log pioneer vs copies for better traceability while keeping slashing logs unchanged
             for group in grouped_duplicated_hotkeys:
