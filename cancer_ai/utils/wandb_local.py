@@ -2,16 +2,50 @@ from typing import Dict, Any, TYPE_CHECKING, Optional
 import os
 import json
 import datetime
+import tempfile
 
 import wandb
 import bittensor as bt
 
+if TYPE_CHECKING:
+    from neurons.validator import Validator
 
-
-from neurons.validator import Validator
 from cancer_ai.validator.utils import NewDatasetFile
 from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import WanDBLogModelErrorEntry, WanDBLogModelBase
+
+
+def log_state_to_wandb(validator_hotkey: str = None, config: 'bt.Config' = None) -> bool:
+    try:
+        if not validator_hotkey:
+            return False
+        if config.wandb.state_off or config.wandb.off:
+            bt.logging.trace("State/wandb disabled, skipping wandb state logging")
+            return False
+        
+        bt.logging.info("Logging state to wandb")
+        run = wandb.init(project=config.wandb_project_name_state, entity=config.wandb_entity, group="validator_state")
+        
+        artifact = wandb.Artifact(
+            name=validator_hotkey,
+            type="validator_state",
+            description=f"Validator state from hotkey: {validator_hotkey}"
+        )
+        state_file_path = config.neuron.full_path + "/state.json"
+        try:
+            artifact.add_file(state_file_path, name="state.json")
+            logged_artifact = run.log_artifact(artifact)
+            logged_artifact.wait()
+            run.finish()
+            bt.logging.info(f"State logged to wandb successfully to project {config.wandb_entity}/{config.wandb_project_name_state}")
+            return True
+        except Exception as e:
+            bt.logging.error(f"Failed to log state to wandb: {e}", exc_info=True)
+            return False
+        
+    except (OSError, IOError, wandb.Error) as e:
+        bt.logging.error(f"Failed to log state to wandb: {e}", exc_info=True)
+        return False
 
 class LocalWandbSaver:
     """Local wandb logging utilities for saving wandb data to JSON files."""
@@ -134,6 +168,11 @@ async def log_evaluation_results(
             model_link=winning_model_link,
             dataset_filename=data_package.dataset_hf_filename,
             run_time_s=(datetime.datetime.now() - competition_start_time).seconds
+        ) 
+        
+        log_state_to_wandb(
+            validator_hotkey=validator.wallet.hotkey.ss58_address,
+            config=validator.config
         )
         
         if validator.config.wandb.local_save:
@@ -142,7 +181,7 @@ async def log_evaluation_results(
             local_wandb.finish()
         
         if not validator.config.wandb.off:
-            project_name = validator.config.wandb.project_name if validator.config.wandb.project_name else competition_id
+            project_name = competition_id
             wandb.init(project=project_name, group="competition_evaluation")
             wandb.log(winner_log.model_dump())
             wandb.finish()
@@ -158,7 +197,7 @@ async def log_evaluation_results(
             local_wandb = init_local_wandb(competition_id, "model_evaluation")
         
         if not validator.config.wandb.off:
-            project_name = validator.config.wandb.project_name if validator.config.wandb.project_name else competition_id
+            project_name = competition_id
             wandb.init(project=project_name, group="model_evaluation")
     except Exception as wandb_error:
         import bittensor as bt

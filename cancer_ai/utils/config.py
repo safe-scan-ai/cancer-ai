@@ -124,16 +124,16 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
-        "--wandb.offline",
+        "--wandb.local_save",
         action="store_true",
-        help="Runs wandb in offline mode.",
+        help="Save wandb data to local JSON files instead of sending to wandb.",
         default=False,
     )
 
     parser.add_argument(
-        "--wandb.local_save",
-        action="store_true",
-        help="Save wandb data to local JSON files instead of sending to wandb.",
+        "--wandb.state_off",
+        action="store_true", 
+        help="Disable logging validator state to wandb when wandb is enabled.",
         default=False,
     )
 
@@ -143,6 +143,7 @@ def add_args(cls, parser):
         help="The name of the project where you are sending the new run. By default - the one in dataset ",
         default=None,
     )
+
 
     parser.add_argument(
         "--wandb.notes",
@@ -358,6 +359,12 @@ def add_validator_args(cls, parser):
     )
 
     parser.add_argument(
+        "--wandb_project_name_state",
+        type=str,
+        help="The suffix to add to the project name for state logging.",
+        default="validator-state",
+    )
+    parser.add_argument(
         "--wandb_entity",
         type=str,
         help="The name of the project where you are sending the new run.",
@@ -433,6 +440,14 @@ def add_validator_args(cls, parser):
         type=str,
         help="Axiom API base URL (deployment/region). You can also set AXIOM_URL env var.",
         default="https://eu-central-1.aws.edge.axiom.co",
+    )
+
+    ## Debugging variables
+    parser.add_argument(
+        "--debug.dont_refresh_miners",
+        action="store_true",
+        help="Don't refresh miners",
+        default=False,
     )
 
 def path_config(cls=None):

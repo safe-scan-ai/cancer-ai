@@ -441,16 +441,15 @@ class CompetitionManager(SerializableManager):
                     result.error = "Slashing model copier - setting score to 0.0"
 
     def _compute_model_hash(self, file_path) -> str:
-        """Compute an 8-character hexadecimal SHA-1 hash of the model file."""
-        sha1 = hashlib.sha1()
+        """Compute a 64-character hexadecimal SHA-256 hash of the model file."""
+        sha256 = hashlib.sha256()
         try:
             with open(file_path, 'rb') as f:
                 while chunk := f.read(8192):
-                    sha1.update(chunk)
-            full_hash = sha1.hexdigest()
-            truncated_hash = full_hash[:8]
-            log.info(f"Computed 8-character hash: {truncated_hash}")
-            return truncated_hash
+                    sha256.update(chunk)
+            full_hash = sha256.hexdigest()
+            bt.logging.info(f"Computed 64-character hash: {full_hash}")
+            return full_hash
         except Exception as e:
             log.competition.error(f"Error computing hash for {file_path}: {e}", exc_info=True)
             return None
@@ -465,7 +464,7 @@ class CompetitionManager(SerializableManager):
         if len(grouped_duplicated_hotkeys) > 0:
             pioneer_models_hotkeys, validation_errors = self.model_manager.get_pioneer_models(grouped_duplicated_hotkeys)
             
-            # Apply validation errors to results
+            # Apply validation errors to results and delete invalid models from DB
             if validation_errors:
                 for hotkey, error_msg in validation_errors.items():
                     for h, result in self.results:
@@ -473,6 +472,14 @@ class CompetitionManager(SerializableManager):
                             result.error = error_msg
                             result.score = 0.0
                             log.info(f"Setting validation error for {hotkey}: {error_msg}")
+                    
+                    model_record = self.db_controller.get_model(hotkey)
+                    if model_record:
+                        try:
+                            self.db_controller.delete_model(model_record.date_submitted, hotkey)
+                            log.info(f"Deleted invalid model from DB for hotkey {hotkey}: {error_msg}")
+                        except Exception as e:
+                            log.error(f"Failed to delete invalid model from DB for hotkey {hotkey}: {e}")
             
             # Log pioneer vs copies for better traceability while keeping slashing logs unchanged
             for group in grouped_duplicated_hotkeys:
