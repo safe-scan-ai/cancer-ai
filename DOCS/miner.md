@@ -163,6 +163,8 @@ Command line argument explanation
 - `--netuid` - subnet number
 - `--subtensor.network` - Bittensor network to connect to - <test|finney>
 
+**Important**: The `--hf_code_filename` and `--hf_model_name` must have the same base name (without extension). For example: `--hf_model_name model.onnx --hf_code_filename model.zip`
+
 #### Post Submit activities
 Submitting models to validators is executing blockchain extrinsic which must be documented in the miners HF repo for a reference to prevent model copiers from stealing miners model.
 After submitting the model miner must create file named 'extrinsic_record.json' in the miners HF model repo with the following content:
