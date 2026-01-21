@@ -48,8 +48,8 @@ from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile, WanDBLogBase
 from cancer_ai.validator.validator_helpers import setup_organization_data_references
 
-from cancer_ai.validator.validator_axon import ValidatorAxon
-from cancer_ai.validator.p2p_collector import P2PCollector, ResultAggregator
+from cancer_ai.validator.communication.validator_axon import ValidatorAxon
+from cancer_ai.validator.communication.p2p_collector import P2PCollector, ResultAggregator
 
 from cancer_ai.utils.structured_logger import log
 from cancer_ai.utils.wandb_local import log_state_to_wandb, log_evaluation_results
@@ -92,7 +92,13 @@ class Validator(BaseValidatorNeuron):
 
         self.validator_axon = None
         self.p2p_collector = None
+        self.last_p2p_test: float = None
+        self.setup_communication()
         
+       
+    
+    def setup_communication(self):
+        """Setup P2P communication for validator."""
         if not self.config.neuron.axon_off:
             self.validator_axon = ValidatorAxon(
                 wallet=self.wallet,
@@ -111,20 +117,23 @@ class Validator(BaseValidatorNeuron):
                 config=self.config
             )
             
-            # Test P2P connection on startup
-            asyncio.get_event_loop().run_until_complete(self.p2p_collector.test_connection())
     
     async def concurrent_forward(self):
-
         coroutines = []
         if self.config.filesystem_evaluation:
             coroutines.append(self.filesystem_test_evaluation())
         else:
             coroutines.append(self.monitor_datasets())
-    
+        if not self.config.neuron.axon_off and self.p2p_collector:
+            coroutines.append(self.test_p2p_communication())
         await asyncio.gather(*coroutines)
 
-
+    async def test_p2p_communication(self):
+        """Test P2P communication with peer validators."""
+        if self.last_p2p_test is None or time.time() - self.last_p2p_test > 120:  # 2 minutes
+            if not self.config.neuron.axon_off and self.p2p_collector:
+                await self.p2p_collector.test_connection()
+            self.last_p2p_test = time.time()
 
     async def refresh_miners(self):
         """Downloads miner's models from the chain and stores them in the DB."""

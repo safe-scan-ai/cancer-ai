@@ -8,8 +8,8 @@ import time
 import asyncio
 import bittensor as bt
 from typing import Dict, List, Optional
-from cancer_ai.protocol import CompetitionResultsSynapse
-
+from .protocol import CompetitionResultsSynapse
+from cancer_ai.utils.structured_logger import log
 
 class P2PCollector:
     """Collects evaluation results from peer validators."""
@@ -25,22 +25,20 @@ class P2PCollector:
         Simple startup test - sends hello to discovered peer validators.
         Returns True if at least one peer responds.
         """
-        bt.logging.info("🔗 P2P Test: Sending hello to peer validators...")
+        log.communication.info("🔗 P2P Test: Sending hello to peer validators...")
         
         try:
             my_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
         except ValueError:
-            bt.logging.error("P2P Test: Could not find our UID")
+            log.communication.error("P2P Test: Could not find our UID")
             return False
         
         # Get peer validators (dynamic discovery)
         peer_uids = self.get_validator_uids()
         
         if not peer_uids:
-            bt.logging.warning("P2P Test: No peer validators found")
+            log.communication.warning("P2P Test: No peer validators found")
             return False
-        
-        bt.logging.info(f"P2P Test: Found {len(peer_uids)} peers: {peer_uids}")
         
         # Send simple hello synapse
         synapse = CompetitionResultsSynapse(
@@ -61,16 +59,23 @@ class P2PCollector:
             for i, response in enumerate(responses):
                 uid = peer_uids[i]
                 if response is not None:
-                    bt.logging.info(f"P2P Test: ✅ UID {uid} responded (status: {response.status})")
-                    success_count += 1
+                    if response.is_success:
+                        log.communication.info(f"P2P Test: ✅ UID {uid} - hotkey {self.metagraph.hotkeys[uid]} responded (status: {response.status})")
+                        success_count += 1
+                    elif response.is_timeout:
+                        log.communication.trace(f"P2P Test: ❌ UID {uid} - hotkey {self.metagraph.hotkeys[uid]} timed out")
+                    elif response.is_failure:
+                        log.communication.trace(f"P2P Test: ❌ UID {uid} - hotkey {self.metagraph.hotkeys[uid]} failed (status: {response.status})")
+                    else:
+                        log.communication.trace(f"P2P Test: ❌ UID {uid} - hotkey {self.metagraph.hotkeys[uid]} responded with error (status: {response.status})")
                 else:
-                    bt.logging.warning(f"P2P Test: ❌ UID {uid} no response")
+                    log.communication.trace(f"P2P Test: ❌ UID {uid} - hotkey {self.metagraph.hotkeys[uid]} no response")
             
-            bt.logging.info(f"P2P Test: {success_count}/{len(peer_uids)} peers reachable")
+            log.communication.info(f"P2P Test: {success_count}/{len(peer_uids)} peers reachable")
             return success_count > 0
             
         except Exception as e:
-            bt.logging.error(f"P2P Test failed: {e}")
+            log.communication.error(f"P2P Test failed: {e}")
             return False
     
     def get_validator_uids(self) -> List[int]:
@@ -79,9 +84,9 @@ class P2PCollector:
         Uses dynamic discovery from metagraph - finds validators with active axons.
         """
         try:
-            my_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+            this_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
         except ValueError:
-            bt.logging.error("Could not find our UID")
+            log.communication.error("Could not find our UID")
             return []
         
         # Check for custom test UIDs from config
@@ -90,24 +95,19 @@ class P2PCollector:
             try:
                 custom_uids = [int(uid.strip()) for uid in test_uids_str.split(',') if uid.strip()]
                 if custom_uids:
-                    bt.logging.info(f"Using custom validator UIDs: {custom_uids}")
-                    return [uid for uid in custom_uids if uid != my_uid]
+                    log.communication.info(f"Using custom validator UIDs: {custom_uids}")
+                    return [uid for uid in custom_uids if uid != this_uid]
             except ValueError:
-                bt.logging.warning(f"Invalid test_validator_uids format: {test_uids_str}")
+                log.communication.warning(f"Invalid test_validator_uids format: {test_uids_str}")
         
         # Dynamic discovery - find validators with active axons
         validator_uids = []
         for uid in range(len(self.metagraph.axons)):
-            if uid == my_uid:
+            if uid == this_uid:
                 continue
-            
-            # Check if this UID has validator permit
-            if uid < len(self.metagraph.validator_permit):
-                if self.metagraph.validator_permit[uid]:
-                    axon = self.metagraph.axons[uid]
-                    # Check if axon is reachable (has valid IP/port)
-                    if axon.ip and axon.port and axon.ip not in ['0.0.0.0', '']:
-                        validator_uids.append(uid)
+            if self.metagraph.validator_permit[uid]:
+                validator_uids.append(uid)
+        log.communication.debug(f"Found {len(validator_uids)} validator UIDs: {validator_uids}")
         
         return validator_uids
     
@@ -128,23 +128,24 @@ class P2PCollector:
         Returns:
             Dictionary mapping validator UID to their results
         """
-        bt.logging.info("=== P2P: Collecting results from peer validators ===")
+        
+        log.communication.info("=== P2P: Collecting results from peer validators ===")
         
         # Get my UID
         try:
             my_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
         except ValueError:
-            bt.logging.error("Could not find our UID")
+            log.communication.error("Could not find our UID")
             return {}
         
         # Get available validator UIDs (auto-discovery)
         validator_uids = self.get_validator_uids()
         
         if not validator_uids:
-            bt.logging.warning("P2P: No peer validators available")
+            log.communication.warning("P2P: No peer validators available")
             return {}
         
-        bt.logging.info(f"P2P: Querying {len(validator_uids)} validators: {validator_uids}")
+        log.communication.info(f"P2P: Querying {len(validator_uids)} validators: {validator_uids}")
         
         # Create request synapse
         synapse = CompetitionResultsSynapse(
@@ -176,13 +177,13 @@ class P2PCollector:
                     'model_count': response.model_count,
                     'timestamp': response.timestamp
                 }
-                bt.logging.info(f"✅ UID {uid}: {len(response.evaluation_results)} results")
+                log.communication.info(f"✅ UID {uid}: {len(response.evaluation_results)} results")
             elif response is not None and response.status == "not_ready":
-                bt.logging.info(f"⏳ UID {uid}: not ready")
+                log.communication.info(f"⏳ UID {uid}: not ready")
             else:
-                bt.logging.warning(f"❌ UID {uid}: no response")
+                log.communication.warning(f"❌ UID {uid}: no response")
         
-        bt.logging.info(f"P2P: Collected from {len(collected_results)}/{len(validator_uids)} validators")
+        log.communication.info(f"P2P: Collected from {len(collected_results)}/{len(validator_uids)} validators")
         return collected_results
 
 
@@ -201,7 +202,7 @@ class ResultAggregator:
         Uses weighted average or median depending on validator count.
         """
         if not peer_results:
-            bt.logging.info("No peer results, using local results only")
+            log.communication.info("No peer results, using local results only")
             return local_results
         
         # Collect all scores per miner
@@ -230,6 +231,6 @@ class ResultAggregator:
                 # Not enough validators, use mean
                 aggregated[hotkey] = float(np.mean(scores))
         
-        bt.logging.info(f"Aggregated scores for {len(aggregated)} miners from {len(peer_results) + 1} validators")
+        log.communication.info(f"Aggregated scores for {len(aggregated)} miners from {len(peer_results) + 1} validators")
         
         return aggregated

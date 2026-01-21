@@ -4,7 +4,7 @@ Handles incoming requests from peer validators for result sharing.
 """
 
 import bittensor as bt
-from cancer_ai.protocol import CompetitionResultsSynapse
+from .protocol import CompetitionResultsSynapse
 
 
 class ValidatorAxon:

@@ -21,6 +21,7 @@ from abc import abstractmethod
 
 import sys
 import copy
+import time
 import numpy as np
 import asyncio
 import argparse
@@ -162,6 +163,8 @@ class BaseValidatorNeuron(BaseNeuron):
                 # Sync metagraph and potentially set weights.
                 self.sync()
                 self.step += 1
+                
+                time.sleep(1) # don't burn CPU cycles
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
