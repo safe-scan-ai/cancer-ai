@@ -100,13 +100,13 @@ class Validator(BaseValidatorNeuron):
     def setup_communication(self):
         """Setup P2P communication for validator."""
         if not self.config.neuron.axon_off:
-            self.validator_axon = ValidatorAxon(
-                wallet=self.wallet,
-                config=self.config,
-                subtensor=self.subtensor,
-                metagraph=self.metagraph,
-                base_axon=self.axon
-            )
+            # self.validator_axon = ValidatorAxon(
+            #     wallet=self.wallet,
+            #     config=self.config,
+            #     subtensor=self.subtensor,
+            #     metagraph=self.metagraph,
+            #     base_axon=self.axon
+            # )
             self.validator_axon.serve_axon()
             self.validator_axon.start_axon_server()
             
@@ -130,7 +130,7 @@ class Validator(BaseValidatorNeuron):
 
     async def test_p2p_communication(self):
         """Test P2P communication with peer validators."""
-        if self.last_p2p_test is None or time.time() - self.last_p2p_test > 120:  # 2 minutes
+        if self.last_p2p_test is None or time.time() - self.last_p2p_test > 10800:  # 3 hours
             if not self.config.neuron.axon_off and self.p2p_collector:
                 await self.p2p_collector.test_connection()
             self.last_p2p_test = time.time()
