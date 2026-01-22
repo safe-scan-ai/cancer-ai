@@ -107,8 +107,8 @@ class Validator(BaseValidatorNeuron):
             #     metagraph=self.metagraph,
             #     base_axon=self.axon
             # )
-            self.validator_axon.serve_axon()
-            self.validator_axon.start_axon_server()
+            # self.validator_axon.serve_axon()
+            # self.validator_axon.start_axon_server()
             
             self.p2p_collector = P2PCollector(
                 dendrite=self.dendrite,
