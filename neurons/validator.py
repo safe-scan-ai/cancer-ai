@@ -40,16 +40,21 @@ from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
     check_for_new_dataset_files,
     get_local_dataset,
-    log_system_info
+    log_system_info,
 )
 from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.model_manager import ModelManager 
 from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile, WanDBLogBase
 from cancer_ai.validator.validator_helpers import setup_organization_data_references
+
+from cancer_ai.validator.communication.validator_axon import ValidatorAxon
+from cancer_ai.validator.communication.p2p_collector import P2PCollector, ResultAggregator
+
 from cancer_ai.utils.structured_logger import log
 from cancer_ai.utils.wandb_local import log_state_to_wandb, log_evaluation_results
 from huggingface_hub import HfApi
+import hashlib
 
 class Validator(BaseValidatorNeuron):
     
@@ -85,17 +90,50 @@ class Validator(BaseValidatorNeuron):
 
         self.exit_event = validator_exit_event
 
+        self.validator_axon = None
+        self.p2p_collector = None
+        self.last_p2p_test: float = None
+        self.setup_communication()
+        
+       
+    
+    def setup_communication(self):
+        """Setup P2P communication for validator."""
+        if not self.config.neuron.axon_off:
+            self.validator_axon = ValidatorAxon(
+                wallet=self.wallet,
+                config=self.config,
+                subtensor=self.subtensor,
+                metagraph=self.metagraph,
+                base_axon=self.axon
+            )
+            self.validator_axon.serve_axon()
+            self.validator_axon.start_axon_server()
+            
+            self.p2p_collector = P2PCollector(
+                dendrite=self.dendrite,
+                metagraph=self.metagraph,
+                wallet=self.wallet,
+                config=self.config
+            )
+            
+    
     async def concurrent_forward(self):
-
         coroutines = []
         if self.config.filesystem_evaluation:
             coroutines.append(self.filesystem_test_evaluation())
         else:
             coroutines.append(self.monitor_datasets())
-    
+        if not self.config.neuron.axon_off and self.p2p_collector:
+            coroutines.append(self.test_p2p_communication())
         await asyncio.gather(*coroutines)
 
-
+    async def test_p2p_communication(self):
+        """Test P2P communication with peer validators."""
+        if self.last_p2p_test is None or time.time() - self.last_p2p_test > 120:  # 2 minutes
+            if not self.config.neuron.axon_off and self.p2p_collector:
+                await self.p2p_collector.test_connection()
+            self.last_p2p_test = time.time()
 
     async def refresh_miners(self):
         """Downloads miner's models from the chain and stores them in the DB."""
@@ -208,6 +246,45 @@ class Validator(BaseValidatorNeuron):
         winning_hotkey = None
         try:
             winning_hotkey, _ = await competition_manager.evaluate()
+            # === P2P: Store and collect results ===
+            if self.validator_axon and competition_manager.results:
+                try: 
+                    evaluation_results = {
+                        hotkey: result.score 
+                        for hotkey, result in competition_manager.results
+                    }
+
+                    dataset_hash = ""
+                    try:
+                        dataset_path = competition_manager.dataset_manager.local_compressed_path
+                        if dataset_path and os.path.exists(dataset_path):
+                            with open(dataset_path, 'rb') as f:
+                                dataset_hash = hashlib.sha256(f.read()).hexdigest()
+                    except Exception as e:
+                        bt.logging.warning(f"Could not compute dataset hash: {e}")
+
+                    self.validator_axon.store_results(
+                        competition_id=competition_id,
+                        results=evaluation_results,
+                        dataset_hash=dataset_hash,
+                        model_count=len(evaluation_results)
+                    )
+
+                    if getattr(self.config, 'enable_p2p_collection', False) and self.p2p_collector:
+                        cycle_id = f"{competition_id}-{int(time.time())}"
+                        peer_results = await self.p2p_collector.collect_results(
+                            competition_id=competition_id,
+                            cycle_id=cycle_id
+                        )
+
+                        if peer_results:
+                            aggregated_results = ResultAggregator.aggregate_scores(
+                                evaluation_results,
+                                peer_results
+                            )
+                            bt.logging.info(f"Aggregated scores from {len(peer_results) + 1} validators")
+                except Exception as p2p_error:
+                    bt.logging.warning(f"P2P collection failed (non-critical): {p2p_error}")
         except Exception:
             stack_trace = traceback.format_exc()
             log.error(f"Cannot run {competition_id}: {stack_trace}")
