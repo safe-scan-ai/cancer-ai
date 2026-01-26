@@ -34,7 +34,7 @@ import numpy as np
 import wandb
 
 from cancer_ai.chain_models_store import ChainModelMetadata
-from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION
+from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION,BEYOND_TOP_10_TOTAL_SCORE
 from cancer_ai.base.base_validator import BaseValidatorNeuron
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
@@ -404,7 +404,7 @@ class Validator(BaseValidatorNeuron):
             remaining_hotkeys = sorted_hotkeys[10:]
             k = len(remaining_hotkeys)
             if k > 0:
-                total_score = 0.005
+                total_score = BEYOND_TOP_10_TOTAL_SCORE
                 if k > 1:
                     # Formula: score_i = S * (k - i + 1) / (k * (k + 1) / 2)
                     # where S = total_score, k = number of miners, i = rank (1 to k)
@@ -415,7 +415,7 @@ class Validator(BaseValidatorNeuron):
                         for i in range(1, k + 1)
                     ]
                 else:
-                    # Single miner gets all 0.005
+                    # Single miner gets all total_score
                     minimal_values = [total_score]
 
                 # Apply scores (not scaled by weight, will be normalized later)

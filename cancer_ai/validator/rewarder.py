@@ -14,6 +14,8 @@ HISTORY_LENGTH = 10
 # how many results should we use for calculating average score
 MOVING_AVERAGE_LENGTH = 5
 
+# Total score allocation for miners ranked +11
+BEYOND_TOP_10_TOTAL_SCORE = 0.005
 
 SCORE_DISTRIBUTION = {
     1: 0.50,   # 50%
