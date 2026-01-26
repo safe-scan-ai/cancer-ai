@@ -23,7 +23,12 @@ from cancer_ai.validator.competition_manager import COMPETITION_HANDLER_MAPPING
 from cancer_ai.base.base_miner import BaseNeuron
 from cancer_ai.chain_models_store import ChainMinerModel, ChainModelMetadata
 from cancer_ai.utils.config import path_config, add_miner_args
-from cancer_ai.validator.utils import get_newest_competition_packages
+from cancer_ai.validator.utils import (
+    get_newest_competition_packages,
+    chain_miner_to_model_info,
+)
+from cancer_ai.validator.model_manager import ModelManager
+from cancer_ai.validator.model_db import ModelDBController
 
 
 LICENSE_NOTICE = """
@@ -35,6 +40,8 @@ which allows open use, modification, and distribution with attribution.
 
 📤 Make sure your HuggingFace repository has license set to MIT.
 """
+
+
 class MinerManagerCLI:
     def __init__(self, config=None):
 
@@ -99,13 +106,107 @@ class MinerManagerCLI:
             return False
         return True
 
-    async def evaluate_model(self) -> None:
-        bt.logging.info("Evaluate model mode")
+    async def evaluate_model(self, is_self_check: bool = False) -> None:
+        """Unified evaluation function for both local and self-check modes.
 
-        run_manager = ModelRunManager(
-            config=self.config, model=ModelInfo(file_path=self.config.model_path)
-        )
+        Args:
+            is_self_check: If True, downloads model from chain first. If False, uses local model.
+        """
+        if is_self_check:
+            bt.logging.info(
+                "Self-check mode: downloading and evaluating model from chain"
+            )
 
+            if not self.config.hotkey:
+                bt.logging.error("--hotkey argument is required for self-check mode")
+                return
+
+            if not self.config.competition_id:
+                bt.logging.error(
+                    "--competition_id argument is required for self-check mode"
+                )
+                return
+
+            # Initialize chain connection
+            self.wallet = bt.wallet(config=self.config)
+            self.subtensor = bt.subtensor(config=self.config)
+            self.metagraph = self.subtensor.metagraph(self.config.netuid)
+
+            bt.logging.info(f"Checking model for hotkey: {self.config.hotkey}")
+            bt.logging.info(f"Competition ID: {self.config.competition_id}")
+
+            # Initialize metadata store and DB controller
+            self.metadata_store = ChainModelMetadata(
+                subtensor=self.subtensor, netuid=self.config.netuid
+            )
+
+            # Set default db_path for self-check mode
+            if not hasattr(self.config, "db_path") or self.config.db_path is None:
+                self.config.db_path = "/tmp/miner_self_check.db"
+
+            db_controller = ModelDBController(
+                subtensor=self.subtensor, config=self.config
+            )
+
+            # Get UID for the hotkey
+            try:
+                uid = self.metagraph.hotkeys.index(self.config.hotkey)
+                bt.logging.info(f"✅ Found UID {uid} for hotkey {self.config.hotkey}")
+            except ValueError:
+                bt.logging.error(f"Hotkey {self.config.hotkey} not found in metagraph")
+                return
+
+            # Retrieve model metadata from chain
+            try:
+                chain_model = await self.metadata_store.retrieve_model_metadata(
+                    self.config.hotkey, uid
+                )
+                bt.logging.info(
+                    f"✅ Retrieved model metadata: {chain_model.to_compressed_str()}"
+                )
+            except Exception as e:
+                bt.logging.error(f"Failed to retrieve model metadata from chain: {e}")
+                return
+
+            # Check if model belongs to the specified competition
+            if chain_model.competition_id != self.config.competition_id:
+                bt.logging.error(
+                    f"Model competition_id '{chain_model.competition_id}' does not match "
+                    f"requested competition_id '{self.config.competition_id}'"
+                )
+                return
+
+            # Convert chain model to ModelInfo
+            model_info = chain_miner_to_model_info(chain_model)
+            bt.logging.info(
+                f"✅ Model info: {model_info.hf_repo_id}/{model_info.hf_model_filename}"
+            )
+
+            # Initialize model manager for downloading
+            model_manager = ModelManager(
+                config=self.config,
+                db_controller=db_controller,
+                subtensor=self.subtensor,
+            )
+            model_manager.hotkey_store[self.config.hotkey] = model_info
+
+            # Download model
+            bt.logging.info("Downloading model from HuggingFace...")
+            success, error = await model_manager.download_miner_model(
+                self.config.hotkey, token=self.config.hf_token
+            )
+            if not success:
+                bt.logging.error(f"Failed to download model: {error}")
+                return
+
+            bt.logging.info(
+                f"✅ Model downloaded successfully to: {model_info.file_path}"
+            )
+        else:
+            bt.logging.info("Local evaluation mode")
+            model_info = ModelInfo(file_path=self.config.model_path)
+
+        # Common evaluation logic for both modes
         try:
             dataset_packages = await get_newest_competition_packages(self.config)
         except Exception as e:
@@ -113,39 +214,81 @@ class MinerManagerCLI:
             return
 
         for package in dataset_packages:
+            bt.logging.info(
+                f"Evaluating with dataset: {package['dataset_hf_filename']}"
+            )
+
             dataset_manager = DatasetManager(
                 self.config,
                 self.config.competition_id,
                 package["dataset_hf_repo"],
                 package["dataset_hf_filename"],
                 package["dataset_hf_repo_type"],
-                use_auth=False
+                use_auth=False,
             )
             await dataset_manager.prepare_dataset()
 
             X_test, y_test, metadata = await dataset_manager.get_data()
 
-            competition_handler = COMPETITION_HANDLER_MAPPING[self.config.competition_id](
-                X_test=X_test, y_test=y_test, metadata=metadata, config=self.config
-            )
+            # Initialize competition handler
+            if self.config.competition_id in ["tricorder-3", "tricorder-2"]:
+                competition_handler = COMPETITION_HANDLER_MAPPING[
+                    self.config.competition_id
+                ](X_test=X_test, y_test=y_test, metadata=metadata, config=self.config)
+            else:
+                competition_handler = COMPETITION_HANDLER_MAPPING[
+                    self.config.competition_id
+                ](X_test=X_test, y_test=y_test, config=self.config)
 
             # Set preprocessing directory and preprocess data once
-            competition_handler.set_preprocessed_data_dir(self.config.models.dataset_dir)
+            competition_handler.set_preprocessed_data_dir(
+                self.config.models.dataset_dir
+            )
             await competition_handler.preprocess_and_serialize_data(X_test)
 
             y_test = competition_handler.prepare_y_pred(y_test)
 
             start_time = time.time()
-            # Pass the preprocessed data generator instead of raw paths
-            preprocessed_data_gen = competition_handler.get_preprocessed_data_generator()
+            run_manager = ModelRunManager(config=self.config, model=model_info)
+            preprocessed_data_gen = (
+                competition_handler.get_preprocessed_data_generator()
+            )
             y_pred = await run_manager.run(preprocessed_data_gen)
             run_time_s = time.time() - start_time
 
-            # print(y_pred)
-            model_result = competition_handler.get_model_result(y_test, y_pred, run_time_s)
-            bt.logging.info(
-                f"Evalutaion results:\n{model_result.model_dump_json(indent=4)}"
+            # Get model size for efficiency score
+            model_size_mb = (
+                model_info.model_size_mb
+                if hasattr(model_info, "model_size_mb") and model_info.model_size_mb
+                else None
             )
+            if (
+                model_size_mb is None
+                and model_info.file_path
+                and os.path.exists(model_info.file_path)
+            ):
+                model_size_bytes = os.path.getsize(model_info.file_path)
+                model_size_mb = model_size_bytes / (1024 * 1024)
+
+            model_result = competition_handler.get_model_result(
+                y_test, y_pred, run_time_s, model_size_mb
+            )
+
+            if is_self_check:
+                bt.logging.success("SELF-CHECK EVALUATION RESULTS")
+                bt.logging.info(f"Hotkey: {self.config.hotkey}")
+                bt.logging.info(f"Competition: {self.config.competition_id}")
+                bt.logging.info(
+                    f"Model: {model_info.hf_repo_id}/{model_info.hf_model_filename}"
+                )
+                if model_size_mb:
+                    bt.logging.info(f"Model Size: {model_size_mb:.2f} MB")
+                bt.logging.success(f"\n{model_result.model_dump_json(indent=4)}")
+                bt.logging.success("=" * 60)
+            else:
+                bt.logging.info(
+                    f"✅ Evaluation results:\n{model_result.model_dump_json(indent=4)}"
+                )
 
             # Cleanup preprocessed data
             competition_handler.cleanup_preprocessed_data()
@@ -178,7 +321,7 @@ class MinerManagerCLI:
                 repo_type="model",
             )
             sha256 = hashlib.sha256()
-            with open(model_path, 'rb') as f:
+            with open(model_path, "rb") as f:
                 while chunk := f.read(8192):
                     sha256.update(chunk)
             full_hash = sha256.hexdigest()  # SHA-256 gives 64 chars
@@ -214,26 +357,37 @@ class MinerManagerCLI:
             subtensor=self.subtensor, netuid=self.config.netuid, wallet=self.wallet
         )
 
-        if len(self.config.hf_repo_id.encode('utf-8')) > 32:
+        if len(self.config.hf_repo_id.encode("utf-8")) > 32:
             bt.logging.error("hf_repo_id must be 32 bytes or less")
             return
 
-        if len(self.config.hf_model_name.encode('utf-8')) > 32:
+        if len(self.config.hf_model_name.encode("utf-8")) > 32:
             bt.logging.error("hf_model_filename must be 32 bytes or less")
             return
 
-        if len(self.config.hf_code_filename.encode('utf-8')) > 31:
+        if len(self.config.hf_code_filename.encode("utf-8")) > 31:
             bt.logging.error("hf_code_filename must be 31 bytes or less")
             return
 
-        if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_model_name, self.config.hf_repo_type):
+        if not self._check_hf_file_exists(
+            self.config.hf_repo_id, self.config.hf_model_name, self.config.hf_repo_type
+        ):
             return
 
-        if not self._check_hf_file_exists(self.config.hf_repo_id, self.config.hf_code_filename, self.config.hf_repo_type):
+        if not self._check_hf_file_exists(
+            self.config.hf_repo_id,
+            self.config.hf_code_filename,
+            self.config.hf_repo_type,
+        ):
             return
 
-        if Path(self.config.hf_code_filename).stem != Path(self.config.hf_model_name).stem:
-            bt.logging.error("hf_model_filename and hf_code_filename must have the same name")
+        if (
+            Path(self.config.hf_code_filename).stem
+            != Path(self.config.hf_model_name).stem
+        ):
+            bt.logging.error(
+                "hf_model_filename and hf_code_filename must have the same name"
+            )
             return
 
         model_hash = self._compute_model_hash(
@@ -260,7 +414,9 @@ class MinerManagerCLI:
         )
 
     def _check_hf_file_exists(self, repo_id, filename, repo_type):
-        if not huggingface_hub.file_exists(repo_id=repo_id, filename=filename, repo_type=repo_type):
+        if not huggingface_hub.file_exists(
+            repo_id=repo_id, filename=filename, repo_type=repo_type
+        ):
             bt.logging.error(f"{filename} not found in Hugging Face repo")
             return False
         return True
@@ -268,23 +424,35 @@ class MinerManagerCLI:
     async def main(self) -> None:
 
         # bt.logging(config=self.config)
-        if self.config.action != "submit" and not self.config.model_path:
-            bt.logging.error("Missing --model_path argument")
-            return
-        if self.config.action != "submit" and not MinerManagerCLI.is_onnx_model(
-            self.config.model_path
-        ):
-            bt.logging.error("Provided model with is not in ONNX format")
-            return
+
+        # Validate action-specific requirements
+        if self.config.action == "self-check":
+            if not self.config.hotkey:
+                bt.logging.error("--hotkey argument is required for self-check action")
+                return
+            if not self.config.competition_id:
+                bt.logging.error(
+                    "--competition_id argument is required for self-check action"
+                )
+                return
+        elif self.config.action != "submit":
+            if not self.config.model_path:
+                bt.logging.error("Missing --model_path argument")
+                return
+            if not MinerManagerCLI.is_onnx_model(self.config.model_path):
+                bt.logging.error("Provided model is not in ONNX format")
+                return
 
         match self.config.action:
             case "submit":
                 await self.submit_model()
             case "evaluate":
-                await self.evaluate_model()
+                await self.evaluate_model(is_self_check=False)
             case "upload":
                 await self.compress_code()
                 await self.upload_to_hf()
+            case "self-check":
+                await self.evaluate_model(is_self_check=True)
             case _:
                 bt.logging.error(f"Unrecognized action: {self.config.action}")
 

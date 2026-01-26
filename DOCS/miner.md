@@ -1,22 +1,37 @@
-# Miner Script Documentation
+# Miner Documentation
 
-This documentation provides an overview of the miner script, its functionality, requirements, and usage instructions.
+Complete guide for miners participating in the CancerAI subnet (netuid 76).
 
 ## Overview
 
-The miner script is designed to manage models, evaluate them locally, and upload them to HuggingFace, as well as submit models to validators within a specified network.
+The miner script enables you to:
 
-Key features of the script include:
+- **Evaluate models locally** - Test your model against competition datasets
+- **Self-check submitted models** - Verify your model using validator code
+- **Upload to HuggingFace** - Publish your model and code
+- **Submit to validators** - Register your model on-chain for evaluation
 
-- **Local Model Evaluation**: Allows you to evaluate models against a dataset locally.
-- **HuggingFace Upload**: Compresses and uploads models and code to HuggingFace.
-- **Model Submission to Validators**: Saves model information in the metagraph, enabling validators to test the models.
+## Table of Contents
+
+1. [Prerequisites](#prerequisites)
+2. [Installation](#installation)
+3. [Registration](#registration)
+4. [Usage](#usage)
+   - [Local Evaluation](#local-evaluation)
+   - [Self-Check](#self-check)
+   - [Upload to HuggingFace](#upload-to-huggingface)
+   - [Submit to Validators](#submit-to-validators)
+5. [Notes](#notes)
 
 ## Prerequisites
 
-- **Python 3.12**: The script is written in Python and requires Python 3.12 to run.
-- **Virtual Environment**: It's recommended to run the script within a virtual environment to manage dependencies.
-- **8GB RAM**: minimum required operating memory for testing (evaluate) machine learning model locally
+Before you begin, ensure you have:
+
+- **Python 3.12** or higher
+- **8GB RAM** minimum (for local model evaluation)
+- **Virtual Environment** (recommended)
+- **Bittensor Wallet** with registered hotkey on netuid 76
+- **HuggingFace Account** (for model uploads)
 
 ## Installation
 
@@ -42,147 +57,306 @@ Key features of the script include:
     pip install -r requirements.txt
     ```
 
-## Registering miner on the subnet
+## Registration
 
-If you haven't yet created a miner wallet and registered on our subnet here is the set of commands to run:
+If you haven't registered on the CancerAI subnet yet, follow these steps:
 
-Create a miner coldkey:
+### 1. Create Wallet
 
-```
+```bash
+# Create coldkey
 btcli wallet new_coldkey --wallet.name miner
-```
 
-Create a hotkey for the miner:
-```
+# Create hotkey
 btcli wallet new_hotkey --wallet.name miner --wallet.hotkey default
 ```
 
-Register miner on the CancerAI subnet:
-```
-btcli subnet register --netuid 76 --subtensor.network finney --wallet.name miner --wallet.hotkey default
+### 2. Register on Subnet
+
+```bash
+btcli subnet register \
+    --netuid 76 \
+    --subtensor.network finney \
+    --wallet.name miner \
+    --wallet.hotkey default
 ```
 
-Check that your key was registered:
+### 3. Verify Registration
+
+```bash
+btcli wallet overview --wallet.name miner
 ```
-btcli wallet overview --wallet.name miner 
-```
+
+> **📚 Additional Resources**: Detailed registration instructions available at [Bittensor Docs](https://docs.learnbittensor.org/miners)
 
 ## Usage
 
-### Prerequisites
+### Setup Environment
 
-Before running the script, ensure the following:
+Before running any commands:
 
-- You are in the base directory of the project.
-- Your virtual environment is activated.
-- Run the following command to set the `PYTHONPATH`:
+```bash
+# Navigate to project directory
+cd cancer-ai-subnet
 
-```
+# Activate virtual environment
+source venv/bin/activate
+
+# Set PYTHONPATH
 export PYTHONPATH="${PYTHONPATH}:./"
 ```
 
-### Evaluate Model Locally
+---
 
-This mode performs the following tasks:
+### Local Evaluation
 
-- Downloads the dataset.
-- Loads your model.
-- Prepares data for execution.
-- Logs evaluation results.
+Test your ONNX model locally against competition datasets before submitting.
 
-To evaluate a model locally, use the following command:
+**What it does:**
+- Downloads the latest competition dataset
+- Runs your model through the evaluation pipeline
+- Calculates all metrics including efficiency score
+- Displays results in JSON format
 
+**Command:**
+
+```bash
+python neurons/miner.py \
+    --action evaluate \
+    --competition_id <COMPETITION_ID> \
+    --model_path <PATH_TO_MODEL.onnx>
 ```
-python neurons/miner.py --action evaluate --competition_id <COMPETITION ID> --model_path <NAME OF FILE WITH EXTENSION>
+
+**Arguments:**
+
+| Argument | Description | Required | Default |
+|----------|-------------|----------|----------|
+| `--action` | Action to perform | Yes | - |
+| `--model_path` | Path to ONNX model file | Yes | - |
+| `--competition_id` | Competition identifier | Yes | - |
+| `--clean-after-run` | Delete dataset after evaluation | No | false |
+| `--dataset_dir` | Directory for datasets | No | `./datasets` |
+| `--datasets_config_hf_repo_id` | HF repo for dataset config | No | `safescanai/competition-configuration` |
+
+**Example:**
+
+```bash
+python neurons/miner.py \
+    --action evaluate \
+    --competition_id tricorder-3 \
+    --model_path ./models/my_model.onnx \
+    --clean-after-run
 ```
 
-Command line argument explanation
+---
 
-- `--action` - action to perform, choices are "upload", "evaluate", "submit"
-- `--model_path` - local path of ONNX model
-- `--competition_id` - ID of competition. List of current competitions are in [competition_config.json](config/competition_config.json)
-- `--clean-after-run` - it will delete dataset after evaluating the model
-- `--model_dir` - path for storing models (default: "./models")
-- `--dataset_dir` - path for storing datasets (default: "./datasets")
-- `--datasets_config_hf_repo_id` - hugging face repository ID for datasets configuration - ex. "safescanai/competition-configuration-testnet" in case of testnet
+### Self-Check
+
+Verify your submitted model by downloading it from the blockchain and evaluating it using the exact same code validators use.
+
+**What it does:**
+1. Retrieves your model metadata from the blockchain
+2. Downloads your model from HuggingFace
+3. Downloads the latest competition dataset
+4. Evaluates using validator evaluation code
+5. Displays comprehensive results:
+   - All accuracy metrics (precision, recall, F1, etc.)
+   - Efficiency score based on model size
+   - Final competition score
+   - Risk category breakdown (for Tricorder competitions)
+
+**Command:**
+
+```bash
+python neurons/miner.py \
+    --action self-check \
+    --hotkey <YOUR_HOTKEY_SS58_ADDRESS> \
+    --competition_id <COMPETITION_ID> \
+    --subtensor.network finney
+```
+
+**Arguments:**
+
+| Argument | Description | Required | Default |
+|----------|-------------|----------|----------|
+| `--action` | Must be `self-check` | Yes | - |
+| `--hotkey` | Your miner's hotkey SS58 address | Yes | - |
+| `--competition_id` | Competition identifier | Yes | - |
+| `--subtensor.network` | Network (finney/test) | Yes | - |
+| `--clean-after-run` | Delete dataset after evaluation | No | false |
+| `--models.model_dir` | Directory for downloaded models | No | `/tmp/models` |
+| `--models.dataset_dir` | Directory for datasets | No | `/tmp/datasets-extracted` |
+
+**Example:**
+
+```bash
+python neurons/miner.py \
+    --action self-check \
+    --hotkey <YOUR_HOTKEY_SS58_ADDRESS> \
+    --competition_id tricorder-3 \
+    --subtensor.network finney
+```
+
+> **💡 Tip**: Use self-check before validators evaluate to catch issues early!
+
+---
+
 
 ### Upload to HuggingFace
 
-This mode compresses the code provided by `--code-path` and uploads the model and code to HuggingFace.
-Repository ID should be a repository type "model".
+Compress and upload your model and code to HuggingFace.
 
-The repository needs to be public for validator to pick it up.
+**Requirements:**
+- Repository must be type `model`
+- Repository must be **public** (validators cannot access private repos)
+- You need a HuggingFace API token with write permissions
 
-To upload to HuggingFace, use the following command:
+**Command:**
 
 ```bash
 python neurons/miner.py \
     --action upload \
-    --competition_id <COMPETITION ID> \
-    --model_path <NAME OF FILE WITH EXTENSION> \
-    --code_directory <CODE DIRECTORY WITHOUT DATASETS> \
-    --hf_model_name <MODEL NAME WITH EXTENSION> \
-    --hf_repo_id <HF REPO ID> \
-    --hf_token <HF API TOKEN>
+    --competition_id <COMPETITION_ID> \
+    --model_path <PATH_TO_MODEL.onnx> \
+    --code_directory <CODE_DIRECTORY> \
+    --hf_model_name <MODEL_FILENAME.onnx> \
+    --hf_repo_id <USERNAME/REPO_NAME> \
+    --hf_token <YOUR_HF_TOKEN>
 ```
 
-Command line argument explanation
+**Arguments:**
 
-- `--code_directory` - local directory of code
-- `--hf_repo_id` - hugging face repository ID - ex. "username/repo"
-- `--hf_token` - hugging face authentication token
-- `--hf_model_name` - name of file to store in hugging face repository
+| Argument | Description | Required |
+|----------|-------------|----------|
+| `--action` | Must be `upload` | Yes |
+| `--competition_id` | Competition identifier | Yes |
+| `--model_path` | Local path to ONNX model | Yes |
+| `--code_directory` | Directory containing your code (exclude datasets) | Yes |
+| `--hf_model_name` | Filename for model in HF repo | Yes |
+| `--hf_repo_id` | HuggingFace repo (username/repo) | Yes |
+| `--hf_token` | HuggingFace API token | Yes |
 
-### Submit Model to Validators
+**Example:**
 
-This mode saves model information in the metagraph, allowing validators to retrieve information about your model for testing.
+```bash
+python neurons/miner.py \
+    --action upload \
+    --competition_id tricorder-3 \
+    --model_path ./models/my_model.onnx \
+    --code_directory ./my_code \
+    --hf_model_name my_model.onnx \
+    --hf_repo_id myusername/cancer-ai-model \
+    --hf_token hf_xxxxxxxxxxxxx
+```
 
-The repository you are submitting needs to be public for validator to pick it up.
+---
 
-To submit a model to validators, use the following command:
+### Submit to Validators
+
+Register your model on-chain so validators can evaluate it.
+
+**Requirements:**
+- Model must already be uploaded to HuggingFace
+- Repository must be **public**
+- Code and model filenames must share the same base name
+
+**Command:**
 
 ```bash
 python neurons/miner.py \
     --action submit \
-    --competition_id <COMPETITION ID>\
-    --hf_code_filename <HF MODEL CODE FILE NAME>\
-    --hf_model_name <HF MODEL FILE NAME>\
-    --hf_repo_id <HF REPO ID> \
-    --wallet.name <WALLET NAME> \
-    --wallet.hotkey <HOTKEY NAME> \
+    --competition_id <COMPETITION_ID> \
+    --hf_code_filename <CODE.zip> \
+    --hf_model_name <MODEL.onnx> \
+    --hf_repo_id <USERNAME/REPO_NAME> \
+    --wallet.name <WALLET_NAME> \
+    --wallet.hotkey <HOTKEY_NAME> \
     --netuid 76 \
     --subtensor.network finney
 ```
 
-Command line argument explanation
+**Arguments:**
 
-- `--hf_code_filename` - name of file in hugging face repository containing zipped code
-- `--hf_model_name` - name of file in hugging face repository containing model
-- `--wallet.name` - name of wallet coldkey used for authentication with Bittensor network
-- `--wallet.hotkey` - name of wallet hotkey used for authentication with Bittensor network
-- `--netuid` - subnet number
-- `--subtensor.network` - Bittensor network to connect to - <test|finney>
+| Argument | Description | Required | Default |
+|----------|-------------|----------|----------|
+| `--action` | Must be `submit` | Yes | - |
+| `--competition_id` | Competition identifier | Yes | - |
+| `--hf_code_filename` | Zipped code filename in HF repo | Yes | - |
+| `--hf_model_name` | Model filename in HF repo | Yes | - |
+| `--hf_repo_id` | HuggingFace repo (username/repo) | Yes | - |
+| `--wallet.name` | Coldkey name | Yes | - |
+| `--wallet.hotkey` | Hotkey name | Yes | - |
+| `--netuid` | Subnet ID | No | 76 |
+| `--subtensor.network` | Network (finney/test) | Yes | - |
 
-**Important**: The `--hf_code_filename` and `--hf_model_name` must have the same base name (without extension). For example: `--hf_model_name model.onnx --hf_code_filename model.zip`
+**Example:**
 
-#### Post Submit activities
-Submitting models to validators is executing blockchain extrinsic which must be documented in the miners HF repo for a reference to prevent model copiers from stealing miners model.
-After submitting the model miner must create file named 'extrinsic_record.json' in the miners HF model repo with the following content:
-
+```bash
+python neurons/miner.py \
+    --action submit \
+    --competition_id tricorder-3 \
+    --hf_code_filename my_model.zip \
+    --hf_model_name my_model.onnx \
+    --hf_repo_id myusername/cancer-ai-model \
+    --wallet.name miner \
+    --wallet.hotkey default \
+    --netuid 76 \
+    --subtensor.network finney
 ```
+
+> **⚠️ Important**: Code and model filenames must have matching base names (e.g., `model.onnx` and `model.zip`)
+
+#### Post-Submission: Document Your Extrinsic
+
+To prevent model copying, you **must** create an `extrinsic_record.json` file in your HuggingFace repo:
+
+**1. Create the file:**
+
+```json
 {
-    "hotkey": <hotkey used for submission>
-    "extrinsic": <extrinsic id of the submission>
+    "hotkey": "<YOUR_HOTKEY_SS58_ADDRESS>",
+    "extrinsic": "<EXTRINSIC_ID>"
 }
 ```
 
-The extrinsic id can be found via any Bittensor block explorer. It can be done using Taostats. Example:
-1. https://taostats.io/accounts
-2. Search for participant account by the hotkey SS58 address
-3. Enter the account dashboard, search for 'Extrinsics'
-4. In 'Extrinsics' look for the 'Commitments.set_commitment' extrinsic. Copy the corresponding Extrinsic ID into the 'extrinsic_record.json'.
+**2. Find your extrinsic ID:**
+
+1. Go to [Taostats Accounts](https://taostats.io/accounts)
+2. Search for your hotkey SS58 address
+3. Navigate to account dashboard → **Extrinsics**
+4. Find the `Commitments.set_commitment` extrinsic
+5. Copy the **Extrinsic ID**
+
+**3. Upload to HuggingFace:**
+
+Add `extrinsic_record.json` to the root of your model repository.
+
+---
 
 ## Notes
 
-- **Environment**: The script uses the environment from which it is executed, so ensure all necessary environment variables and dependencies are correctly configured.
-- **Model Evaluation**: The `evaluate` action downloads necessary datasets and runs the model locally; ensure that your local environment has sufficient resources.
+### Model Requirements
+- Models must be in **ONNX format**
+- Model size affects efficiency score:
+  - ≤50MB: Full efficiency score (1.0)
+  - 50-150MB: Linear interpolation
+  - ≥150MB: Zero efficiency score (0.0)
+
+### Network Configuration
+- **Mainnet**: `--subtensor.network finney --netuid 76`
+- **Testnet**: `--subtensor.network test --netuid <testnet_id>`
+
+### Resource Requirements
+- Minimum 8GB RAM for local evaluation
+- Sufficient disk space for datasets (~1-5GB per competition)
+
+### Troubleshooting
+- Ensure `PYTHONPATH` is set before running commands
+- Verify virtual environment is activated
+- Check that HuggingFace repositories are public
+- Confirm wallet is registered on the subnet
+
+### Getting Help
+- [CancerAI Documentation](https://github.com/safe-scan-ai/cancer-ai/tree/main/DOCS)
+- [Bittensor Discord](https://discord.gg/bittensor)
+- [Competition Details](./COMPETITIONS.md)
