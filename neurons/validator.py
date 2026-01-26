@@ -357,7 +357,29 @@ class Validator(BaseValidatorNeuron):
         
         # Save state only after successful competition evaluation
         self.save_state()
-
+        # Sync state from reference validator if vtrust is low
+        self.sync_state_from_wandb()
+        
+    def sync_state_from_wandb(self):
+        """Sync state from reference validator after competition if vtrust is low."""
+        source_hotkey = self.config.sync_state_from_hotkey
+        if not source_hotkey:
+            return
+        
+        # Don't sync from ourselves
+        if source_hotkey == self.wallet.hotkey.ss58_address:
+            return
+            
+        my_vtrust = self.metagraph.validator_trust[self.uid]
+        threshold = self.config.sync_state_vtrust_threshold
+        
+        if my_vtrust < threshold:
+            log.info(f"Low vtrust ({my_vtrust:.3f} < {threshold}), syncing state from {source_hotkey}")
+            from cancer_ai.utils.wandb_local import pull_state_from_wandb
+            if pull_state_from_wandb(source_hotkey, self.config):
+                self.load_state()  # Reload the synced state
+        else:
+            log.debug(f"vtrust ({my_vtrust:.3f}) above threshold, keeping local state")
     
     def update_scores(
         self,
