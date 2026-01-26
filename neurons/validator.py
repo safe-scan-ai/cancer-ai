@@ -34,7 +34,7 @@ import numpy as np
 import wandb
 
 from cancer_ai.chain_models_store import ChainModelMetadata
-from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION
+from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION,BEYOND_TOP_10_TOTAL_SCORE
 from cancer_ai.base.base_validator import BaseValidatorNeuron
 from cancer_ai.validator.cancer_ai_logo import cancer_ai_logo
 from cancer_ai.validator.utils import (
@@ -341,7 +341,7 @@ class Validator(BaseValidatorNeuron):
         competition_weights = await self.competition_results_store.update_competition_results(
             competition_id, competition_manager.results, self.config, self.metagraph.hotkeys, self.hf_api, self.db_controller
         )
-        self.update_scores(competition_weights, 0.0001, 0.0002)
+        self.update_scores(competition_weights)
 
         average_winning_hotkey = self.competition_results_store.get_top_hotkey(competition_id)
         
@@ -362,8 +362,6 @@ class Validator(BaseValidatorNeuron):
     def update_scores(
         self,
         competition_weights: dict[str, float],
-        min_min_score: float,
-        max_min_score: float
     ):
         """
         Distribute rewards to top 10 miners according to SCORE_DISTRIBUTION.
@@ -406,21 +404,21 @@ class Validator(BaseValidatorNeuron):
             remaining_hotkeys = sorted_hotkeys[10:]
             k = len(remaining_hotkeys)
             if k > 0:
-                # compute the minimal-value sequence:
-                # index 0 (highest score) → max_min_score,
-                # index k-1 (lowest) → min_min_score
+                total_score = BEYOND_TOP_10_TOTAL_SCORE
                 if k > 1:
-                    span = max_min_score - min_min_score
-                    step = span / (k - 1)
+                    # Formula: score_i = S * (k - i + 1) / (k * (k + 1) / 2)
+                    # where S = total_score, k = number of miners, i = rank (1 to k)
+                    # Denominator: sum of arithmetic series 1+2+...+k = k*(k+1)/2
+                    denominator = k * (k + 1) / 2
                     minimal_values = [
-                        max_min_score - i * step
-                        for i in range(k)
+                        total_score * (k - i + 1) / denominator
+                        for i in range(1, k + 1)
                     ]
                 else:
-                    # single runner-up gets the top of the band
-                    minimal_values = [max_min_score]
+                    # Single miner gets all total_score
+                    minimal_values = [total_score]
 
-                # apply those concrete minimal values (not scaled by weight)
+                # Apply scores (not scaled by weight, will be normalized later)
                 for minimal, hotkey in zip(minimal_values, remaining_hotkeys):
                     if hotkey in self.metagraph.hotkeys:
                         idx = self.metagraph.hotkeys.index(hotkey)
