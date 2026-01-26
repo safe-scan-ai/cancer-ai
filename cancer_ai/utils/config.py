@@ -72,7 +72,7 @@ def add_args(cls, parser):
     Adds relevant arguments to the parser for operation.
     """
 
-    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
+    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=76)
 
     parser.add_argument(
         "--neuron.device",
@@ -196,7 +196,14 @@ def add_miner_args(cls, parser):
 
     parser.add_argument(
         "--action",
-        choices=["submit", "evaluate", "upload"],
+        choices=["submit", "evaluate", "upload", "self-check"],
+    )
+
+    parser.add_argument(
+        "--hotkey",
+        type=str,
+        help="Hotkey to check model for (used with --action self-check)",
+        default=None,
     )
 
     parser.add_argument(
@@ -268,6 +275,19 @@ def add_common_args(cls, parser):
         default="./config/competition_config.json",
     )
 
+    parser.add_argument(
+        "--archive_node_url",
+        type=str,
+        help="The URL of the archive node to use",
+        default="wss://archive.chain.opentensor.ai:443",
+    )
+    parser.add_argument(
+        "--archive_node_fallback_url",
+        type=str,
+        help="The fallback URL of the archive node to use",
+        default=None,
+    )
+
 
 def add_validator_args(cls, parser):
     """Add validator specific arguments to the parser."""
@@ -336,19 +356,6 @@ def add_validator_args(cls, parser):
         type=str,
         help="Path to the sqlite DB for storing the miners models reference",
         default="models.db"
-    )
-
-    parser.add_argument(
-        "--archive_node_url",
-        type=str,
-        help="The URL of the archive node to use",
-        default="wss://archive.chain.opentensor.ai:443",
-    )
-    parser.add_argument(
-        "--archive_node_fallback_url",
-        type=str,
-        help="The fallback URL of the archive node to use",
-        default=None,
     )
 
     parser.add_argument(
