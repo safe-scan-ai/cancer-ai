@@ -101,9 +101,10 @@ class Validator(BaseValidatorNeuron):
         # Sync from reference validator at startup if vtrust is low
         source_hotkey = self.config.sync_state_from_hotkey
         if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
-            my_vtrust = self.metagraph.validator_trust[self.uid]
-            if my_vtrust < self.config.sync_state_vtrust_threshold:
-                self.sync_state_from_wandb(at_startup=True)
+            if self.uid >= 0:  # Skip if not registered
+                my_vtrust = self.metagraph.validator_trust[self.uid]
+                if my_vtrust < self.config.sync_state_vtrust_threshold:
+                    self.sync_state_from_wandb(at_startup=True)
         
        
     
@@ -136,6 +137,8 @@ class Validator(BaseValidatorNeuron):
             coroutines.append(self.monitor_datasets())
         if not self.config.neuron.axon_off and self.p2p_collector:
             coroutines.append(self.test_p2p_communication())
+        if self.config.sync_state_from_hotkey:
+            coroutines.append(self.periodic_state_sync())
         await asyncio.gather(*coroutines)
 
     async def test_p2p_communication(self):
@@ -144,6 +147,15 @@ class Validator(BaseValidatorNeuron):
             if not self.config.neuron.axon_off and self.p2p_collector:
                 await self.p2p_collector.test_connection()
             self.last_p2p_test = time.time()
+
+    async def periodic_state_sync(self):
+        """Periodically sync state from reference validator if vtrust is low."""
+        source_hotkey = self.config.sync_state_from_hotkey
+        if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
+            if self.uid >= 0:  # Skip if not registered
+                my_vtrust = self.metagraph.validator_trust[self.uid]
+                if my_vtrust < self.config.sync_state_vtrust_threshold:
+                    self.sync_state_from_wandb()
 
     async def refresh_miners(self):
         """Downloads miner's models from the chain and stores them in the DB."""
@@ -368,18 +380,12 @@ class Validator(BaseValidatorNeuron):
         # Save state only after successful competition evaluation
         self.save_state()
         
-        # Sync state from reference validator if vtrust is low
-        source_hotkey = self.config.sync_state_from_hotkey
-        if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
-            my_vtrust = self.metagraph.validator_trust[self.uid]
-            if my_vtrust < self.config.sync_state_vtrust_threshold:
-                self.sync_state_from_wandb()
         
     def sync_state_from_wandb(self, at_startup: bool = False):
         """Sync state from reference validator after competition if vtrust is low."""
         source_hotkey = self.config.sync_state_from_hotkey
         
-        # Check 2-hour interval (skip for startup)
+
         if not at_startup and self.last_sync_time:
             hours_since_sync = (time.time() - self.last_sync_time) / 3600
             if hours_since_sync < 2:
