@@ -36,24 +36,6 @@ class MockModelManager:
         """Setup mock models using local ONNX files with competition_id filtering."""
         mock_models = [
             {
-                "hotkey": "5HNqK33tM7o3dgrqJ4o4yrwwfov",
-                "competition_id": "tricorder-2",  
-                "file_path": "mlnm314.onnx",
-                "hf_repo_id": "mock/mock1",
-                "hf_model_filename": "mlnm314.onnx",
-                "hf_code_filename": "code.py",
-                "hf_repo_type": "model"
-            },
-            {
-                "hotkey": "5HNjM7o3dgrqJ4o4yrwwf",
-                "competition_id": "tricorder-2", 
-                "file_path": "model118.onnx",
-                "hf_repo_id": "mock/model2",
-                "hf_model_filename": "model118.onnx",
-                "hf_code_filename": "code2.py",
-                "hf_repo_type": "model"
-            },
-            {
                 "hotkey": "5HNkT3stM0d3lTr1c0rd3r3",
                 "competition_id": "tricorder-3", 
                 "file_path": "sample_tricorder_3_model.onnx",
@@ -119,9 +101,6 @@ class MockModelManager:
     
     async def verify_model_hash(self, hotkey: str):
         return
-    
-    async def model_license_valid(self, hotkey: str) -> tuple[bool, str]:
-        return True, "Mock license valid"
     
     def delete_model(self, hotkey) -> None:
         if hotkey in self.hotkey_store:

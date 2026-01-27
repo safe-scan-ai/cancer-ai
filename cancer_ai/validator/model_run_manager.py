@@ -5,15 +5,11 @@ from .manager import SerializableManager
 from .model_manager import ModelInfo
 from .utils import detect_model_format, ModelType
 from .model_runners import BaseRunnerHandler
-from .model_runners.pytorch_runner import PytorchRunnerHandler
-from .model_runners.tensorflow_runner import TensorflowRunnerHandler
 from .model_runners.onnx_runner import OnnxRunnerHandler
 from .exceptions import ModelRunException
 
 
 MODEL_TYPE_HANDLERS = {
-    ModelType.PYTORCH: PytorchRunnerHandler,
-    ModelType.TENSORFLOW_SAVEDMODEL: TensorflowRunnerHandler,
     ModelType.ONNX: OnnxRunnerHandler,
 }
 

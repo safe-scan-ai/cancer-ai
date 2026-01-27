@@ -92,7 +92,7 @@ class Validator(BaseValidatorNeuron):
 
         self.validator_axon = None
         self.p2p_collector = None
-        self.last_p2p_test: float = None
+        self.last_p2p_test = None
         self.setup_communication()
         
        

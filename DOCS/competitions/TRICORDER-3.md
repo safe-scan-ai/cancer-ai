@@ -4,7 +4,7 @@
 
 The goal of the competition is to build a lightweight and effective ML model that classifies skin lesions into one of 11 predefined disease classes based on lesion images and demographic data.
 
-(Note that it's the same as [TRICORDER-2](TRICORDER-2.md), but with 11 classes aligned from ISIC-2025 competition, instead of 10.)
+(11 classes aligned from ISIC-2025 competition.)
 
 ## 📥 Input and Output Data
 

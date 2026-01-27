@@ -154,7 +154,7 @@ class OnnxRunnerHandler(BaseRunnerHandler):
                         results.append(single_result)
                     
                 else:
-                    # Melanoma format: plain numpy array (no metadata)
+                    # Plain numpy array (no metadata)
                     chunk = data
                     
                     # Resize chunk to match model's expected input size
