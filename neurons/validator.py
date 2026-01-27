@@ -32,7 +32,8 @@ from typing import Dict
 import bittensor as bt
 import numpy as np
 import wandb
-
+from dotenv import load_dotenv
+load_dotenv()
 from cancer_ai.chain_models_store import ChainModelMetadata
 from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION,BEYOND_TOP_10_TOTAL_SCORE
 from cancer_ai.base.base_validator import BaseValidatorNeuron
