@@ -459,7 +459,7 @@ def add_validator_args(cls, parser):
     parser.add_argument(
         "--sync_state_from_hotkey",
         type=str,
-        default=None,
+        default=os.getenv("SYNC_STATE_FROM_HOTKEY"),
         help="Pull state from this validator's hotkey if vtrust is below threshold.",
     )
     parser.add_argument(

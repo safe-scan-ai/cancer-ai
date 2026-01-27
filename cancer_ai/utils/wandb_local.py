@@ -49,29 +49,33 @@ def log_state_to_wandb(validator_hotkey: str = None, config: 'bt.Config' = None)
 
 def pull_state_from_wandb(source_hotkey: str, config: 'bt.Config') -> bool:
     try:
+        bt.logging.info(f"Starting state sync from {source_hotkey}")
         api = wandb.Api()
         artifact_path = f"{config.wandb_entity}/{config.wandb_project_name_state}/{source_hotkey}:latest"
         bt.logging.info(f"Pulling state from wandb: {artifact_path}")
         
         artifact = api.artifact(artifact_path)
+        bt.logging.info(f"Artifact found, downloading")
         download_dir = artifact.download()
+        bt.logging.info(f"Artifact downloaded to: {download_dir}")
         
         source_file = os.path.join(download_dir, "state.json")
         target_path = config.neuron.full_path + "/state.json"
+        bt.logging.info(f"Copying from {source_file} to {target_path}")
         
         if os.path.exists(source_file):
             import shutil
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
-            shutil.copy2(source_file, target_path)
+            shutil.copy(source_file, target_path)
             bt.logging.info(f"State synced from {source_hotkey}")
             return True
         
         bt.logging.warning("state.json not found in artifact")
         return False
     except Exception as e:
-        bt.logging.error(f"Failed to pull state from wandb: {e}")
+        bt.logging.error(f"Failed to pull state from wandb: {e}", exc_info=True)
         return False
-        
+
 class LocalWandbSaver:
     """Local wandb logging utilities for saving wandb data to JSON files."""
     

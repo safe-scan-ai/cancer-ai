@@ -75,6 +75,8 @@ class Validator(BaseValidatorNeuron):
         self.last_miners_refresh = None
         self.last_monitor_datasets = None
 
+        self.last_sync_time = None
+
         self.hf_api = HfApi()
         
         # Log validator initialization with hotkey
@@ -94,6 +96,13 @@ class Validator(BaseValidatorNeuron):
         self.p2p_collector = None
         self.last_p2p_test: float = None
         self.setup_communication()
+        
+        # Sync from reference validator at startup if vtrust is low
+        source_hotkey = self.config.sync_state_from_hotkey
+        if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
+            my_vtrust = self.metagraph.validator_trust[self.uid]
+            if my_vtrust < self.config.sync_state_vtrust_threshold:
+                self.sync_state_from_wandb(at_startup=True)
         
        
     
@@ -357,29 +366,30 @@ class Validator(BaseValidatorNeuron):
         
         # Save state only after successful competition evaluation
         self.save_state()
-        # Sync state from reference validator if vtrust is low
-        self.sync_state_from_wandb()
         
-    def sync_state_from_wandb(self):
+        # Sync state from reference validator if vtrust is low
+        source_hotkey = self.config.sync_state_from_hotkey
+        if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
+            my_vtrust = self.metagraph.validator_trust[self.uid]
+            if my_vtrust < self.config.sync_state_vtrust_threshold:
+                self.sync_state_from_wandb()
+        
+    def sync_state_from_wandb(self, at_startup: bool = False):
         """Sync state from reference validator after competition if vtrust is low."""
         source_hotkey = self.config.sync_state_from_hotkey
-        if not source_hotkey:
-            return
         
-        # Don't sync from ourselves
-        if source_hotkey == self.wallet.hotkey.ss58_address:
-            return
-            
-        my_vtrust = self.metagraph.validator_trust[self.uid]
-        threshold = self.config.sync_state_vtrust_threshold
+        # Check 2-hour interval (skip for startup)
+        if not at_startup and self.last_sync_time:
+            hours_since_sync = (time.time() - self.last_sync_time) / 3600
+            if hours_since_sync < 2:
+                log.debug(f"Skipping sync - {hours_since_sync:.1f}h since last sync")
+                return
         
-        if my_vtrust < threshold:
-            log.info(f"Low vtrust ({my_vtrust:.3f} < {threshold}), syncing state from {source_hotkey}")
-            from cancer_ai.utils.wandb_local import pull_state_from_wandb
-            if pull_state_from_wandb(source_hotkey, self.config):
-                self.load_state()  # Reload the synced state
-        else:
-            log.debug(f"vtrust ({my_vtrust:.3f}) above threshold, keeping local state")
+        log.info(f"Syncing state from {source_hotkey}")
+        from cancer_ai.utils.wandb_local import pull_state_from_wandb
+        if pull_state_from_wandb(source_hotkey, self.config):
+            self.load_state()
+            self.last_sync_time = time.time()
     
     def update_scores(
         self,
