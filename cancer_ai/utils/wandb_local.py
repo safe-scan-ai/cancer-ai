@@ -55,7 +55,8 @@ def pull_state_from_wandb(source_hotkey: str, config: 'bt.Config') -> bool:
         bt.logging.info(f"Pulling state from wandb: {artifact_path}")
         
         artifact = api.artifact(artifact_path)
-        bt.logging.info(f"Artifact found, downloading")
+        artifact_version = artifact.version
+        bt.logging.info(f"Artifact found (version: {artifact_version}), downloading")
         download_dir = artifact.download()
         bt.logging.info(f"Artifact downloaded to: {download_dir}")
         
@@ -67,7 +68,7 @@ def pull_state_from_wandb(source_hotkey: str, config: 'bt.Config') -> bool:
             import shutil
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             shutil.copy(source_file, target_path)
-            bt.logging.info(f"State synced from {source_hotkey}")
+            bt.logging.info(f"State synced from {source_hotkey} (WandB artifact version: {artifact_version})")
             return True
         
         bt.logging.warning("state.json not found in artifact")
