@@ -103,8 +103,12 @@ class Validator(BaseValidatorNeuron):
         if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
             if self.uid >= 0:  # Skip if not registered
                 my_vtrust = self.metagraph.validator_trust[self.uid]
-                if my_vtrust < self.config.sync_state_vtrust_threshold:
+                threshold = self.config.sync_state_vtrust_threshold
+                if my_vtrust < threshold:
+                    log.info(f"State sync vtrust check: {my_vtrust:.4f} < {threshold:.4f} - syncing")
                     self.sync_state_from_wandb(at_startup=True)
+                else:
+                    log.info(f"State sync vtrust check: {my_vtrust:.4f} >= {threshold:.4f} - skipping" )
         
        
     
@@ -154,8 +158,12 @@ class Validator(BaseValidatorNeuron):
         if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
             if self.uid >= 0:  # Skip if not registered
                 my_vtrust = self.metagraph.validator_trust[self.uid]
-                if my_vtrust < self.config.sync_state_vtrust_threshold:
+                threshold = self.config.sync_state_vtrust_threshold
+                if my_vtrust < threshold:
+                    log.info(f"State sync vtrust check: {my_vtrust:.4f} < {threshold:.4f} - syncing")
                     self.sync_state_from_wandb()
+                else:
+                    log.info(f"State sync vtrust check: {my_vtrust:.4f} >= {threshold:.4f} - skipping")
 
     async def refresh_miners(self):
         """Downloads miner's models from the chain and stores them in the DB."""
