@@ -20,8 +20,6 @@ from .utils import chain_miner_to_model_info
 from .models import ModelInfo
 
 from .competition_handlers.base_handler import BaseCompetitionHandler, BaseModelEvaluationResult
-from .competition_handlers.melanoma_handler import MelanomaCompetitionHandler
-from .competition_handlers.tricorder_2_handler import Tricorder2CompetitionHandler
 from .competition_handlers.tricorder_3_handler import Tricorder3CompetitionHandler
 from .tests.mock_data import get_mock_hotkeys_with_models
 from cancer_ai.chain_models_store import (
@@ -32,13 +30,6 @@ from cancer_ai.chain_models_store import (
 load_dotenv()
 
 COMPETITION_HANDLER_MAPPING = {
-    "melanoma-1": MelanomaCompetitionHandler,
-    "melanoma-testnet": MelanomaCompetitionHandler,
-    "melanoma-testnet2": MelanomaCompetitionHandler,
-    "melanoma-7": MelanomaCompetitionHandler,
-    "melanoma-2": MelanomaCompetitionHandler,
-    "melanoma-3": MelanomaCompetitionHandler,
-    "tricorder-2": Tricorder2CompetitionHandler,
     "tricorder-3": Tricorder3CompetitionHandler,
 }
 
@@ -121,10 +112,7 @@ class CompetitionManager(SerializableManager):
 
     def _create_error_result(self, error_message: str) -> BaseModelEvaluationResult:
         """Create an error result using the competition-specific result class."""
-        if self.competition_id.startswith("melanoma"):
-            from .competition_handlers.melanoma_handler import MelanomaEvaluationResult
-            return MelanomaEvaluationResult(score=0.0, error=error_message)
-        elif self.competition_id.startswith("tricorder"):
+        if self.competition_id.startswith("tricorder"):
             from .competition_handlers.tricorder_common import TricorderEvaluationResult
             return TricorderEvaluationResult(score=0.0, error=error_message)
         else:
@@ -301,15 +289,9 @@ class CompetitionManager(SerializableManager):
         await self.dataset_manager.prepare_dataset()
         X_test, y_test, metadata = await self.dataset_manager.get_data()
 
-        # Pass metadata to tricorder handlers, otherwise use default parameters
-        if self.competition_id in ["tricorder-3", "tricorder-2"]:
-            self.competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
-                X_test=X_test, y_test=y_test, metadata=metadata, config=self.config
-            )
-        else:
-            self.competition_handler: BaseCompetitionHandler = COMPETITION_HANDLER_MAPPING[self.competition_id](
-                X_test=X_test, y_test=y_test, config=self.config
-            )
+        self.competition_handler = Tricorder3CompetitionHandler(
+            X_test=X_test, y_test=y_test, metadata=metadata, config=self.config
+        )
         
         # Set preprocessing directory and preprocess data once
         self.competition_handler.set_preprocessed_data_dir(self.config.models.dataset_dir)
@@ -350,7 +332,7 @@ class CompetitionManager(SerializableManager):
 
         log.info("======== VALIDATING FINAL SCORES ========")
         
-        if self.competition_id in ["tricorder-3", "tricorder-2"]:
+        if self.competition_id == "tricorder-3":
             zero_score_models = []
             for model_id, result in self.results:
                 if result.score == 0.0 and not result.error:

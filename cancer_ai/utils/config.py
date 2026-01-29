@@ -269,13 +269,6 @@ def add_common_args(cls, parser):
     )
 
     parser.add_argument(
-        "--competition.config_path",
-        type=str,
-        help="Path with competition configuration .",
-        default="./config/competition_config.json",
-    )
-
-    parser.add_argument(
         "--archive_node_url",
         type=str,
         help="The URL of the archive node to use",
@@ -362,7 +355,7 @@ def add_validator_args(cls, parser):
         "--wandb_project_name",
         type=str,
         help="The name of the project where you are sending the new run.",
-        default="melanoma-testnet",
+        default="tricorder-3",
     )
 
     parser.add_argument(

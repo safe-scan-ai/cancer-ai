@@ -46,7 +46,7 @@ Safe Scan organizes dynamic competitions focused on cancer detection using machi
   - 7th place: 3%
   - 8th place: 2%
   - 9th place: 1%
-  - 10th place: 1%
+  - 10th place: 0.5%
   
   The total reward pool for each competition is the emission allocated for miners divided by the number of competitions held. Miners beyond the top 10 receive minimal participation rewards.
 

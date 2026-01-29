@@ -1,12 +1,12 @@
 [
     {
-        "competition_id": "melanoma-testnet",
+        "competition_id": "tricorder-3",
         "category": "skin",
         "evaluation_times": [
             "14:38"
         ],
-        "dataset_hf_repo": "safescanai/test_dataset",
-        "dataset_hf_filename": "test_dataset.zip",
+        "dataset_hf_repo": "safescanai/tricorder-3-competition-testnet",
+        "dataset_hf_filename": "tricorder-3-dataset-testnet.zip",
         "dataset_hf_repo_type": "dataset"
     }
 ]

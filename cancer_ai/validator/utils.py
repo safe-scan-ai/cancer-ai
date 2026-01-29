@@ -1,6 +1,5 @@
 from enum import Enum
 import os
-import json
 import subprocess
 from datetime import datetime
 import asyncio
@@ -12,7 +11,6 @@ import binascii
 import bittensor as bt
 from retry import retry
 from huggingface_hub import HfApi, hf_hub_download
-from typing import Union
 from pathlib import Path
 import sys
 import platform
@@ -28,11 +26,6 @@ from cancer_ai.validator.models import (
 
 class ModelType(Enum):
     ONNX = "ONNX"
-    TENSORFLOW_SAVEDMODEL = "TensorFlow SavedModel"
-    KERAS_H5 = "Keras H5"
-    PYTORCH = "PyTorch"
-    SCIKIT_LEARN = "Scikit-learn"
-    XGBOOST = "XGBoost"
     UNKNOWN = "Unknown format"
 
 
@@ -109,30 +102,6 @@ def detect_model_format(file_path) -> ModelType:
 
     if ext == ".onnx":
         return ModelType.ONNX
-    elif ext == ".h5":
-        return ModelType.KERAS_H5
-    elif ext in [".pt", ".pth"]:
-        return ModelType.PYTORCH
-    elif ext in [".pkl", ".joblib", ""]:
-        return ModelType.SCIKIT_LEARN
-    elif ext in [".model", ".json", ".txt"]:
-        return ModelType.XGBOOST
-
-    try:
-        with open(file_path, "rb") as f:
-            # TODO check if it works
-            header = f.read(4)
-            if (
-                header == b"PK\x03\x04"
-            ):  # Magic number for ZIP files (common in TensorFlow SavedModel)
-                return ModelType.TENSORFLOW_SAVEDMODEL
-            elif header[:2] == b"\x89H":  # Magic number for HDF5 files (used by Keras)
-                return ModelType.KERAS_H5
-
-    except Exception as e:
-        bt.logging.error(f"Failed to detect model format: {e}")
-        return ModelType.UNKNOWN
-
     return ModelType.UNKNOWN
 
 

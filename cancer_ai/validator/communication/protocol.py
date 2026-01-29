@@ -13,7 +13,7 @@ class CompetitionResultsSynapse(bt.Synapse):
     
     Attributes:
     - validator_uid: UID of the validator sending/requesting results
-    - competition_id: ID of the competition (e.g., 'tricorder-3', 'melanoma')
+    - competition_id: ID of the competition (e.g., 'tricorder-3')
     - cycle_id: Unique identifier for this evaluation cycle
     - timestamp: Unix timestamp when evaluation was completed
     - evaluation_results: Dictionary mapping miner hotkey to their score

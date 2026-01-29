@@ -1,0 +1,45 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Validator",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/neurons/validator.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--wallet.name=validator-staked",
+        "--wallet.hotkey=default",
+        "--netuid=163",
+        "--logging.debug",
+        "--subtensor.network", "test",
+        "--datasets_config_hf_repo_id", "safescanai/competition-configuration-testnet",
+        "--wandb.off"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}:${PYTHONPATH}"
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "Testnet Validator UID 87",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/neurons/validator.py",
+      "console": "integratedTerminal",
+      "args": [
+        "--wallet.name=testnet_vali_2",
+        "--wallet.hotkey=vali2_hotkey",
+        "--subtensor.network=test",
+        "--logging.trace",
+        "--netuid=163",
+        "--db_path=./testnet_chain_format.db",
+        "--wandb.off"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}:${PYTHONPATH}"
+      },
+      "justMyCode": false
+    }
+  ]
+}
