@@ -99,16 +99,7 @@ class Validator(BaseValidatorNeuron):
         self.setup_communication()
         
         # Sync from reference validator at startup if vtrust is low
-        source_hotkey = self.config.sync_state_from_hotkey
-        if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
-            if self.uid >= 0:  # Skip if not registered
-                my_vtrust = self.metagraph.validator_trust[self.uid]
-                threshold = self.config.sync_state_vtrust_threshold
-                if my_vtrust < threshold:
-                    log.info(f"State sync vtrust check: {my_vtrust:.4f} < {threshold:.4f} - syncing")
-                    self.sync_state_from_wandb(at_startup=True)
-                else:
-                    log.info(f"State sync vtrust check: {my_vtrust:.4f} >= {threshold:.4f} - skipping" )
+        self._check_and_sync_state(at_startup=True)
         
        
     
@@ -156,16 +147,9 @@ class Validator(BaseValidatorNeuron):
         """Periodically sync state from reference validator if vtrust is low."""
         if self.last_sync_time and (time.time() - self.last_sync_time) / 3600 < 2:
             return
-        source_hotkey = self.config.sync_state_from_hotkey
-        if source_hotkey and source_hotkey != self.wallet.hotkey.ss58_address:
-            if self.uid >= 0:  # Skip if not registered
-                my_vtrust = self.metagraph.validator_trust[self.uid]
-                threshold = self.config.sync_state_vtrust_threshold
-                if my_vtrust < threshold:
-                    log.info(f"State sync vtrust check: {my_vtrust:.4f} < {threshold:.4f} - syncing")
-                    self.sync_state_from_wandb()
-                else:
-                    log.info(f"State sync vtrust check: {my_vtrust:.4f} >= {threshold:.4f} - skipping")
+    
+        self.last_sync_time = time.time()
+        self._check_and_sync_state()
 
     async def refresh_miners(self):
         """Downloads miner's models from the chain and stores them in the DB."""
@@ -408,6 +392,30 @@ class Validator(BaseValidatorNeuron):
             self.load_state()
             self.last_sync_time = time.time()
     
+    def _check_and_sync_state(self, at_startup: bool = False) -> bool:
+        """Check vtrust and sync state if needed. Returns True if synced."""
+        source_hotkey = self.config.sync_state_from_hotkey
+
+        if not source_hotkey or source_hotkey == self.wallet.hotkey.ss58_address:
+            return False
+
+
+        if self.uid < 0:
+            log.debug("State sync: not registered, skipping")
+            return False
+
+        my_vtrust = self.metagraph.validator_trust[self.uid]
+        threshold = self.config.sync_state_vtrust_threshold
+
+        if my_vtrust >= threshold:
+            log.debug(f"State sync: vtrust {my_vtrust:.4f} >= {threshold:.4f} - skipping")
+            return False
+
+        log.info(f"State sync: vtrust {my_vtrust:.4f} < {threshold:.4f} - syncing from {source_hotkey}")
+        self.sync_state_from_wandb(at_startup=at_startup)
+        return True
+
+
     def update_scores(
         self,
         competition_weights: dict[str, float],
