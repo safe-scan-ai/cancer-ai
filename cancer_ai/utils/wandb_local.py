@@ -57,7 +57,8 @@ def pull_state_from_wandb(source_hotkey: str, config: 'bt.Config') -> bool:
         artifact = api.artifact(artifact_path)
         artifact_version = artifact.version
         bt.logging.info(f"Artifact found (version: {artifact_version}), downloading")
-        download_dir = artifact.download()
+        temp_dir = tempfile.mkdtemp()
+        download_dir = artifact.download(root=temp_dir)
         bt.logging.info(f"Artifact downloaded to: {download_dir}")
         
         source_file = os.path.join(download_dir, "state.json")
