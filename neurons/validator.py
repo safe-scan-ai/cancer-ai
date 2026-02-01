@@ -383,10 +383,10 @@ class Validator(BaseValidatorNeuron):
         if not at_startup and self.last_sync_time:
             hours_since_sync = (time.time() - self.last_sync_time) / 3600
             if hours_since_sync < 2:
-                log.debug(f"Skipping sync - {hours_since_sync:.1f}h since last sync")
+                log.state_sync.debug(f"Skipping - {hours_since_sync:.1f}h since last sync")
                 return
         
-        log.info(f"Syncing state from {source_hotkey}")
+        log.state_sync.info(f"Syncing state from {source_hotkey}")
         from cancer_ai.utils.wandb_local import pull_state_from_wandb
         if pull_state_from_wandb(source_hotkey, self.config):
             self.load_state()
@@ -401,17 +401,17 @@ class Validator(BaseValidatorNeuron):
 
 
         if self.uid < 0:
-            log.debug("State sync: not registered, skipping")
+            log.state_sync.debug("Not registered, skipping")
             return False
 
         my_vtrust = self.metagraph.validator_trust[self.uid]
         threshold = self.config.sync_state_vtrust_threshold
 
         if my_vtrust >= threshold:
-            log.debug(f"State sync: vtrust {my_vtrust:.4f} >= {threshold:.4f} - skipping")
+            log.state_sync.debug(f"vtrust {my_vtrust:.4f} >= {threshold:.4f} - skipping")
             return False
 
-        log.info(f"State sync: vtrust {my_vtrust:.4f} < {threshold:.4f} - syncing from {source_hotkey}")
+        log.state_sync.info(f"vtrust {my_vtrust:.4f} < {threshold:.4f} - syncing from {source_hotkey}")
         self.sync_state_from_wandb(at_startup=at_startup)
         return True
 
