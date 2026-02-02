@@ -7,6 +7,8 @@ import tempfile
 import wandb
 import bittensor as bt
 
+from cancer_ai.utils.structured_logger import log
+
 if TYPE_CHECKING:
     from neurons.validator import Validator
 
@@ -45,6 +47,37 @@ def log_state_to_wandb(validator_hotkey: str = None, config: 'bt.Config' = None)
         
     except (OSError, IOError, wandb.Error) as e:
         bt.logging.error(f"Failed to log state to wandb: {e}", exc_info=True)
+        return False
+
+def pull_state_from_wandb(source_hotkey: str, config: 'bt.Config') -> bool:
+    try:
+        log.state_sync.info(f"Starting sync from {source_hotkey}")
+        api = wandb.Api()
+        artifact_path = f"{config.wandb_entity}/{config.wandb_project_name_state}/{source_hotkey}:latest"
+        log.state_sync.info(f"Pulling state from wandb: {artifact_path}")
+        
+        artifact = api.artifact(artifact_path)
+        artifact_version = artifact.version
+        log.state_sync.info(f"Artifact found (version: {artifact_version}), downloading")
+        temp_dir = tempfile.mkdtemp()
+        download_dir = artifact.download(root=temp_dir)
+        log.state_sync.debug(f"Artifact downloaded to: {download_dir}")
+        
+        source_file = os.path.join(download_dir, "state.json")
+        target_path = config.neuron.full_path + "/state.json"
+        log.state_sync.debug(f"Copying from {source_file} to {target_path}")
+        
+        if os.path.exists(source_file):
+            import shutil
+            os.makedirs(os.path.dirname(target_path), exist_ok=True)
+            shutil.copy(source_file, target_path)
+            log.state_sync.info(f"State synced from {source_hotkey} (WandB artifact version: {artifact_version})")
+            return True
+        
+        log.state_sync.warn("state.json not found in artifact")
+        return False
+    except Exception as e:
+        log.state_sync.error(f"Failed to pull state from wandb: {e}", exc_info=True)
         return False
 
 class LocalWandbSaver:

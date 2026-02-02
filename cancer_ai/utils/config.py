@@ -449,6 +449,18 @@ def add_validator_args(cls, parser):
         help="Don't refresh miners",
         default=False,
     )
+    parser.add_argument(
+        "--sync_state_from_hotkey",
+        type=str,
+        default=os.getenv("SYNC_STATE_FROM_HOTKEY"),
+        help="Pull state from this validator's hotkey if vtrust is below threshold.",
+    )
+    parser.add_argument(
+        "--sync_state_vtrust_threshold",
+        type=float,
+        default=0.8,
+        help="Sync state only if validator trust is below this threshold.",
+    )
 
 def path_config(cls=None):
     """
