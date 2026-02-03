@@ -62,6 +62,17 @@ def log_system_info(repo_root: Path = None) -> None:
 
     try:
         result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            check=True,
+            capture_output=True,
+            cwd=repo_root,
+        )
+        branch_name = result.stdout.decode().strip()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        branch_name = "unknown"
+
+    try:
+        result = subprocess.run(
             ["git", "status", "--porcelain"],
             check=True,
             capture_output=True,
@@ -89,6 +100,7 @@ def log_system_info(repo_root: Path = None) -> None:
         packages = "unknown"
 
     bt.logging.info(f"Git commit: {commit_hash}")
+    bt.logging.info(f"Git branch: {branch_name}")
     bt.logging.info(f"Repo clean: {cleanliness}")
     bt.logging.info(f"Python version: {python_version}")
     bt.logging.info(f"Platform: {platform_info}")
