@@ -360,6 +360,49 @@ class ModelManager():
                     return v
         raise KeyError("No Raw<n> entry found in `info.fields`")
 
+    def verify_hash_from_extrinsic(self, hotkey: str, computed_hash: str) -> tuple[bool, str | None]:
+        """Verify computed hash against on-chain extrinsic. Returns (is_valid, error_msg)."""
+        model_info = self.hotkey_store.get(hotkey)
+        if not model_info:
+            return False, "Model info not found"
+
+        try:
+            fs = HfFileSystem(token=self.config.hf_token) if self.config.hf_token else HfFileSystem()
+
+            # Read extrinsic_record.json from HF
+            matches = fs.glob(f"{model_info.hf_repo_id}/extrinsic_record.json", refresh=True)
+            if not matches:
+                return False, "extrinsic_record.json not found"
+
+            with fs.open(matches[0], "r", encoding="utf-8") as rf:
+                record = json.load(rf)
+
+            extrinsic_id = record.get("extrinsic")
+            if record.get("hotkey") != hotkey or not extrinsic_id:
+                return False, "Invalid extrinsic_record.json"
+
+            # Fetch extrinsic from chain
+            blk_str, idx_str = extrinsic_id.split("-", 1)
+            block_data = self.subtensor.substrate.get_block(block_number=int(blk_str))
+            if not block_data or "extrinsics" not in block_data:
+                return False, f"Could not fetch block {blk_str}"
+            ext = block_data["extrinsics"][int(idx_str)]
+
+            # Extract hash from extrinsic
+            raw_params = {p["name"]: p["value"] for p in ext.value["call"]["call_args"]}
+            decoded = decode_params(raw_params)
+            chain_hash = self._extract_raw_value(decoded["info"]["fields"]).split(":")[-1]
+
+            if chain_hash != computed_hash:
+                bt.logging.warning(f"Hash mismatch for {hotkey}: chain={chain_hash}... != computed={computed_hash}...")
+                return False, f"Hash mismatch: chain={chain_hash}... != computed={computed_hash}..."
+
+            bt.logging.debug(f"Verified {hotkey} via {extrinsic_id}")
+            return True, None
+
+        except Exception as e:
+            bt.logging.warning(f"Verification error for {hotkey}: {e}")
+            return False, str(e)
 
     def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> tuple[list[str], dict[str, str]]:
         """
