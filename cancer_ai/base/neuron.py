@@ -75,14 +75,14 @@ class BaseNeuron(ABC):
 
         slog.install_bittensor_logger_bridge()
 
+        # Set up logging with the provided configuration.
+        bt.logging.set_config(config=self.config.logging)
+
         # set up axiom logging
         self._axiom_handler = setup_axiom_logging(self.config)
 
         # log system information
         log_system_info()
-
-        # Set up logging with the provided configuration.
-        bt.logging.set_config(config=self.config.logging)
 
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device

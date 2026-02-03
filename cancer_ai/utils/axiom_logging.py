@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+import traceback
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -94,6 +95,25 @@ class AxiomHandler(logging.Handler):
         self._validator_name = validator_name
         self._hotkey = hotkey
 
+    def send_startup_event(self) -> int:
+        event_model = self._AxiomEvent(
+            _time=datetime.now(timezone.utc).isoformat(),
+            level="INFO",
+            logger="bittensor.axiom",
+            message="Axiom logging handshake",
+            file="axiom_logging.py:0",
+            function="send_startup_event",
+            validator=self._validator_name,
+            validator_hotkey=self._hotkey,
+            category="AXIOM",
+        )
+        event: dict[str, Any] = event_model.model_dump(exclude_none=True)
+        ingest_url = f"{self._ingest_base_url}/v1/ingest/{self._dataset}"
+        resp = self._session.post(ingest_url, json=[event], timeout=2)
+        if resp.status_code >= 400:
+            raise AxiomError(resp.status_code, resp.text[:300])
+        return resp.status_code
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
             rel_path: str
@@ -139,7 +159,11 @@ class AxiomHandler(logging.Handler):
             resp = self._session.post(ingest_url, json=[event], timeout=2)
             if resp.status_code >= 400:
                 raise AxiomError(resp.status_code, resp.text[:300])
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except Exception:
+            if os.getenv("AXIOM_DEBUG") == "1":
+                bt.logging.exception("Axiom emit failed")
             return
 
 
@@ -196,6 +220,39 @@ def setup_axiom_logging(config: "bt.Config") -> Optional[logging.Handler]:
 
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
+
+    local_logger = logging.getLogger("axiom_startup")
+    try:
+        status_code = handler.send_startup_event()
+        print(
+            f"AXIOM_HANDSHAKE_OK dataset={dataset} validator={validator_name} url={axiom_url} status={status_code}",
+            file=sys.stdout,
+            flush=True,
+        )
+        local_logger.info(
+            "Axiom logging handshake succeeded: dataset=%s validator=%s url=%s",
+            dataset,
+            validator_name,
+            axiom_url,
+        )
+    except Exception as e:
+        root_logger.removeHandler(handler)
+        print(
+            "AXIOM_HANDSHAKE_FAIL "
+            f"dataset={dataset} validator={validator_name} url={axiom_url} error={e} "
+            f"traceback={traceback.format_exc()}",
+            file=sys.stdout,
+            flush=True,
+        )
+        local_logger.error(
+            "Axiom logging handshake FAILED: dataset=%s validator=%s url=%s error=%s",
+            dataset,
+            validator_name,
+            axiom_url,
+            str(e),
+        )
+        local_logger.exception("Axiom logging handshake exception")
+        return None
 
     bt.logging.info(f"Axiom logging enabled: dataset={dataset} (validator={validator_name})")
     return handler
