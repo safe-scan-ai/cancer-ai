@@ -171,19 +171,42 @@ def setup_axiom_logging(config: "bt.Config") -> Optional[logging.Handler]:
     if not getattr(config, "logs_axiom_enabled", False):
         return None
 
+    def _require_nonempty_str(value: Any, flag_name: str) -> str:
+        if value is None:
+            bt.logging.error(f"{flag_name} is required when --logs_axiom_enabled is set")
+            sys.exit(1)
+        if isinstance(value, bool):
+            bt.logging.error(
+                f"{flag_name} must be a non-empty string, got boolean={value}. "
+                f"This usually means you passed {flag_name} without a value."
+            )
+            sys.exit(1)
+        if not isinstance(value, str):
+            bt.logging.error(f"{flag_name} must be a string, got {type(value).__name__}")
+            sys.exit(1)
+        if not value.strip():
+            bt.logging.error(f"{flag_name} must be a non-empty string")
+            sys.exit(1)
+        return value
+
     token = os.getenv("AXIOM_API_KEY")
     if not token:
         bt.logging.error("AXIOM_API_KEY is not set in environment")
         return None
 
-    validator_name = getattr(config, "validator_name", None)
-    if not validator_name:
-        bt.logging.error("--validator_name is required when --logs_axiom_enabled is set")
-        sys.exit(1)
+    validator_name = _require_nonempty_str(getattr(config, "validator_name", None), "--validator_name")
 
-    dataset = getattr(config, "axiom_dataset", "cancer-ai-logs")
+    dataset = _require_nonempty_str(getattr(config, "axiom_dataset", "cancer-ai-logs"), "--axiom_dataset")
 
-    axiom_url = (getattr(config, "axiom_url", None) or os.getenv("AXIOM_URL"))
+    axiom_url_raw = (getattr(config, "axiom_url", None) or os.getenv("AXIOM_URL"))
+    if isinstance(axiom_url_raw, bool):
+        bt.logging.error(
+            f"--axiom_url must be a string, got boolean={axiom_url_raw}. "
+            f"This usually means you passed --axiom_url without a value."
+        )
+        return None
+
+    axiom_url = axiom_url_raw
     if not axiom_url:
         bt.logging.error(
             "AXIOM_URL (or --axiom_url) must be set to your edge deployment base URL, e.g. https://eu-central-1.aws.edge.axiom.co"
