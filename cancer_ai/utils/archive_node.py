@@ -122,16 +122,39 @@ class ArchiveNodeWrapper:
     @retry(tries=3, delay=1, backoff=2, max_delay=30)
     def get_block_hash(self, block_number: int) -> str:
         """Get block hash with automatic fallback."""
-        subtensor = self._get_subtensor()
-        return subtensor.get_block_hash(block_number)
+        try:
+            subtensor = self._get_subtensor()
+            return subtensor.get_block_hash(block_number)
+        except TimeoutError:
+            # Force reconnection on timeout
+            bt.logging.warning("Timeout getting block hash, forcing reconnection...")
+            self._force_reconnect()
+            raise
+    
+    def _force_reconnect(self):
+        """Force a reconnection to trigger fallback logic."""
+        if self._subtensor and hasattr(self._subtensor.substrate, 'ws'):
+            try:
+                # Close the websocket to force reconnection
+                self._subtensor.substrate.ws.close()
+            except:
+                pass
+        # Reset subtensor to force reconnection on next call
+        self._subtensor = None
     
     @retry(tries=3, delay=1, backoff=2, max_delay=30)
     def query_storage(self, module: str, storage_function: str, block_hash: str):
         """Query storage with automatic fallback."""
-        subtensor = self._get_subtensor()
-        return subtensor.substrate.query(
-            module=module, storage_function=storage_function, block_hash=block_hash
-        )
+        try:
+            subtensor = self._get_subtensor()
+            return subtensor.substrate.query(
+                module=module, storage_function=storage_function, block_hash=block_hash
+            )
+        except TimeoutError:
+            # Force reconnection on timeout
+            bt.logging.warning("Timeout querying storage, forcing reconnection...")
+            self._force_reconnect()
+            raise
 
 
 def get_archive_subtensor(archive_node_url: str, archive_node_fallback_url: str | None = None, subtensor: Optional[bt.subtensor] = None) -> bt.subtensor:

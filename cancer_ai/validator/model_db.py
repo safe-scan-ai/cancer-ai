@@ -347,28 +347,25 @@ class ModelDBController:
     @retry(tries=4, delay=1, backoff=2, max_delay=30)
     def get_block_timestamp(self, block_number) -> datetime:
         """Gets the timestamp of a given block."""
-        try:
-            block_hash = self.subtensor.get_block_hash(block_number)
+        # Use the archive wrapper which has its own retry mechanism
+        block_hash = self.archive_wrapper.get_block_hash(block_number)
 
-            if block_hash is None:
-                raise ValueError(f"Block hash not found for block number {block_number}")
+        if block_hash is None:
+            raise ValueError(f"Block hash not found for block number {block_number}")
 
-            timestamp_info = self.subtensor.substrate.query(
-                module="Timestamp",
-                storage_function="Now",
-                block_hash=block_hash
-            )
+        timestamp_info = self.archive_wrapper.query_storage(
+            module="Timestamp",
+            storage_function="Now",
+            block_hash=block_hash
+        )
 
-            if timestamp_info is None:
-                raise ValueError(f"Timestamp not found for block hash {block_hash}")
+        if timestamp_info is None:
+            raise ValueError(f"Timestamp not found for block hash {block_hash}")
 
-            timestamp_ms = timestamp_info.value
-            block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
+        timestamp_ms = timestamp_info.value
+        block_datetime = datetime.fromtimestamp(timestamp_ms / 1000.0, tz=timezone.utc)
 
-            return block_datetime
-        except Exception as e:
-            bt.logging.exception(f"Error retrieving block timestamp: {e}")
-            raise
+        return block_datetime
 
     def close(self):
         try:
