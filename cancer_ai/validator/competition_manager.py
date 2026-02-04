@@ -225,11 +225,11 @@ class CompetitionManager(SerializableManager):
             log.info("Could not determine model hash. Skipping.")
             return self._create_error_result("Could not determine model hash"), False
     
-        if computed_hash != model_info.model_hash:
+        is_valid, error = self.model_manager.verify_hash_from_extrinsic(miner_hotkey, computed_hash)
+        if not is_valid:
             hf_info = f"{model_info.hf_repo_id}/{model_info.hf_model_filename}" if model_info.hf_repo_id and model_info.hf_model_filename else "unknown"
-            log.info(f"The hash of model uploaded by {miner_hotkey} ({hf_info}) does not match hash of model submitted on-chain. Slashing.")
-            return self._create_error_result("The hash of model uploaded does not match hash of model submitted on-chain"), True
-
+            log.info(f"Hash validation failed for {miner_hotkey} ({hf_info}): {error}. Slashing.")
+            return self._create_error_result(f"Hash validation failed: {error}"), True
         # Run inference
         inference_start_time = time.time()
         model_manager = None
