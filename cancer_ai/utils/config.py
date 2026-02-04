@@ -281,11 +281,19 @@ def add_common_args(cls, parser):
         help="The URL of the archive node to use",
         default="wss://archive.chain.opentensor.ai:443",
     )
+
     parser.add_argument(
         "--archive_node_fallback_url",
         type=str,
         help="The fallback URL of the archive node to use",
         default=None,
+    )
+
+    parser.add_argument(
+        "--test_dataset_hf_repo",
+        type=str,
+        default=None,
+        help="Test HF repo for dataset discovery (bypasses normal org config). Format: username/repo-name"
     )
 
 

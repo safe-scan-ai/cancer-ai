@@ -198,7 +198,7 @@ class Validator(BaseValidatorNeuron):
         # Check for new dataset files
         try:
             bt.logging.trace(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
-            data_packages = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+            data_packages = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates, self.hotkey)
         except Exception as e:
             log.error(f"Error checking for new dataset files: {e}\n Stack trace: {traceback.format_exc()}")
             return

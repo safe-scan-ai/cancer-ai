@@ -50,6 +50,15 @@ def log_time(func):
 
     return wrapper
 
+def extract_hotkey_from_byzantium_filename(filename: str) -> str | None:
+    """Extract hotkey from dataset filename."""
+    basename = os.path.basename(filename)
+    if not basename.startswith("byzantium_"):
+        return None
+    parts = basename.replace(".zip", "").split("_", 2)
+    if len(parts) >= 2:
+        return parts[1]
+    return None
 
 def log_system_info(repo_root: Path = None) -> None:
     """Log system and environment information for debugging and instance identification."""
@@ -330,7 +339,7 @@ async def get_newest_competition_packages(config: bt.Config, packages_count: int
 
 
 async def check_for_new_dataset_files(
-    hf_api: HfApi, org_latest_updates: dict
+    hf_api: HfApi, org_latest_updates: dict, validator_hotkey: str = None
 ) -> list[NewDatasetFile]|None:
     """
     For each OrganizationDataReference stored in the singleton, this function:
@@ -358,6 +367,12 @@ async def check_for_new_dataset_files(
             if f.__class__.__name__ == "RepoFile"
             and f.path.startswith(org.dataset_hf_dir) and f.path.endswith(".zip")
         ]
+        if validator_hotkey:
+            relevant_files = [
+                f for f in relevant_files
+                if not os.path.basename(f.path).startswith("byzantium_")
+                or extract_hotkey_from_byzantium_filename(f.path) == validator_hotkey
+            ]
         max_commit_date = None
         for f in relevant_files:
             commit_date = f.last_commit.date if f.last_commit else None
@@ -464,11 +479,18 @@ def get_local_dataset(local_dataset_dir: str) -> NewDatasetFile|None:
                 final_path = os.path.join(already_released_dir, filename)
                 shutil.move(filepath, final_path)
                 bt.logging.info(f"Successfully processed and moved {filename} to {already_released_dir}")
+                cycle_id = None
+                if filename.startswith("byzantium_"):
+                    # Extract cycle_id from byzantium_<hotkey>_<cycle_id>.zip
+                    parts = filename.replace(".zip", "").split("_", 2)
+                    if len(parts) >= 3:
+                        cycle_id = parts[2]
                 return NewDatasetFile(
                     competition_id=random.choice(["tricorder-3"]), 
                     dataset_hf_repo="local",
                     dataset_hf_filename=final_path,
                     dataset_release_date=file_release_date,
+                    cycle_id=cycle_id,
                 )
             except Exception as e:
                 bt.logging.error(f"Error processing {filename}: {e}")

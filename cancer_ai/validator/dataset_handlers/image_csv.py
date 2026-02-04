@@ -15,6 +15,7 @@ class ImageEntry:
     age: int | None = None
     gender: str | None = None
     location: str | None = None
+    entry_hash: str | None = None
 
 
 class DatasetImagesCSV(BaseDatasetHandler):
@@ -83,13 +84,14 @@ class DatasetImagesCSV(BaseDatasetHandler):
             if gender_str:
                 gender = gender_str.strip().lower()
                 # Keep the raw value - validation will happen in tricorder handler
-            
+            entry_hash = row_lower.get('entry_hash')
             self.entries.append(ImageEntry(
                 relative_path=filepath,
                 label=label,
                 age=age,
                 gender=gender,
-                location=location
+                location=location,
+                entry_hash=entry_hash,
             ))
 
     @log_time

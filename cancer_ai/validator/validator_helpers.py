@@ -72,7 +72,22 @@ async def process_miner_models(validator, blacklisted_hotkeys: set):
 async def setup_organization_data_references(validator):
     """Setup organization data references by fetching, syncing, and returning instance."""
     from cancer_ai.validator.utils import fetch_organization_data_references, sync_organizations_data_references
-    from cancer_ai.validator.utils import OrganizationDataReferenceFactory
+    from cancer_ai.validator.models import OrganizationDataReferenceFactory, OrganizationDataReference
+    import bittensor as bt
+    
+    # If test_dataset_hf_repo is specified, use it directly instead of fetching from config
+    if getattr(validator.config, 'test_dataset_hf_repo', None):
+        bt.logging.info(f"Using test dataset HF repo: {validator.config.test_dataset_hf_repo}")
+        factory = OrganizationDataReferenceFactory.get_instance()
+        # Create a test organization pointing to the test repo
+        test_org = OrganizationDataReference(
+            competition_id="tricorder-3",
+            organization_id="test-org",
+            dataset_hf_repo=validator.config.test_dataset_hf_repo,
+            dataset_hf_dir="",  # Root of repo
+        )
+        factory.organizations = [test_org]
+        return factory
     
     raw_data = await fetch_organization_data_references(
         validator.config.datasets_config_hf_repo_id,

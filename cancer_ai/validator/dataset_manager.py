@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Tuple
 import json
 
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, hf_hub_download
 import bittensor as bt
 
 from .manager import SerializableManager
@@ -60,12 +60,20 @@ class DatasetManager(SerializableManager):
         if not os.path.exists(self.local_extracted_dir):
             os.makedirs(self.local_extracted_dir)
 
-        self.local_compressed_path = HfApi(token=self.config.hf_token).hf_hub_download(
-            self.hf_repo_id,
-            self.hf_filename,
-            cache_dir=Path(self.config.models.dataset_dir),
-            repo_type=self.hf_repo_type,
-        )
+        if not self.hf_repo_id or not self.hf_filename:
+            raise DatasetManagerException("HuggingFace repo or filename not configured")
+
+        try:
+            local_path = hf_hub_download(
+                repo_id=self.hf_repo_id,
+                repo_type=self.hf_repo_type,
+                filename=self.hf_filename,
+                token=getattr(self.config, 'hf_token', None) if self.use_auth else None,
+            )
+            self.local_compressed_path = local_path
+            bt.logging.info(f"Downloaded dataset from HF: {local_path}")
+        except Exception as e:
+            raise DatasetManagerException(f"Failed to download from HuggingFace: {e}")
 
     def delete_dataset(self) -> None:
         """Delete dataset from disk"""
