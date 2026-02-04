@@ -10,7 +10,7 @@ import bittensor as bt
 from huggingface_hub import HfApi, HfFileSystem, hf_hub_download
 
 from .models import ModelInfo
-from ..utils.archive_node import _create_archive_subtensor_with_fallback as _create_archive_subtensor, WebSocketManager
+from ..utils.archive_node import _create_archive_subtensor_with_fallback as _create_archive_subtensor, _create_subtensor, WebSocketManager
 from .utils import decode_params
 from ..utils.structured_logger import log
 
@@ -364,28 +364,54 @@ class ModelManager():
         """Verify computed hash against on-chain extrinsic. Returns (is_valid, error_msg)."""
         model_info = self.hotkey_store.get(hotkey)
         if not model_info:
+            log.warning(f"Verification failed for miner {hotkey}: model info not found in hotkey_store")
             return False, "Model info not found"
 
+        hf_repo = model_info.hf_repo_id
+        
         try:
             fs = HfFileSystem(token=self.config.hf_token) if self.config.hf_token else HfFileSystem()
 
             # Read extrinsic_record.json from HF
-            matches = fs.glob(f"{model_info.hf_repo_id}/extrinsic_record.json", refresh=True)
+            matches = fs.glob(f"{hf_repo}/extrinsic_record.json", refresh=True)
             if not matches:
+                log.warning(f"Verification failed for miner {hotkey}: extrinsic_record.json not found in repo {hf_repo}")
                 return False, "extrinsic_record.json not found"
 
             with fs.open(matches[0], "r", encoding="utf-8") as rf:
                 record = json.load(rf)
 
             extrinsic_id = record.get("extrinsic")
-            if record.get("hotkey") != hotkey or not extrinsic_id:
-                return False, "Invalid extrinsic_record.json"
+            record_hotkey = record.get("hotkey")
+            
+            if record_hotkey != hotkey:
+                log.warning(f"Verification failed for miner {hotkey}: hotkey mismatch in extrinsic_record.json - expected {hotkey}, got {record_hotkey} in repo {hf_repo}")
+                return False, f"Hotkey mismatch: expected {hotkey}, got {record_hotkey}"
+            
+            if not extrinsic_id:
+                log.warning(f"Verification failed for miner {hotkey}: missing extrinsic ID in extrinsic_record.json in repo {hf_repo}")
+                return False, "Missing extrinsic ID in extrinsic_record.json"
 
             # Fetch extrinsic from chain
             blk_str, idx_str = extrinsic_id.split("-", 1)
-            block_data = self.subtensor.substrate.get_block(block_number=int(blk_str))
+            block_num = int(blk_str)
+            
+            block_data = self.subtensor.substrate.get_block(block_number=block_num)
+            
+            # Try fallback if primary fails to fetch block
             if not block_data or "extrinsics" not in block_data:
-                return False, f"Could not fetch block {blk_str}"
+                if self.config.archive_node_fallback_url:
+                    log.debug(f"Primary node missing block {block_num} for miner {hotkey}, trying fallback")
+                    try:
+                        fallback_subtensor = _create_subtensor(self.config.archive_node_fallback_url)
+                        block_data = fallback_subtensor.substrate.get_block(block_number=block_num)
+                    except Exception as e:
+                        log.debug(f"Fallback also failed for block {block_num}: {e}")
+            
+            if not block_data or "extrinsics" not in block_data:
+                log.warning(f"Verification failed for miner {hotkey}: could not fetch block {block_num} for extrinsic {extrinsic_id} in repo {hf_repo}")
+                return False, f"Could not fetch block {block_num} from chain"
+
             ext = block_data["extrinsics"][int(idx_str)]
 
             # Extract hash from extrinsic
@@ -393,15 +419,31 @@ class ModelManager():
             decoded = decode_params(raw_params)
             chain_hash = self._extract_raw_value(decoded["info"]["fields"]).split(":")[-1]
 
+            # Check hash match, try fallback if mismatch
             if chain_hash != computed_hash:
-                bt.logging.warning(f"Hash mismatch for {hotkey}: chain={chain_hash}... != computed={computed_hash}...")
+                if self.config.archive_node_fallback_url:
+                    log.debug(f"Hash mismatch on primary for miner {hotkey}, trying fallback")
+                    try:
+                        fallback_subtensor = _create_subtensor(self.config.archive_node_fallback_url)
+                        fallback_block = fallback_subtensor.substrate.get_block(block_number=block_num)
+                        if fallback_block and "extrinsics" in fallback_block:
+                            fallback_ext = fallback_block["extrinsics"][int(idx_str)]
+                            fallback_params = {p["name"]: p["value"] for p in fallback_ext.value["call"]["call_args"]}
+                            fallback_decoded = decode_params(fallback_params)
+                            chain_hash = self._extract_raw_value(fallback_decoded["info"]["fields"]).split(":")[-1]
+                    except Exception as e:
+                        log.debug(f"Fallback failed for miner {hotkey}: {e}")
+
+            # Final check after fallback attempt
+            if chain_hash != computed_hash:
+                log.warning(f"Verification failed for miner {hotkey}: hash mismatch - chain={chain_hash}... != computed={computed_hash}... in repo {hf_repo}")
                 return False, f"Hash mismatch: chain={chain_hash}... != computed={computed_hash}..."
 
-            bt.logging.debug(f"Verified {hotkey} via {extrinsic_id}")
+            log.debug(f"Verification passed for miner {hotkey} via extrinsic {extrinsic_id}")
             return True, None
 
         except Exception as e:
-            bt.logging.warning(f"Verification error for {hotkey}: {e}")
+            log.error(f"Verification error for miner {hotkey} in repo {hf_repo}: {e}")
             return False, str(e)
 
     def get_pioneer_models(self, grouped_hotkeys: list[list[str]]) -> tuple[list[str], dict[str, str]]:
