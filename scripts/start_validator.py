@@ -119,8 +119,10 @@ def pull_latest_version() -> None:
         )
     except subprocess.CalledProcessError as exc:
         log.error("Failed to pull, reverting: %s", exc)
-        subprocess.run(split("git rebase --abort"), check=True, cwd=CURRENT_WORKING_DIR)
-
+        try:
+            subprocess.run(split("git rebase --abort"), check=True, cwd=CURRENT_WORKING_DIR)
+        except subprocess.CalledProcessError:
+            log.error("git rebase --abort failed (no rebase in progress), ignoring")
 
 def upgrade_packages() -> None:
     """
