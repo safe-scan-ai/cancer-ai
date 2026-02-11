@@ -312,7 +312,7 @@ async def get_newest_competition_packages(config: bt.Config, packages_count: int
 
 async def check_for_new_dataset_files(
     hf_api: HfApi, org_latest_updates: dict
-) -> list[NewDatasetFile]|None:
+) -> tuple[list[NewDatasetFile], dict]:
     """
     For each OrganizationDataReference stored in the singleton, this function:
       - Connects to the organization's public Hugging Face repo.
@@ -382,9 +382,7 @@ async def check_for_new_dataset_files(
                 )
             )
 
-    org_latest_updates.clear()
-    org_latest_updates.update(updated_latest_updates)
-    return results
+    return results, updated_latest_updates
 
 
 async def get_competition_weights(config: bt.Config, hf_api: HfApi) -> dict[str, float]:

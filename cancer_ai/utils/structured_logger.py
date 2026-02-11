@@ -31,6 +31,7 @@ class LogCategory(Enum):
     CHAINSTORE = "CHAINSTORE"
     COMMUNICATION = "COMMUNICATION"
     STATE_SYNC = "STATE_SYNC"
+    INTERNAL = "INTERNAL"
 
 
 class LogContext:
@@ -168,6 +169,7 @@ class StructuredLogger:
         self.chainstore = _CategoryLogger(self, LogCategory.CHAINSTORE)
         self.communication = _CategoryLogger(self, LogCategory.COMMUNICATION)
         self.state_sync = _CategoryLogger(self, LogCategory.STATE_SYNC)
+        self.internal = _CategoryLogger(self, LogCategory.INTERNAL)
 
     def _log(self, level: LogLevel, category: LogCategory, message: str, **kwargs: Any) -> None:
         """Internal logging method."""

@@ -27,13 +27,17 @@ import threading
 import datetime
 import csv
 from uuid import uuid4
-from typing import Dict
+
+from dotenv import load_dotenv
+load_dotenv()
 
 import bittensor as bt
 import numpy as np
 import wandb
-from dotenv import load_dotenv
-load_dotenv()
+
+from huggingface_hub import HfApi
+import hashlib
+
 from cancer_ai.chain_models_store import ChainModelMetadata
 from cancer_ai.validator.rewarder import CompetitionResultsStore, SCORE_DISTRIBUTION,BEYOND_TOP_10_TOTAL_SCORE
 from cancer_ai.base.base_validator import BaseValidatorNeuron
@@ -47,15 +51,14 @@ from cancer_ai.validator.model_db import ModelDBController
 from cancer_ai.validator.model_manager import ModelManager 
 from cancer_ai.validator.competition_manager import CompetitionManager
 from cancer_ai.validator.models import OrganizationDataReferenceFactory, NewDatasetFile, WanDBLogBase
-from cancer_ai.validator.validator_helpers import setup_organization_data_references
+from cancer_ai.validator.validator_helpers import setup_organization_data_references, safe_coroutine
 
 from cancer_ai.validator.communication.validator_axon import ValidatorAxon
 from cancer_ai.validator.communication.p2p_collector import P2PCollector, ResultAggregator
 
 from cancer_ai.utils.structured_logger import log
 from cancer_ai.utils.wandb_local import log_state_to_wandb, log_evaluation_results
-from huggingface_hub import HfApi
-import hashlib
+
 
 class Validator(BaseValidatorNeuron):
     
@@ -129,12 +132,12 @@ class Validator(BaseValidatorNeuron):
         if self.config.filesystem_evaluation:
             coroutines.append(self.filesystem_test_evaluation())
         else:
-            coroutines.append(self.monitor_datasets())
+            coroutines.append(safe_coroutine("monitor_datasets", self.monitor_datasets()))
         if not self.config.neuron.axon_off and self.p2p_collector:
-            coroutines.append(self.test_p2p_communication())
+            coroutines.append(safe_coroutine("test_p2p_communication", self.test_p2p_communication()))
         if self.config.sync_state_from_hotkey:
-            coroutines.append(self.periodic_state_sync()) 
-        await asyncio.gather(*coroutines)
+            coroutines.append(safe_coroutine("periodic_state_sync", self.periodic_state_sync()))
+        await asyncio.gather(*coroutines, return_exceptions=True)
 
     async def test_p2p_communication(self):
         """Test P2P communication with peer validators."""
@@ -160,7 +163,7 @@ class Validator(BaseValidatorNeuron):
         if not should_refresh_miners(self.last_miners_refresh, self.config.miners_refresh_interval):
             return
 
-        bt.logging.info(f"Synchronizing {len(self.hotkeys)} miners from the chain")
+        log.internal.trace(f"Synchronizing {len(self.hotkeys)} miners from the chain")
         blacklisted_hotkeys = load_blacklisted_hotkeys(self.config.test_mode)
         
         await process_miner_models(self, blacklisted_hotkeys)
@@ -177,7 +180,7 @@ class Validator(BaseValidatorNeuron):
         time.sleep(5)
         data_package = get_local_dataset(self.config.local_dataset_dir)
         if not data_package:
-            bt.logging.trace("No new data packages found.")
+            log.internal.trace("No new data packages found.")
             return
         
         await self.run_competition_for_data_package(data_package, local_mode=True)
@@ -191,13 +194,13 @@ class Validator(BaseValidatorNeuron):
                 < self.config.monitor_datasets_interval
             ):
             return
-        bt.logging.info("Starting monitor_datasets")
+        log.internal.trace("Starting monitor_datasets")
 
         # Setup organization data references (cached) - always refresh to ensure latest data
         try:
             self.organizations_data_references = await setup_organization_data_references(self)
         except Exception as e:
-            log.error(f"Error in monitor_datasets initial setup: {e}\n Stack trace: {traceback.format_exc()}")
+            log.internal.error(f"Error in monitor_datasets initial setup: {e}\n Stack trace: {traceback.format_exc()}")
             return
         
         # Initialize org_latest_updates with all organization IDs if not present or empty
@@ -209,12 +212,12 @@ class Validator(BaseValidatorNeuron):
             if org.organization_id not in self.org_latest_updates:
                 self.org_latest_updates[org.organization_id] = None
         
-        bt.logging.trace(f"org_latest_updates contains {len(self.org_latest_updates)} organizations")
+        log.internal.trace(f"org_latest_updates contains {len(self.org_latest_updates)} organizations")
         
         # Check for new dataset files
         try:
-            bt.logging.trace(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
-            data_packages = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
+            log.internal.trace(f"Checking for new datasets with org_latest_updates: {self.org_latest_updates}")
+            data_packages, updated_org_latest = await check_for_new_dataset_files(self.hf_api, self.org_latest_updates)
         except Exception as e:
             log.error(f"Error checking for new dataset files: {e}\n Stack trace: {traceback.format_exc()}")
             return
@@ -222,24 +225,38 @@ class Validator(BaseValidatorNeuron):
         self.last_monitor_datasets = time.time()
         
         if not data_packages:
-            bt.logging.info("No new data packages found")
+            # No new packages — safe to commit the updated timestamps
+            self.org_latest_updates = updated_org_latest
+            log.validation.trace("No new data packages found")
             return
         
-        bt.logging.info(f"Processing {len(data_packages)} new data packages")
+        log.internal.trace(f"Processing {len(data_packages)} new data packages")
         
         # Refresh miners to get latest models before competition evaluation
-        bt.logging.info("Refreshing miners for new competition evaluation")
-        if self.config.debug.dont_refresh_miners:
-            bt.logging.info("Skipping miners refresh")
-        else:
-            await self.refresh_miners()
-        for data_package in data_packages:
-            await self.run_competition_for_data_package(data_package)
+        log.internal.trace("Refreshing miners for new competition evaluation")
+        try:
+            if self.config.debug.dont_refresh_miners:
+                log.internal.trace("Skipping miners refresh")
+            else:
+                await self.refresh_miners()
+        except Exception as e:
+            log.internal.error(f"monitor_datasets: refresh_miners failed: {e}\n{traceback.format_exc()}")
+            return
+
+        for i, data_package in enumerate(data_packages):
+            try:
+                log.internal.trace(f"monitor_datasets: running competition {i+1}/{len(data_packages)} - {data_package.competition_id}")
+                await self.run_competition_for_data_package(data_package)
+            except Exception as e:
+                log.internal.error(f"monitor_datasets: run_competition_for_data_package failed for {data_package.competition_id}: {e}\n{traceback.format_exc()}")
+
+        # Only commit updated timestamps after all competitions processed
+        self.org_latest_updates = updated_org_latest
 
         
     async def run_competition_for_data_package(self, data_package: NewDatasetFile, local_mode: bool = False):
         competition_id = data_package.competition_id
-        bt.logging.info(f"====== STARTING COMPETITION: {data_package.dataset_hf_filename} ({competition_id}) {'[LOCAL]' if local_mode else '[REMOTE]'} ======")
+        log.competition.info(f"====== STARTING COMPETITION: {data_package.dataset_hf_filename} ({competition_id}) {'[LOCAL]' if local_mode else '[REMOTE]'} ======")
         competition_uuid = uuid4().hex
         competition_start_time = datetime.datetime.now()
         
@@ -277,7 +294,7 @@ class Validator(BaseValidatorNeuron):
                             with open(dataset_path, 'rb') as f:
                                 dataset_hash = hashlib.sha256(f.read()).hexdigest()
                     except Exception as e:
-                        bt.logging.warning(f"Could not compute dataset hash: {e}")
+                        log.competition.warn(f"Could not compute dataset hash: {e}")
 
                     self.validator_axon.store_results(
                         competition_id=competition_id,
@@ -298,9 +315,9 @@ class Validator(BaseValidatorNeuron):
                                 evaluation_results,
                                 peer_results
                             )
-                            bt.logging.info(f"Aggregated scores from {len(peer_results) + 1} validators")
+                            log.communication.info(f"Aggregated scores from {len(peer_results) + 1} validators")
                 except Exception as p2p_error:
-                    bt.logging.warning(f"P2P collection failed (non-critical): {p2p_error}")
+                    log.communication.warn(f"P2P collection failed (non-critical): {p2p_error}")
         except Exception:
             stack_trace = traceback.format_exc()
             log.error(f"Cannot run {competition_id}: {stack_trace}")
@@ -320,13 +337,13 @@ class Validator(BaseValidatorNeuron):
                     wandb.log(error_log.model_dump())
                     wandb.finish()
                 else:
-                    bt.logging.info("WANDB is off, don't log")
+                    log.wandb.trace("WANDB is off, don't log")
             except Exception as wandb_error:
-                bt.logging.warning(f"Failed to log to wandb: {wandb_error}")
+                log.wandb.error(f"Failed to log to wandb: {wandb_error}")
             return
 
         if not winning_hotkey:
-            bt.logging.warning("Could not determine the winner of competition")
+            log.competition.error("Could not determine the winner of competition")
             return
         
         # Process competition results
@@ -634,7 +651,7 @@ class Validator(BaseValidatorNeuron):
 
 
 if __name__ == "__main__":
-    bt.logging.info("Setting up main thread interrupt handle.")
+    log.internal.trace("Setting up main thread interrupt handle.")
   
     try:
         bt.logging.disable_third_party_loggers()
@@ -646,5 +663,5 @@ if __name__ == "__main__":
         while True:
             time.sleep(5)
             if exit_event.is_set():
-                bt.logging.info("Exit event received. Shutting down...")
+                log.internal.trace("Exit event received. Shutting down...")
                 break

@@ -2,9 +2,24 @@
 
 import json
 import time
+import traceback
+
+import bittensor as bt
 
 from cancer_ai.utils.config import BLACKLIST_FILE_PATH, BLACKLIST_FILE_PATH_TESTNET
 from cancer_ai.utils.structured_logger import log
+
+
+async def safe_coroutine(name: str, coro):
+    """Wrap a coroutine with logging so failures are always visible."""
+    try:
+        log.internal.trace(f"[concurrent_forward] starting '{name}'")
+        result = await coro
+        log.internal.trace(f"[concurrent_forward] '{name}' completed")
+        return result
+    except Exception as e:
+        log.internal.error(f"[concurrent_forward] '{name}' failed: {e}\n{traceback.format_exc()}")
+        raise
 
 
 def should_refresh_miners(last_miners_refresh, miners_refresh_interval) -> bool:
